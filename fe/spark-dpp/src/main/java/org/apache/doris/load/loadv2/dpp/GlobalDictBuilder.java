@@ -98,6 +98,8 @@ public class GlobalDictBuilder {
     // column in this list means need split distinct value and then encode respectively
     // to avoid the performance bottleneck to transfer origin value to dict value
     private List<String> veryHighCardinalityColumn;
+    // column in this list means has a big cardinality of null value, the null value do not need to be encoded.
+    private List<String> skipNullColumn;
     // determine the split num of new distinct value,better can be divisible by 1
     private int veryHighCardinalityColumnSplitNum;
 
@@ -117,6 +119,7 @@ public class GlobalDictBuilder {
                              int buildConcurrency,
                              List<String> veryHighCardinalityColumn,
                              int veryHighCardinalityColumnSplitNum,
+                             List<String> skipNullColumn,
                              SparkSession spark) {
         this.dictColumn = dictColumn;
         this.dorisOlapTableColumnList = dorisOlapTableColumnList;
@@ -130,11 +133,13 @@ public class GlobalDictBuilder {
         this.pool = Executors.newFixedThreadPool(buildConcurrency < 0 ? 1 : buildConcurrency);
         this.veryHighCardinalityColumn = veryHighCardinalityColumn;
         this.veryHighCardinalityColumnSplitNum = veryHighCardinalityColumnSplitNum;
+        this.skipNullColumn = skipNullColumn;
 
         spark.sql("use " + dorisHiveDB);
     }
 
     public void createHiveIntermediateTable() throws AnalysisException {
+        spark.sparkContext().setJobDescription("[create hive intermediate table and insert data]");
         Map<String, String> sourceHiveTableColumn = spark.catalog()
                 .listColumns(sourceHiveDBTableName)
                 .collectAsList()
@@ -171,8 +176,10 @@ public class GlobalDictBuilder {
         // For the column in dictColumns's valueSet, their value is a subset of column in keyset,
         // so we don't need to extract distinct value of column in valueSet
         for (Object column : dictColumn.keySet()) {
-            workerList.add(
-                    () -> spark.sql(getInsertDistinctKeyTableSql(column.toString(), dorisIntermediateHiveTable)));
+            workerList.add(()->{
+                spark.sparkContext().setJobDescription(String.format("[create distinctKeyTable] insert distinct col: %s", column.toString()));
+                spark.sql(getInsertDistinctKeyTableSql(column.toString(), dorisIntermediateHiveTable));
+            });
         }
 
         submitWorker(workerList);
@@ -187,8 +194,12 @@ public class GlobalDictBuilder {
             String distinctColumnNameTmp = distinctColumnNameOrigin.toString();
             globalDictBuildWorkers.add(() -> {
                 // get global dict max value
+                spark.sparkContext().setJobDescription(
+                        String.format("[build global dict] get max value of col %s", distinctColumnNameOrigin)
+                );
                 List<Row> maxGlobalDictValueRow
                         = spark.sql(getMaxGlobalDictValueSql(distinctColumnNameTmp)).collectAsList();
+
                 if (maxGlobalDictValueRow.size() == 0) {
                     throw new RuntimeException(String.format("get max dict value failed: %s", distinctColumnNameTmp));
                 }
@@ -211,9 +222,11 @@ public class GlobalDictBuilder {
                 if (veryHighCardinalityColumn.contains(distinctColumnNameTmp)
                         && veryHighCardinalityColumnSplitNum > 1) {
                     // split distinct key first and then encode with count
+                    spark.sparkContext().setJobDescription(String.format("[build global dict] split build for col: %s", distinctColumnNameTmp));
                     buildGlobalDictBySplit(maxDictValue, distinctColumnNameTmp);
                 } else {
                     // build global dict directly
+                    spark.sparkContext().setJobDescription(String.format("[build global dict] direct build for col: %s", distinctColumnNameTmp));
                     spark.sql(getBuildGlobalDictSql(maxDictValue, distinctColumnNameTmp));
                 }
 
@@ -225,8 +238,15 @@ public class GlobalDictBuilder {
     // encode dorisIntermediateHiveTable's distinct column
     public void encodeDorisIntermediateHiveTable() {
         for (Object distinctColumnObj : dictColumn.keySet()) {
-            spark.sql(getEncodeDorisIntermediateHiveTableSql(distinctColumnObj.toString(),
-                    (ArrayList) dictColumn.get(distinctColumnObj.toString())));
+            if (skipNullColumn.contains(distinctColumnObj.toString())
+                    && !mapSideJoinColumns.contains(distinctColumnObj.toString())) {
+                spark.sparkContext().setJobDescription(String.format("[update encoded column skip null value] column: %s", distinctColumnObj.toString()));
+                spark.sql(getEncodeDorisIntermediateHiveTableSkipNullSql(distinctColumnObj.toString()));
+            } else {
+                spark.sparkContext().setJobDescription(String.format("[update encoded column] column: %s", distinctColumnObj.toString()));
+                spark.sql(getEncodeDorisIntermediateHiveTableSql(distinctColumnObj.toString(),
+                        (ArrayList) dictColumn.get(distinctColumnObj.toString())));
+            }
         }
     }
 
@@ -364,6 +384,54 @@ public class GlobalDictBuilder {
                 + " (select dict_key,dict_value from " + globalDictTableName
                 + " where dict_column='" + distinctColumnName + "' )t2 "
                 + "on t1.dict_key = t2.dict_key where t2.dict_value is null";
+
+    }
+    //disable reuse and map join features in this pattern
+    // split the whole dIHTable into two parts by dictColumn value
+    // 1. rows with null value in dictColumn: we do not encode them just simply select each columns
+    // 2. rows with not null value in dictColumn: we retrieve them and then encode
+    // merge 1 and 2
+    private String getEncodeDorisIntermediateHiveTableSkipNullSql(String dictColumn) {
+        StringBuilder sql = new StringBuilder();
+        sql.append("insert overwrite table ").append(dorisIntermediateHiveTable).append(" select ");
+        // get null value
+        dorisOlapTableColumnList.forEach(columnName -> {
+            sql.append(dorisIntermediateHiveTable).append(".").append(columnName).append(" ,");
+        });
+        sql.deleteCharAt(sql.length() - 1);
+        sql.append(" from ")
+                .append(dorisIntermediateHiveTable)
+                .append(" where ")
+                .append(dictColumn)
+                .append(" is null ");
+        sql.append(" union all select ");
+        // encode non-null value
+        dorisOlapTableColumnList.forEach(columnName -> {
+            if (dictColumn.equals(columnName)) {
+                sql.append("t.dict_value").append(" ,");
+            } else {
+                sql.append("t0.").append(columnName).append(" ,");
+            }
+        });
+        sql.deleteCharAt(sql.length() - 1)
+                .append(" from ");
+        sql.append(" (");
+        sql.append("select ");
+        dorisOlapTableColumnList.forEach(columnName -> {
+            sql.append(dorisIntermediateHiveTable).append(".").append(columnName).append(" ,");
+        });
+        sql.deleteCharAt(sql.length() - 1)
+                .append(" from ")
+                .append(dorisIntermediateHiveTable)
+                .append(" where ")
+                .append(dictColumn)
+                .append(" is not null ");
+        sql.append(") t0");
+        sql.append(" LEFT OUTER JOIN ( select dict_key,dict_value from ").append(globalDictTableName)
+                .append(" where dict_column='").append(dictColumn).append("' ) t on ")
+                .append("t0.").append(dictColumn)
+                .append(" = t.dict_key ");
+        return sql.toString();
 
     }
 

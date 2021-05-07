@@ -631,6 +631,7 @@ fi
 DORIS_OUTPUT=${DORIS_OUTPUT:="${DORIS_HOME}/output/"}
 echo "OUTPUT DIR=${DORIS_OUTPUT}"
 mkdir -p "${DORIS_OUTPUT}"
+COMMIT_ID=$(git rev-parse --short HEAD)
 
 # Copy Frontend and Backend
 if [[ "${BUILD_FE}" -eq 1 ]]; then
@@ -655,10 +656,12 @@ if [[ "${BUILD_FE}" -eq 1 ]]; then
     mkdir -p "${DORIS_OUTPUT}/fe/conf/ssl"
 fi
 
-if [[ "${BUILD_SPARK_DPP}" -eq 1 ]]; then
-    install -d "${DORIS_OUTPUT}/fe/spark-dpp"
-    rm -rf "${DORIS_OUTPUT}/fe/spark-dpp"/*
-    cp -r -p "${DORIS_HOME}/fe/spark-dpp/target"/spark-dpp-*-jar-with-dependencies.jar "${DORIS_OUTPUT}/fe/spark-dpp"/
+
+if [ ${BUILD_SPARK_DPP} -eq 1 ]; then
+    install -d ${DORIS_OUTPUT}/fe/spark-dpp/
+    rm -rf ${DORIS_OUTPUT}/fe/spark-dpp/*
+    echo ${COMMIT_ID} >  ${DORIS_OUTPUT}/fe/spark-dpp/version.${COMMIT_ID}
+    cp -r -p ${DORIS_HOME}/fe/spark-dpp/target/spark-dpp-*-jar-with-dependencies.jar ${DORIS_OUTPUT}/fe/spark-dpp/
 fi
 
 if [[ "${OUTPUT_BE_BINARY}" -eq 1 ]]; then

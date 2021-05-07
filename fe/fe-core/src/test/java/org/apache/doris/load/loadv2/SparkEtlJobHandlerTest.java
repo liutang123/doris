@@ -68,7 +68,6 @@ public class SparkEtlJobHandlerTest {
     private String trackingUrl;
     private String dppVersion;
     private String remoteArchivePath;
-    private SparkRepository.SparkArchive archive;
 
     private final String runningReport = "Application Report :\n"
             + "Application-Id : application_15888888888_0088\n"
@@ -128,24 +127,14 @@ public class SparkEtlJobHandlerTest {
         etlOutputPath = "hdfs://127.0.0.1:10000/tmp/doris/100/label/101";
         trackingUrl = "http://127.0.0.1:8080/proxy/application_1586619723848_0088/";
         dppVersion = Config.spark_dpp_version;
-        remoteArchivePath = etlOutputPath + "/__repository__/__archive_" + dppVersion;
-        archive = new SparkRepository.SparkArchive(remoteArchivePath, dppVersion);
-        archive.libraries.add(new SparkRepository
-                .SparkLibrary("", "", SparkRepository.SparkLibrary.LibType.DPP, 0L));
-        archive.libraries.add(new SparkRepository
-                .SparkLibrary("", "", SparkRepository.SparkLibrary.LibType.SPARK2X, 0L));
     }
 
     @Test
-    public void testSubmitEtlJob(
-            @Mocked BrokerUtil brokerUtil,
-            @Mocked SparkLauncher launcher,
-            @Injectable Process process,
-            @Mocked SparkLoadAppHandle handle) throws IOException, LoadException {
+
+    public void testSubmitEtlJob(@Mocked BrokerUtil brokerUtil,  @Injectable Process process,
+                                 @Mocked SparkLoadAppHandle handle ) throws IOException, LoadException {
         new Expectations() {
             {
-                launcher.launch();
-                result = process;
                 handle.getAppId();
                 result = appId;
                 handle.getState();
@@ -155,12 +144,6 @@ public class SparkEtlJobHandlerTest {
 
         EtlJobConfig etlJobConfig = new EtlJobConfig(Maps.newHashMap(), etlOutputPath, label, null);
         SparkResource resource = new SparkResource(resourceName);
-        new Expectations(resource) {
-            {
-                resource.prepareArchive();
-                result = archive;
-            }
-        };
 
         Map<String, String> sparkConfigs = resource.getSparkConfigs();
         sparkConfigs.put("spark.master", "yarn");
@@ -176,12 +159,10 @@ public class SparkEtlJobHandlerTest {
     }
 
     @Test(expected = LoadException.class)
-    public void testSubmitEtlJobFailed(@Mocked BrokerUtil brokerUtil, @Mocked SparkLauncher launcher, @Injectable Process process,
+    public void testSubmitEtlJobFailed(@Mocked BrokerUtil brokerUtil, @Injectable Process process,
                                        @Mocked SparkLoadAppHandle handle) throws IOException, LoadException {
         new Expectations() {
             {
-                launcher.launch();
-                result = process;
                 handle.getAppId();
                 result = appId;
                 handle.getState();
@@ -191,12 +172,6 @@ public class SparkEtlJobHandlerTest {
 
         EtlJobConfig etlJobConfig = new EtlJobConfig(Maps.newHashMap(), etlOutputPath, label, null);
         SparkResource resource = new SparkResource(resourceName);
-        new Expectations(resource) {
-            {
-                resource.prepareArchive();
-                result = archive;
-            }
-        };
 
         Map<String, String> sparkConfigs = resource.getSparkConfigs();
         sparkConfigs.put("spark.master", "yarn");
@@ -210,14 +185,11 @@ public class SparkEtlJobHandlerTest {
 
     @Test
     public void testGetEtlJobStatus(@Mocked BrokerUtil brokerUtil, @Mocked Util util, @Mocked CommandResult commandResult,
-                                    @Mocked SparkYarnConfigFiles sparkYarnConfigFiles, @Mocked SparkLoadAppHandle handle)
+                                    @Mocked SparkLoadAppHandle handle)
             throws IOException, UserException {
 
         new Expectations() {
             {
-                sparkYarnConfigFiles.prepare();
-                sparkYarnConfigFiles.getConfigDir();
-                result = "./yarn_config";
 
                 commandResult.getReturnCode();
                 result = 0;
@@ -277,16 +249,11 @@ public class SparkEtlJobHandlerTest {
     }
 
     @Test
-    public void testGetEtlJobStatusFailed(@Mocked Util util, @Mocked CommandResult commandResult,
-                                          @Mocked SparkYarnConfigFiles sparkYarnConfigFiles, @Mocked SparkLoadAppHandle handle)
+    public void testGetEtlJobStatusFailed(@Mocked Util util, @Mocked CommandResult commandResult, @Mocked SparkLoadAppHandle handle)
             throws IOException, UserException {
 
         new Expectations() {
             {
-                sparkYarnConfigFiles.prepare();
-                sparkYarnConfigFiles.getConfigDir();
-                result = "./yarn_config";
-
                 commandResult.getReturnCode();
                 result = -1;
             }
@@ -321,15 +288,7 @@ public class SparkEtlJobHandlerTest {
     }
 
     @Test
-    public void testKillEtlJob(@Mocked Util util, @Mocked CommandResult commandResult,
-                               @Mocked SparkYarnConfigFiles sparkYarnConfigFiles) throws IOException, UserException {
-        new Expectations() {
-            {
-                sparkYarnConfigFiles.prepare();
-                sparkYarnConfigFiles.getConfigDir();
-                result = "./yarn_config";
-            }
-        };
+    public void testKillEtlJob(@Mocked Util util, @Mocked CommandResult commandResult) throws IOException, UserException {
 
         new Expectations() {
             {

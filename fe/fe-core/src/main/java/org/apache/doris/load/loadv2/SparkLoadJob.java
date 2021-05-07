@@ -146,6 +146,8 @@ public class SparkLoadJob extends BulkLoadJob {
     private Set<Long> quorumTablets = Sets.newHashSet();
     private Set<Long> fullTablets = Sets.newHashSet();
 
+    private int etlUnknownStateRetryTime = 0;
+
     // only for log replay
     public SparkLoadJob() {
         super(EtlJobType.SPARK);
@@ -301,6 +303,7 @@ public class SparkLoadJob extends BulkLoadJob {
         try {
             switch (status.getState()) {
                 case RUNNING:
+                    etlUnknownStateRetryTime = 0;
                     unprotectedUpdateEtlStatusInternal(status);
                     break;
                 case FINISHED:
@@ -308,6 +311,14 @@ public class SparkLoadJob extends BulkLoadJob {
                     break;
                 case CANCELLED:
                     throw new LoadException("spark etl job failed. msg: " + status.getFailMsg());
+                case UNKNOWN:
+                    if (etlUnknownStateRetryTime >= Config.SPARK_ETL_UNKNOWN_RETRY_TIMES) {
+                        LOG.warn("{} etl state is unknown over retried 3 times, set state to CANCELLED", appId);
+                        throw new LoadException("get spark etl job state failed. after retried: " + Config.SPARK_ETL_UNKNOWN_RETRY_TIMES + "times. Error msg: " + status.getFailMsg());
+                    }
+                    LOG.warn("{} etl state is unknown, maybe caused by yarn cmd timeout please retry. retry time is {}", appId, etlUnknownStateRetryTime);
+                    etlUnknownStateRetryTime++;
+                    break;
                 default:
                     LOG.warn("unknown etl state: {}", status.getState().name());
                     break;
@@ -515,13 +526,11 @@ public class SparkLoadJob extends BulkLoadJob {
                                         tBrokerScanRange.getBrokerAddresses().add(
                                                 new TNetworkAddress(fsBroker.host, fsBroker.port));
 
-                                        if (LOG.isDebugEnabled()) {
-                                            LOG.debug("push task for replica {}, broker {}:{},"
-                                                            + " backendId {}, filePath {}, fileSize {}",
-                                                    replicaId, fsBroker.host,
-                                                    fsBroker.port, backendId, tBrokerRangeDesc.path,
-                                                    tBrokerRangeDesc.file_size);
-                                        }
+                                        LOG.info("push task for replica {}, broker {}:{},"
+                                                        + " backendId {}, filePath {}, fileSize {}",
+                                                replicaId, fsBroker.host,
+                                                fsBroker.port, backendId, tBrokerRangeDesc.path,
+                                                tBrokerRangeDesc.file_size);
 
                                         PushTask pushTask = new PushTask(backendId, dbId, olapTable.getId(),
                                                 partitionId, indexId, tabletId, replicaId, schemaHash, 0, id,
@@ -547,7 +556,9 @@ public class SparkLoadJob extends BulkLoadJob {
 
                                 // check tablet push states
                                 if (tabletFinishedReplicas.size() >= quorumReplicaNum) {
-                                    quorumTablets.add(tabletId);
+                                    if(quorumTablets.add(tabletId)){
+                                        LOG.info("Spark Load appid:{} for tablet {} has been finished in BE", appId, tabletId);
+                                    }
                                     if (tabletFinishedReplicas.size() == tabletAllReplicas.size()) {
                                         fullTablets.add(tabletId);
                                     }
@@ -568,6 +579,11 @@ public class SparkLoadJob extends BulkLoadJob {
                 }
 
                 return totalTablets;
+            } catch (Exception e) {
+                LOG.info("Spark Load Failed when push task,  label={} ", label, e);
+                // for base exceptions such as NPE etc.
+                // throw these exceptions as LoadException when error occurred
+                throw new LoadException(e.getMessage());
             } finally {
                 writeUnlock();
             }

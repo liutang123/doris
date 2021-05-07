@@ -81,6 +81,7 @@ public class SparkResource extends Resource {
     private static final String SPARK_CONFIG_PREFIX = "spark.";
     private static final String BROKER_PROPERTY_PREFIX = "broker.";
     private static final String ENV_PREFIX = "env.";
+    private static final String CUSTOM_PROPERTY_PREFIX = "custom.";
     // spark uses hadoop configs in the form of spark.hadoop.*
     private static final String SPARK_HADOOP_CONFIG_PREFIX = "spark.hadoop.";
     private static final String SPARK_YARN_RESOURCE_MANAGER_ADDRESS = "spark.hadoop.yarn.resourcemanager.address";
@@ -90,6 +91,9 @@ public class SparkResource extends Resource {
     private static final String SPARK_YARN_RESOURCE_MANAGER_HA_RMIDS = "spark.hadoop.yarn.resourcemanager.ha.rm-ids";
     private static final String YARN_RESOURCE_MANAGER_ADDRESS_FOMART = "spark.hadoop.yarn.resourcemanager.address.%s";
     private static final String YARN_RESOURCE_MANAGER_HOSTNAME_FORMAT = "spark.hadoop.yarn.resourcemanager.hostname.%s";
+    private static final String HADOOP_PROXY_USER = "hadoop.proxy.user";
+    public static final String DPP_RESOURCE_DIR = "/spark-dpp/";
+    public static final String SPARK_DPP_JAR = "spark-dpp-" + Config.spark_dpp_version + "-jar-with-dependencies.jar";
 
     public enum DeployMode {
         CLUSTER,
@@ -116,6 +120,11 @@ public class SparkResource extends Resource {
     private Map<String, String> brokerProperties;
     @SerializedName(value = "envConfigs")
     private Map<String, String> envConfigs;
+    @SerializedName(value="customizedProperties")
+    private Map<String, String> customizedProperties;
+
+    @SerializedName(value = "hadoopProxyUser")
+    private String hadoopProxyUser;
 
 
     public SparkResource() {
@@ -123,18 +132,20 @@ public class SparkResource extends Resource {
     }
 
     public SparkResource(String name) {
-        this(name, Maps.newHashMap(), null, null, Maps.newHashMap(), Maps.newHashMap());
+        this(name, Maps.newHashMap(), null, null,null, Maps.newHashMap(), Maps.newHashMap(), Maps.newHashMap());
     }
 
     // "public" for testing
-    public SparkResource(String name, Map<String, String> sparkConfigs, String workingDir, String broker,
-                         Map<String, String> brokerProperties, Map<String, String> envConfigs) {
+    public SparkResource(String name, Map<String, String> sparkConfigs, String workingDir, String broker, String hadoopProxyUser,
+                          Map<String, String> brokerProperties, Map<String,String> envConfigs, Map<String, String> customizedProperties) {
         super(name, ResourceType.SPARK);
         this.sparkConfigs = sparkConfigs;
         this.workingDir = workingDir;
         this.broker = broker;
+        this.hadoopProxyUser = hadoopProxyUser;
         this.brokerProperties = brokerProperties;
         this.envConfigs = envConfigs;
+        this.customizedProperties = customizedProperties;
     }
 
     public String getMaster() {
@@ -152,6 +163,10 @@ public class SparkResource extends Resource {
     public String getBroker() {
         return broker;
     }
+
+    public String getHadoopProxyUser() { return hadoopProxyUser; }
+
+    public Map<String, String> getCustomizedProperties() { return customizedProperties; }
 
     public Map<String, String> getBrokerPropertiesWithoutPrefix() {
         Map<String, String> properties = Maps.newHashMap();
@@ -190,7 +205,8 @@ public class SparkResource extends Resource {
     }
 
     public SparkResource getCopiedResource() {
-        return new SparkResource(name, Maps.newHashMap(sparkConfigs), workingDir, broker, brokerProperties, envConfigs);
+        return new SparkResource(name, Maps.newHashMap(sparkConfigs), workingDir, broker, hadoopProxyUser,
+                    Maps.newHashMap(brokerProperties), Maps.newHashMap(envConfigs), Maps.newHashMap());
     }
 
     @Override
@@ -268,6 +284,9 @@ public class SparkResource extends Resource {
         if (properties.containsKey(BROKER)) {
             broker = properties.get(BROKER);
         }
+        if (properties.containsKey(HADOOP_PROXY_USER)) {
+            hadoopProxyUser = properties.get(HADOOP_PROXY_USER);
+        }
         brokerProperties.putAll(getBrokerProperties(properties));
         Map<String, String> env = getEnvConfig(properties);
         if (env.size() > 0) {
@@ -278,6 +297,7 @@ public class SparkResource extends Resource {
             }
         }
         LOG.info("updateProperties,{},{}", properties, envConfigs);
+        customizedProperties.putAll(getCustomizedProperties(properties));
     }
 
     @Override
@@ -328,10 +348,10 @@ public class SparkResource extends Resource {
                     + "or not turned on ha.");
             }
         }
-
         // check working dir and broker
         workingDir = properties.get(WORKING_DIR);
         broker = properties.get(BROKER);
+        hadoopProxyUser = properties.get(HADOOP_PROXY_USER);
         if ((workingDir == null && broker != null) || (workingDir != null && broker == null)) {
             throw new DdlException("working_dir and broker should be assigned at the same time");
         }
@@ -380,6 +400,16 @@ public class SparkResource extends Resource {
             }
         }
         return brokerProperties;
+    }
+
+    private Map<String, String> getCustomizedProperties(Map<String, String> properties) {
+        Map<String, String> customizedProperties = Maps.newHashMap();
+        for (Map.Entry<String, String> entry : properties.entrySet()) {
+            if (entry.getKey().startsWith(CUSTOM_PROPERTY_PREFIX)) {
+                customizedProperties.put(entry.getKey(), entry.getValue());
+            }
+        }
+        return customizedProperties;
     }
 
     @Override

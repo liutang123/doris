@@ -192,6 +192,14 @@ public class RangePartitionInfo extends PartitionInfo {
         }
     }
 
+    public List<Map.Entry<Long, PartitionItem>> getSortedRangeMapAll() {
+        List<Map.Entry<Long, PartitionItem>> sortedListAll = Lists.newArrayList(idToItem.entrySet());
+        List<Map.Entry<Long, PartitionItem>> tmpPartitionList = Lists.newArrayList(idToTempItem.entrySet());
+        sortedListAll.addAll(tmpPartitionList);
+        Collections.sort(sortedListAll, RangeUtils.RANGE_MAP_ENTRY_COMPARATOR);
+        return sortedListAll;
+    }
+
     @Override
     public void checkPartitionItemListsMatch(List<PartitionItem> list1, List<PartitionItem> list2)
             throws DdlException {

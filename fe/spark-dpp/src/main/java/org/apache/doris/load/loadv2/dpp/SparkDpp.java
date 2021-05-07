@@ -32,6 +32,7 @@ import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.parquet.column.ParquetProperties;
 import org.apache.parquet.column.ParquetProperties.WriterVersion;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
@@ -101,6 +102,7 @@ public final class SparkDpp implements java.io.Serializable {
     private Map<String, Integer> bucketKeyMap = new HashMap<>();
     // accumulator to collect invalid rows
     private StringAccumulator invalidRows = new StringAccumulator();
+    private StringAccumulator invalidErrors = new StringAccumulator();
     // save the hadoop configuration from spark session.
     // because hadoop configuration is not serializable,
     // we need to wrap it so that we can use it in executor.
@@ -130,6 +132,7 @@ public final class SparkDpp implements java.io.Serializable {
         fileNumberAcc = spark.sparkContext().longAccumulator("fileNumberAcc");
         fileSizeAcc = spark.sparkContext().longAccumulator("fileSizeAcc");
         spark.sparkContext().register(invalidRows, "InvalidRowsAccumulator");
+        spark.sparkContext().register(invalidErrors, "InvalidErrorsAccumulator");
         this.serializableHadoopConf = new SerializableConfiguration(spark.sparkContext().hadoopConfiguration());
     }
 
@@ -139,6 +142,12 @@ public final class SparkDpp implements java.io.Serializable {
                 && !StringUtils.equalsIgnoreCase(curNode.indexMeta.indexType, "UNIQUE");
         // Aggregate/UNIQUE table
         if (!isDuplicateTable) {
+            // TODO(wb) set the reduce concurrency by statistic instead of hard code 200
+            int aggregateConcurrency = 0;
+            String aggConcurrency = etlJobConfig.customizedProperties.getOrDefault("custom.reduce.agg.concurrency","0");
+            if (StringUtils.isNumeric(aggConcurrency)){
+                aggregateConcurrency = Integer.parseInt(aggConcurrency);
+            }
             int idx = 0;
             for (int i = 0; i < curNode.indexMeta.columns.size(); i++) {
                 if (!curNode.indexMeta.columns.get(i).isKey) {
@@ -148,16 +157,27 @@ public final class SparkDpp implements java.io.Serializable {
             }
 
             if (curNode.indexMeta.isBaseIndex) {
-                JavaPairRDD<List<Object>, Object[]> result = currentPairRDD.mapToPair(
-                        new EncodeBaseAggregateTableFunction(sparkRDDAggregators))
-                        .reduceByKey(new AggregateReduceFunction(sparkRDDAggregators));
+                spark.sparkContext().setJobDescription("[aggregate table] base index encode aggregate table");
+                JavaPairRDD<List<Object>, Object[]> tmpPairRDD = currentPairRDD.mapToPair(new EncodeBaseAggregateTableFunction(sparkRDDAggregators));
+                JavaPairRDD<List<Object>, Object[]> result = null;
+                if (aggregateConcurrency <= 0){
+                    result = tmpPairRDD.reduceByKey(new AggregateReduceFunction(sparkRDDAggregators));
+                } else {
+                    result = tmpPairRDD.reduceByKey(new AggregateReduceFunction(sparkRDDAggregators), aggregateConcurrency);
+                }
                 return result;
             } else {
-                JavaPairRDD<List<Object>, Object[]> result = currentPairRDD
+                spark.sparkContext().setJobDescription("[aggregate table] rollup index encode aggregate table");
+                JavaPairRDD<List<Object>, Object[]> tmpPairRDD = currentPairRDD
                         .mapToPair(new EncodeRollupAggregateTableFunction(
                                 getColumnIndexInParentRollup(curNode.keyColumnNames, curNode.valueColumnNames,
-                                        curNode.parent.keyColumnNames, curNode.parent.valueColumnNames)))
-                        .reduceByKey(new AggregateReduceFunction(sparkRDDAggregators));
+                                        curNode.parent.keyColumnNames, curNode.parent.valueColumnNames)));
+                JavaPairRDD<List<Object>, Object[]> result = null;
+                if (aggregateConcurrency <= 0){
+                    result = tmpPairRDD.reduceByKey(new AggregateReduceFunction(sparkRDDAggregators));
+                } else {
+                    result = tmpPairRDD.reduceByKey(new AggregateReduceFunction(sparkRDDAggregators), aggregateConcurrency);
+                }
                 return result;
             }
         // Duplicate Table
@@ -174,6 +194,7 @@ public final class SparkDpp implements java.io.Serializable {
             if (curNode.indexMeta.isBaseIndex) {
                 return currentPairRDD;
             } else {
+                spark.sparkContext().setJobDescription("[duplicate table] rollup index encode aggregate");
                 return currentPairRDD.mapToPair(new EncodeRollupAggregateTableFunction(
                         getColumnIndexInParentRollup(curNode.keyColumnNames, curNode.valueColumnNames,
                         curNode.parent.keyColumnNames, curNode.parent.valueColumnNames)));
@@ -187,6 +208,7 @@ public final class SparkDpp implements java.io.Serializable {
             EtlJobConfig.EtlIndex indexMeta, SparkRDDAggregator[] sparkRDDAggregators) {
         // TODO(wb) should deal largeint as BigInteger instead of string when using biginteger as key,
         // data type may affect sorting logic
+        spark.sparkContext().setJobDescription("[write into parquet file]");
         StructType dstSchema = DppUtils.createDstTableSchema(indexMeta.columns, false, true);
 
         resultRDD.repartitionAndSortWithinPartitions(new BucketPartitioner(bucketKeyMap), new BucketComparator())
@@ -251,10 +273,18 @@ public final class SparkDpp implements java.io.Serializable {
                             conf.set("spark.sql.parquet.outputTimestampType", "INT96");
                             ParquetWriteSupport.setSchema(dstSchema, conf);
                             ParquetWriteSupport parquetWriteSupport = new ParquetWriteSupport();
-                            parquetWriter = new ParquetWriter<>(new Path(tmpPath), parquetWriteSupport,
-                                    CompressionCodecName.SNAPPY, 256 * 1024 * 1024, 16 * 1024, 1024 * 1024, true, false,
-                                    WriterVersion.PARQUET_1_0, conf);
-                            LOG.info("[HdfsOperate]>> initialize writer succeed! path:" + tmpPath);
+                            CompressionCodecName compressName = CompressionCodecName.UNCOMPRESSED;
+                            if (Boolean.valueOf(etlJobConfig.customizedProperties.getOrDefault(
+                                    "custom.parquet.compress", "false"))) {
+                                compressName = CompressionCodecName.SNAPPY;
+                            }
+                            parquetWriter = new ParquetWriter<InternalRow>(new Path(tmpPath), parquetWriteSupport,
+                                    compressName, 256 * 1024 * 1024, 16 * 1024, 1024 * 1024,
+                                    false, false,
+                                    ParquetProperties.WriterVersion.PARQUET_1_0, conf);
+                            if (parquetWriter != null) {
+                                LOG.info("[HdfsOperate]>> initialize writer succeed! path:" + tmpPath);
+                            }
                             lastBucketKey = curBucketKey;
                         }
                         InternalRow internalRow = InternalRow.apply(rowWithoutBucketKey.toSeq());
@@ -443,7 +473,13 @@ public final class SparkDpp implements java.io.Serializable {
         for (EtlJobConfig.EtlColumn column : baseIndex.columns) {
             parsers.put(column.columnName, ColumnParser.create(column));
         }
-
+        // default max num of invalid row
+        int maxFilteredRows = 10000;
+        String maxFiltered = etlJobConfig.customizedProperties.getOrDefault("custom.filteredrows.max", "10000");
+        if (StringUtils.isNumeric(maxFiltered)) {
+            maxFilteredRows = Integer.parseInt(maxFiltered);
+        }
+        final int maxInvalidRowNum = maxFilteredRows;
         // use PairFlatMapFunction instead of PairMapFunction because the there will be
         // 0 or 1 output row for 1 input row
         JavaPairRDD<List<Object>, Object[]> resultPairRDD = dataframe.toJavaRDD().flatMapToPair(
@@ -455,11 +491,14 @@ public final class SparkDpp implements java.io.Serializable {
                     for (int i = 0; i < keyAndPartitionColumnNames.size(); i++) {
                         String columnName = keyAndPartitionColumnNames.get(i);
                         Object columnObject = row.get(row.fieldIndex(columnName));
-                        if (!validateData(columnObject, baseIndex.getColumn(columnName),
-                                parsers.get(columnName), row)) {
+                        if (!validateData(columnObject, baseIndex.getColumn(columnName), parsers.get(columnName), row)) {
                             abnormalRowAcc.add(1);
+                            if (abnormalRowAcc.value() <= 5) {
+                                invalidRows.add(row.toString());
+                                invalidErrors.add("key column validate data failed: " + columnName);
+                            }
                             return result.iterator();
-                        }
+                        };
                         keyAndPartitionColumns.add(columnObject);
 
                         if (baseIndex.getColumn(columnName).isKey) {
@@ -470,24 +509,29 @@ public final class SparkDpp implements java.io.Serializable {
                     for (int i = 0; i < valueColumnNames.size(); i++) {
                         String columnName = valueColumnNames.get(i);
                         Object columnObject = row.get(row.fieldIndex(columnName));
-                        if (!validateData(columnObject, baseIndex.getColumn(columnName),
-                                parsers.get(columnName), row)) {
+                        if(!validateData(columnObject,  baseIndex.getColumn(columnName),
+                                parsers.get(columnName),row)) {
                             abnormalRowAcc.add(1);
+                            if (abnormalRowAcc.value() <= 5) {
+                                invalidRows.add(row.toString());
+                                invalidErrors.add("value column validate data failed: " + columnName);
+                            }
                             return result.iterator();
-                        }
+                        };
                         valueColumns.add(columnObject);
                     }
 
                     DppColumns key = new DppColumns(keyAndPartitionColumns);
                     int pid = partitioner.getPartition(key);
                     if (!validPartitionIndex.contains(pid)) {
-                        LOG.warn("invalid partition for row:" + row + ", pid:" + pid);
                         abnormalRowAcc.add(1);
-                        LOG.info("abnormalRowAcc:" + abnormalRowAcc);
-                        if (abnormalRowAcc.value() < 5) {
+                        if (abnormalRowAcc.value() <= 5) {
                             LOG.info("add row to invalidRows:" + row.toString());
                             invalidRows.add(row.toString());
-                            LOG.info("invalid rows contents:" + invalidRows.value());
+                            invalidErrors.add("no partition for this row, partition id: " + pid);
+                        }
+                        if(abnormalRowAcc.value() > maxInvalidRowNum) {
+                            throw new RuntimeException("failed cause too many invalid rows");
                         }
                     } else {
                         // TODO(wb) support lagreint for hash
@@ -718,6 +762,7 @@ public final class SparkDpp implements java.io.Serializable {
                         // at most add 5 rows to invalidRows
                         if (abnormalRowAcc.value() <= 5) {
                             invalidRows.add(record);
+                            invalidErrors.add("load data from file path failed with invalid row");
                         }
                     }
                     return result.iterator();
@@ -891,6 +936,7 @@ public final class SparkDpp implements java.io.Serializable {
 
     private Dataset<Row> loadDataFromHiveTable(SparkSession spark,
                                                String hiveDbTableName,
+                                               String hiveSourceFilter,
                                                EtlJobConfig.EtlIndex baseIndex,
                                                EtlJobConfig.EtlFileGroup fileGroup,
                                                StructType dstTableSchema,
@@ -908,6 +954,11 @@ public final class SparkDpp implements java.io.Serializable {
         }
 
         Dataset<Row> dataframe = spark.sql(sql.toString());
+
+        if(!Strings.isNullOrEmpty(hiveSourceFilter)) {
+            // do not count filtered lines to speed up, count is so slow and useless.
+            dataframe = dataframe.filter(hiveSourceFilter);
+        }
         // Note(wb): in current spark load implementation, spark load can't be consistent with doris BE;
         // The reason is as follows
         // For stream load in doris BE, it runs as follow steps:
@@ -959,6 +1010,7 @@ public final class SparkDpp implements java.io.Serializable {
         JavaRDD<Row> result = dataframe.toJavaRDD().flatMap(new FlatMapFunction<Row, Row>() {
             @Override
             public Iterator<Row> call(Row row) throws Exception {
+                scannedRowsAcc.add(1);
                 List<Row> result = new ArrayList<>();
                 Set<Integer> columnIndexNeedToRepalceNull = new HashSet<Integer>();
                 boolean validRow = true;
@@ -992,6 +1044,7 @@ public final class SparkDpp implements java.io.Serializable {
                     // at most add 5 rows to invalidRows
                     if (abnormalRowAcc.value() <= 5) {
                         invalidRows.add(row.toString());
+                        invalidErrors.add("load data from hive failed with invalid row");
                     }
                 } else if (columnIndexNeedToRepalceNull.size() != 0) {
                     Object[] newRow = new Object[row.size()];
@@ -1076,8 +1129,11 @@ public final class SparkDpp implements java.io.Serializable {
                         fileGroupDataframe = loadDataFromFilePaths(
                                 spark, baseIndex, filePaths, fileGroup, dstTableSchema);
                     } else if (sourceType == EtlJobConfig.SourceType.HIVE) {
+
+
                         fileGroupDataframe = loadDataFromHiveTable(spark, fileGroup.dppHiveDbTableName,
-                                baseIndex, fileGroup, dstTableSchema, dictBitmapColumnSet, binaryBitmapColumnSet);
+                                fileGroup.where, baseIndex, fileGroup, dstTableSchema, dictBitmapColumnSet,
+                                binaryBitmapColumnSet);
                     } else {
                         throw new RuntimeException("Unknown source type: " + sourceType.name());
                     }
@@ -1101,10 +1157,13 @@ public final class SparkDpp implements java.io.Serializable {
                 processRollupTree(rootNode, tablePairRDD, tableId, baseIndex);
             }
             LOG.info("invalid rows contents:" + invalidRows.value());
+            LOG.info("invalid rows error:" + invalidErrors.value());
             dppResult.isSuccess = true;
             dppResult.failedReason = "";
         } catch (Exception exception) {
             LOG.warn("spark dpp failed for exception:" + exception);
+            LOG.warn("invalid rows contents:" + invalidRows.value());
+            LOG.warn("invalid rows error:" + invalidErrors.value());
             dppResult.isSuccess = false;
             dppResult.failedReason = exception.getMessage();
             throw exception;

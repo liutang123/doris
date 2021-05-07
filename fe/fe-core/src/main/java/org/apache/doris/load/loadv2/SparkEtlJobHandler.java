@@ -17,6 +17,8 @@
 
 package org.apache.doris.load.loadv2;
 
+import org.apache.commons.lang3.StringUtils;
+import org.apache.doris.PaloFe;
 import org.apache.doris.analysis.BrokerDesc;
 import org.apache.doris.catalog.SparkResource;
 import org.apache.doris.common.Config;
@@ -44,11 +46,11 @@ import org.apache.hadoop.yarn.api.records.FinalApplicationStatus;
 import org.apache.hadoop.yarn.api.records.YarnApplicationState;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.apache.spark.launcher.SparkLauncher;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -67,19 +69,32 @@ public class SparkEtlJobHandler {
     private static final String JOB_CONFIG_DIR = "configs";
     private static final String ETL_JOB_NAME = "doris__%s";
     private static final String LAUNCHER_LOG = "spark_launcher_%s_%s.log";
-    // 5min
-    private static final long GET_APPID_TIMEOUT_MS = 300000L;
-    // 30s
-    private static final long EXEC_CMD_TIMEOUT_MS = 30000L;
     // yarn command
     private static final String YARN_STATUS_CMD = "%s --config %s application -status %s";
     private static final String YARN_KILL_CMD = "%s --config %s application -kill %s";
+    // yarn command mt
+    // for mt, yarn client doesn't need --config and make sure Kerberos success.
+    private static final String YARN_STATUS_CMD_MT = "/bin/bash -c \'source /opt/meituan/hadoop/bin/hadoop_user_login.sh hadoop-launcher " +
+            "&& export HADOOP_JAR_AUTHENTICATION=KERBEROS " +
+            "&& export HADOOP_JAR_KERBEROS_KEYTAB_FILE=/etc/hadoop/keytabs/hadoop-launcher.keytab " +
+            "&& export HADOOP_JAR_KERBEROS_PRINCIPAL=hadoop-launcher/_HOST@SANKUAI.COM " +
+            "&& export HADOOP_PROXY_USER=%s && %s application -status %s\'";
+
+    private static final String YARN_KILL_CMD_MT = "/bin/bash -c \'source /opt/meituan/hadoop/bin/hadoop_user_login.sh hadoop-launcher " +
+            "&& export HADOOP_JAR_AUTHENTICATION=KERBEROS " +
+            "&& export HADOOP_JAR_KERBEROS_KEYTAB_FILE=/etc/hadoop/keytabs/hadoop-launcher.keytab " +
+            "&& export HADOOP_JAR_KERBEROS_PRINCIPAL=hadoop-launcher/_HOST@SANKUAI.COM " +
+            "&& export HADOOP_PROXY_USER=%s && %s application -kill %s\'";
 
     private static final String SPARK_ETL_JOB_CLASS = "org.apache.doris.load.loadv2.etl.SparkEtlJob";
 
     public void submitEtlJob(long loadJobId, String loadLabel, EtlJobConfig etlJobConfig, SparkResource resource,
             BrokerDesc brokerDesc, SparkLoadAppHandle handle, SparkPendingTaskAttachment attachment)
             throws LoadException {
+        // update custom properties
+        if (resource.getCustomizedProperties().size() > 0) {
+            etlJobConfig.customizedProperties.putAll(resource.getCustomizedProperties());
+        }
         // delete outputPath
         deleteEtlOutputPath(etlJobConfig.outputPath, brokerDesc);
 
@@ -88,10 +103,6 @@ public class SparkEtlJobHandler {
             initLocalDir();
         }
 
-        // prepare dpp archive
-        SparkRepository.SparkArchive archive = resource.prepareArchive();
-        SparkRepository.SparkLibrary dppLibrary = archive.getDppLibrary();
-        SparkRepository.SparkLibrary spark2xLibrary = archive.getSpark2xLibrary();
 
         // spark home
         String sparkHome = Config.spark_home_default_dir;
@@ -99,10 +110,8 @@ public class SparkEtlJobHandler {
         String configsHdfsDir = etlJobConfig.outputPath + "/" + JOB_CONFIG_DIR + "/";
         // etl config json path
         String jobConfigHdfsPath = configsHdfsDir + CONFIG_FILE_NAME;
-        // spark submit app resource path
-        String appResourceHdfsPath = dppLibrary.remotePath;
-        // spark yarn archive path
-        String jobArchiveHdfsPath = spark2xLibrary.remotePath;
+        // spark submit app resource local path
+        String appResourceLocalPath = PaloFe.DORIS_HOME_DIR + SparkResource.DPP_RESOURCE_DIR + SparkResource.SPARK_DPP_JAR;
         // spark yarn stage dir
         String jobStageHdfsPath = resource.getWorkingDir();
         // spark launcher log path
@@ -110,9 +119,7 @@ public class SparkEtlJobHandler {
 
         // update archive and stage configs here
         Map<String, String> sparkConfigs = resource.getSparkConfigs();
-        if (Strings.isNullOrEmpty(sparkConfigs.get("spark.yarn.archive"))) {
-            sparkConfigs.put("spark.yarn.archive", jobArchiveHdfsPath);
-        }
+
         if (Strings.isNullOrEmpty(sparkConfigs.get("spark.yarn.stage.dir"))) {
             sparkConfigs.put("spark.yarn.stage.dir", jobStageHdfsPath);
         }
@@ -126,39 +133,20 @@ public class SparkEtlJobHandler {
             throw new LoadException(e.getMessage());
         }
 
-        Map<String, String> envParams = resource.getEnvConfigsWithoutPrefix();
-        LOG.info("submit etl job,env:{}", envParams);
-
-        SparkLauncher launcher = new SparkLauncher(envParams);
-        // master      |  deployMode
-        // ------------|-------------
-        // yarn        |  cluster
-        // spark://xx  |  client
-        launcher.setMaster(resource.getMaster())
-                .setDeployMode(resource.getDeployMode().name().toLowerCase())
-                .setAppResource(appResourceHdfsPath)
-                .setMainClass(SPARK_ETL_JOB_CLASS)
-                .setAppName(String.format(ETL_JOB_NAME, loadLabel))
-                .setSparkHome(sparkHome)
-                .addAppArgs(jobConfigHdfsPath)
-                .redirectError();
-
-        // spark configs
-        for (Map.Entry<String, String> entry : resource.getSparkConfigs().entrySet()) {
-            launcher.setConf(entry.getKey(), entry.getValue());
-        }
-
         // start app
         State state = null;
         String appId = null;
         String errMsg = "start spark app failed. error: ";
         try {
-            Process process = launcher.launch();
+
+            Process process = getSparkSubmitProcess(resource, appResourceLocalPath, "org.apache.doris.load.loadv2.etl.SparkEtlJob",
+                    String.format(ETL_JOB_NAME, loadLabel), sparkHome, jobConfigHdfsPath.replace(Config.hdfs_prefix_mt,""));
             handle.setProcess(process);
             if (!FeConstants.runningUnitTest) {
+
                 SparkLauncherMonitor.LogMonitor logMonitor =
                         SparkLauncherMonitor.createLogMonitor(handle, sparkConfigs);
-                logMonitor.setSubmitTimeoutMs(GET_APPID_TIMEOUT_MS);
+                logMonitor.setSubmitTimeoutMs(Config.GET_APPID_TIMEOUT_MS);
                 logMonitor.setRedirectLogPath(logFilePath);
                 logMonitor.start();
                 try {
@@ -189,33 +177,74 @@ public class SparkEtlJobHandler {
         attachment.setHandle(handle);
     }
 
+    private Process getSparkSubmitProcess(SparkResource resource, String appResource, String mainClassName, String appName,
+                                String sparkHome, String jobConfigHdfsPath) throws IOException {
+        String master = resource.getMaster();
+        String deployMode = resource.getDeployMode().name().toLowerCase();
+        Map<String, String> sparkConf = resource.getSparkConfigs();
+        //build spark submit cmd
+        StringBuilder cmdBuilder = new StringBuilder();
+        cmdBuilder.append("source /opt/meituan/hadoop/bin/hadoop_user_login.sh hadoop-launcher; ");
+        //build kerberos cmd and make sure it is strictly consistent with hive2doris
+        cmdBuilder.append("export HADOOP_JAR_AUTHENTICATION=KERBEROS; ");
+        cmdBuilder.append("export HADOOP_JAR_KERBEROS_KEYTAB_FILE=/etc/hadoop/keytabs/hadoop-launcher.keytab; ");
+        cmdBuilder.append("export HADOOP_JAR_KERBEROS_PRINCIPAL=hadoop-launcher/_HOST@SANKUAI.COM; ");
+
+        cmdBuilder.append(String.format("export HADOOP_PROXY_USER=%s; ", resource.getHadoopProxyUser()));
+        cmdBuilder.append(sparkHome + "/bin/spark-submit ");
+        cmdBuilder.append(" --master " +  master);
+        cmdBuilder.append(" --deploy-mode " + deployMode);
+        cmdBuilder.append(" --name " + appName);
+
+        //--conf args
+        Map<String, String> envs = new HashMap<>();
+        cmdBuilder.append(" --conf spark.yarn.submit.waitAppCompletion=false ");
+        for (Map.Entry<String, String> entry : sparkConf.entrySet()) {
+            if (StringUtils.isEmpty(entry.getValue())) {
+                continue;
+            }
+            if (entry.getKey().startsWith("spark.env")) {
+                envs.put(entry.getKey().replace("spark.env.", ""), entry.getValue());
+            } else if (entry.getKey().contains("spark.files")) {
+                cmdBuilder.append(" --files " + entry.getValue());
+            }
+            else {
+                cmdBuilder.append(String.format(" --conf %s=%s", entry.getKey(), entry.getValue()));
+            }
+        }
+
+        cmdBuilder.append(" --class " + mainClassName);
+        cmdBuilder.append(" " + appResource);
+        cmdBuilder.append(" " + jobConfigHdfsPath);
+        LOG.info("spark submit cmd:" + cmdBuilder.toString());
+
+        String[] cmd = new String[3];
+        cmd[0] = "/bin/bash";
+        cmd[1] = "-c";
+        cmd[2] = cmdBuilder.toString();
+        ProcessBuilder builder = new ProcessBuilder(cmd);
+        for (Map.Entry<String, String> entry : envs.entrySet()) {
+            builder.environment().put(entry.getKey(), entry.getValue());
+        }
+        builder.redirectErrorStream(true);
+        Process proc = builder.start();
+        return proc;
+    }
+
     public EtlStatus getEtlJobStatus(SparkLoadAppHandle handle, String appId, long loadJobId, String etlOutputPath,
                                      SparkResource resource, BrokerDesc brokerDesc) throws LoadException {
         EtlStatus status = new EtlStatus();
 
         Preconditions.checkState(appId != null && !appId.isEmpty());
         if (resource.isYarnMaster()) {
-            // prepare yarn config
-            String configDir = resource.prepareYarnConfig();
             // yarn client path
             String yarnClient = resource.getYarnClientPath();
-            // command: yarn --config configDir application -status appId
-            String yarnStatusCmd = String.format(YARN_STATUS_CMD, yarnClient, configDir, appId);
+            // command: 1.source 2.set hadoop_proxy_user 3.yarn application -status appId
+            String hadoopProxyUser = resource.getHadoopProxyUser();
+            String yarnStatusCmd = String.format(YARN_STATUS_CMD_MT, hadoopProxyUser, yarnClient, appId);
             LOG.info(yarnStatusCmd);
-
-            Map<String, String> envParams = resource.getEnvConfigsWithoutPrefix();
-            int envNums = envParams.size() + 1;
-            String[] envp = new String[envNums];
-            int idx = 0;
-            envp[idx++] = "LC_ALL=" + Config.locale;
-            if (envParams.size() > 0) {
-                for (Map.Entry<String, String> entry : envParams.entrySet()) {
-                    String envItem = entry.getKey() + "=" + entry.getValue();
-                    envp[idx++] = envItem;
-                }
-            }
-            LOG.info("getEtlJobStatus,appId:{}, loadJobId:{}, env:{},resource:{}", appId, loadJobId, envp, resource);
-            CommandResult result = Util.executeCommand(yarnStatusCmd, envp, EXEC_CMD_TIMEOUT_MS);
+            String[] envp = { "LC_ALL=" + Config.locale };
+            CommandResult result = Util.executeCommand(yarnStatusCmd, envp, Config.EXEC_YARNCMD_TIMEOUT_MS);
             if (result.getReturnCode() != 0) {
                 String stderr = result.getStderr();
                 if (stderr != null) {
@@ -224,10 +253,17 @@ public class SparkEtlJobHandler {
                         LOG.warn("spark app not found. spark app id: {}, load job id: {}", appId, loadJobId);
                         status.setState(TEtlState.CANCELLED);
                         status.setFailMsg(stderr);
+                        return status;
                     }
                 }
+                //case for exec yarn cmd timeout
+                if (result.getReturnCode() == -2) {
+                    LOG.warn("exec cmd:[{}] return -1 retry", yarnStatusCmd);
+                    status.setState(TEtlState.UNKNOWN);
+                    return status;
+                }
                 LOG.warn("yarn application status failed. spark app id: {}, load job id: {}, timeout: {}, msg: {}",
-                            appId, loadJobId, EXEC_CMD_TIMEOUT_MS, stderr);
+                            appId, loadJobId, Config.EXEC_YARNCMD_TIMEOUT_MS, stderr);
                 status.setState(TEtlState.CANCELLED);
                 status.setFailMsg(stderr);
                 return status;
@@ -298,26 +334,14 @@ public class SparkEtlJobHandler {
                     return;
                 }
             }
-            // prepare yarn config
-            String configDir = resource.prepareYarnConfig();
             // yarn client path
             String yarnClient = resource.getYarnClientPath();
-            // command: yarn --config configDir application -kill appId
-            String yarnKillCmd = String.format(YARN_KILL_CMD, yarnClient, configDir, appId);
+            String hadoopProxyUser = resource.getHadoopProxyUser();
+            // command: yarn application -kill appId
+            String yarnKillCmd = String.format(YARN_KILL_CMD_MT, hadoopProxyUser, yarnClient, appId);
             LOG.info(yarnKillCmd);
-            Map<String, String> envParams = resource.getEnvConfigsWithoutPrefix();
-            int envNums = envParams.size() + 1;
-            String[] envp = new String[envNums];
-            int idx = 0;
-            envp[idx++] = "LC_ALL=" + Config.locale;
-            if (envParams.size() > 0) {
-                for (Map.Entry<String, String> entry : envParams.entrySet()) {
-                    String envItem = entry.getKey() + "=" + entry.getValue();
-                    envp[idx++] = envItem;
-                }
-            }
-            LOG.info("killEtlJob, env:{}", envp);
-            CommandResult result = Util.executeCommand(yarnKillCmd, envp, EXEC_CMD_TIMEOUT_MS);
+            String[] envp = { "LC_ALL=" + Config.locale };
+            CommandResult result = Util.executeCommand(yarnKillCmd, envp, Config.EXEC_YARNCMD_TIMEOUT_MS);
             LOG.info("yarn application -kill {}, output: {}", appId, result.getStdout());
             if (result.getReturnCode() != 0) {
                 String stderr = result.getStderr();

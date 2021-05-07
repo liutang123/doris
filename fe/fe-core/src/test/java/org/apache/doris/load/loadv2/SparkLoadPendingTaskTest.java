@@ -73,6 +73,7 @@ public class SparkLoadPendingTaskTest {
                                 @Mocked Env env, @Injectable SparkLoadAppHandle handle,
                                 @Injectable Database database,
                                 @Injectable OlapTable table) throws UserException {
+        long dbId = 1001L;
         long tableId = 1L;
 
         // columns
@@ -90,6 +91,7 @@ public class SparkLoadPendingTaskTest {
         PartitionInfo partitionInfo = new SinglePartitionInfo();
         Partition partition = new Partition(partitionId, "p1", null, distributionInfo);
         List<Partition> partitions = Lists.newArrayList(partition);
+        String db_name = "default_cluster:test";
 
         // file group
         Map<BrokerFileGroupAggInfo.FileGroupAggKey, List<BrokerFileGroup>> aggKeyToFileGroups = Maps.newHashMap();
@@ -103,6 +105,12 @@ public class SparkLoadPendingTaskTest {
 
         new Expectations() {
             {
+                Env.getCurrentEnv();
+                result = env;
+                env.getInternalCatalog().getDbNullable(dbId).getFullName();
+                result = db_name;
+                sparkLoadJob.getDbId();
+                result = dbId;
                 sparkLoadJob.getHandle();
                 result = handle;
                 table.getPartitions();
@@ -149,7 +157,10 @@ public class SparkLoadPendingTaskTest {
                                                    @Mocked Env env,
                                                    @Injectable Database database,
                                                    @Injectable OlapTable table) throws LoadException, DdlException, AnalysisException {
+
+        long dbId = 1001L;
         long tableId = 1L;
+        String db_name = "default_cluster:test";
 
         // c1 is partition column, c2 is distribution column
         List<Column> columns = Lists.newArrayList();
@@ -197,6 +208,12 @@ public class SparkLoadPendingTaskTest {
 
         new Expectations() {
             {
+                Env.getCurrentEnv();
+                result = env;
+                env.getInternalCatalog().getDbNullable(dbId).getFullName();
+                result = db_name;
+                sparkLoadJob.getDbId();
+                result = dbId;
                 table.getPartitions();
                 result = partitions;
                 table.getIndexIdToSchema();

@@ -20,6 +20,7 @@ package org.apache.doris.sparkdpp;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.google.gson.ExclusionStrategy;
 import com.google.gson.FieldAttributes;
 import com.google.gson.Gson;
@@ -131,12 +132,12 @@ import java.util.Map;
  */
 public class EtlJobConfig implements Serializable {
     // global dict
-    public static final String GLOBAL_DICT_TABLE_NAME = "doris_global_dict_table_%d";
-    public static final String DISTINCT_KEY_TABLE_NAME = "doris_distinct_key_table_%d_%s";
-    public static final String DORIS_INTERMEDIATE_HIVE_TABLE_NAME = "doris_intermediate_hive_table_%d_%s";
+    public static final String GLOBAL_DICT_TABLE_NAME = "doris_gdt_%s__%s";
+    public static final String DISTINCT_KEY_TABLE_NAME = "tmp_doris_dkt_%s__%s__%s";
+    public static final String DORIS_INTERMEDIATE_HIVE_TABLE_NAME = "tmp_doris_iht_%s__%s__%s";
 
     // hdfsEtlPath/jobs/dbId/loadLabel/PendingTaskSignature
-    private static final String ETL_OUTPUT_PATH_FORMAT = "%s/jobs/%d/%s/%d";
+    private static final String ETL_OUTPUT_PATH_FORMAT = "%s/jobs/%s/%s/%d";
     private static final String ETL_OUTPUT_FILE_NAME_DESC_V1
             = "version.label.tableId.partitionId.indexId.bucket.schemaHash.parquet";
     // tableId.partitionId.indexId.bucket.schemaHash
@@ -145,7 +146,10 @@ public class EtlJobConfig implements Serializable {
 
     // dpp result
     public static final String DPP_RESULT_NAME = "dpp_result.json";
-
+    @SerializedName(value = "dorisTableName")
+    public String dorisTableName;
+    @SerializedName(value = "dorisDBName")
+    public String dorisDBName;
     @SerializedName(value = "tables")
     public Map<Long, EtlTable> tables;
     @SerializedName(value = "outputPath")
@@ -158,15 +162,18 @@ public class EtlJobConfig implements Serializable {
     public EtlJobProperty properties;
     @SerializedName(value = "configVersion")
     public ConfigVersion configVersion;
+    @SerializedName(value="customizedProperties")
+    public Map<String, String> customizedProperties;
 
     public EtlJobConfig(Map<Long, EtlTable> tables, String outputFilePattern, String label, EtlJobProperty properties) {
         this.tables = tables;
         // set outputPath when submit etl job
-        this.outputPath = null;
+        this.outputPath = "";
         this.outputFilePattern = outputFilePattern;
         this.label = label;
         this.properties = properties;
         this.configVersion = ConfigVersion.V1;
+        this.customizedProperties = Maps.newHashMap();
     }
 
     @Override
@@ -185,8 +192,8 @@ public class EtlJobConfig implements Serializable {
         return outputPath;
     }
 
-    public static String getOutputPath(String hdfsEtlPath, long dbId, String loadLabel, long taskSignature) {
-        return String.format(ETL_OUTPUT_PATH_FORMAT, hdfsEtlPath, dbId, loadLabel, taskSignature);
+    public static String getOutputPath(String hdfsEtlPath, String dbName, String loadLabel, long taskSignature) {
+        return String.format(ETL_OUTPUT_PATH_FORMAT, hdfsEtlPath, dbName, loadLabel, taskSignature);
     }
 
     public static String getOutputFilePattern(String loadLabel, FilePatternVersion filePatternVersion) {

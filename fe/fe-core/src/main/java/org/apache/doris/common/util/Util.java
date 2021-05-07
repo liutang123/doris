@@ -183,7 +183,10 @@ public class Util {
         String[] cmds = cmdList.toArray(new String[0]);
 
         try {
-            Process p = Runtime.getRuntime().exec(cmds, envp);
+            ProcessBuilder builder = new ProcessBuilder(cmds);
+            builder.redirectErrorStream(true);
+            Process p = builder.start();
+
             CmdWorker cmdWorker = new CmdWorker(p);
             cmdWorker.start();
 
@@ -195,7 +198,7 @@ public class Util {
                     // if we get this far then we never got an exit value from the worker thread
                     // as a result of a timeout
                     LOG.warn("exec command [{}] timed out.", cmd);
-                    exitValue = -1;
+                    exitValue = -2;
                 }
             } catch (InterruptedException ex) {
                 cmdWorker.interrupt();

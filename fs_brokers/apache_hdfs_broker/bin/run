@@ -1,0 +1,3 @@
+#!/bin/sh
+export JAVA_HOME=/usr/local/java8
+exec pgrphack setuidgid sankuai sh ./start_broker.sh >> /opt/meituan/palo_broker/log/broker.out 2>&1

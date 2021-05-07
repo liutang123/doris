@@ -57,6 +57,7 @@ public class DorisRangePartitioner extends Partitioner {
         // get the partition columns from key as partition key
         DppColumns partitionKey = new DppColumns(key, partitionKeyIndexes);
         // TODO: optimize this by use binary search
+        // TODO(wx)
         for (int i = 0; i < partitionRangeKeys.size(); ++i) {
             if (partitionRangeKeys.get(i).isRowContained(partitionKey)) {
                 return i;

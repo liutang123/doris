@@ -106,6 +106,12 @@ under the License.
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
         </dependency>
+        <!-- for MT -->
+        <dependency>
+            <groupId>com.meituan.talostwo</groupId>
+            <artifactId>talostwo-output</artifactId>
+            <version>1.4.1-RELEASE</version>
+        </dependency>
     </dependencies>
     <build>
         <finalName>spark-dpp-${project.version}</finalName>
@@ -206,12 +212,12 @@ under the License.
                             <exclude>org.slf4j:*</exclude>
                         </excludes>
                     </artifactSet>
+                    <shadedArtifactAttached>true</shadedArtifactAttached>
+                    <shadedClassifierName>jar-with-dependencies</shadedClassifierName>
                     <relocations>
                         <relocation>
                             <pattern>org.roaringbitmap</pattern>
                             <shadedPattern>org.apache.doris.shaded.org.roaringbitmap</shadedPattern>
-                            <pattern>com.google.guava</pattern>
-                            <shadedPattern>org.apache.doris.shaded.com.google.guava</shadedPattern>
                         </relocation>
                     </relocations>
                 </configuration>

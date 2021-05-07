@@ -1,0 +1,33 @@
+version: v1
+build:
+  run:
+    workDir: fs_brokers/apache_hdfs_broker
+    cmd:
+      - ls .
+      - wget $S3_PLUS_URL
+      - ls .
+  target:
+    distDir: fs_brokers/apache_hdfs_broker
+    files:
+      - palo_broker.*.tar.gz
+      - bin/run
+deploy:
+  targetDir: /opt/meituan/versions
+  run:
+    workDir: /opt/meituan/versions
+    cmd:
+      - tar -zxvf /opt/meituan/versions/palo_broker.*.tar.gz
+      - chmod 0755 /opt/meituan/versions/bin/run
+      - cp -rf /opt/meituan/versions/bin/run /opt/meituan/versions/apache_hdfs_broker/bin/
+      - if [[ -d /opt/meituan/palo_broker ]];then echo "palo_broker is exist";else mkdir /opt/meituan/palo_broker;fi
+      - if [[ -d /opt/meituan/palo_broker/log ]];then echo "palo_broker/log is exist";else mkdir /opt/meituan/palo_broker/log;fi
+      - rm -rf /opt/meituan/palo_broker/conf /opt/meituan/palo_broker/lib
+      - cp -rf /opt/meituan/versions/apache_hdfs_broker/* /opt/meituan/palo_broker/
+      - cd /opt/meituan/palo_broker
+      - ls .
+      - rm -rf /opt/meituan/versions
+      - if [[ -d /service/palo_broker ]];then echo "/service/palo_broker is exist";else ln -sf /opt/meituan/palo_broker/bin /service/palo_broker;fi
+      - sudo svc -d /service/palo_broker
+      - jps -m | grep BrokerBootstrap | awk '{print $1}' | xargs -i kill {}
+      - sleep 5s
+      - sudo svc -u /service/palo_broker

@@ -74,6 +74,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 // 1. create etl job config and write it into jobconfig.json file
 // 2. submit spark etl job
@@ -84,6 +85,7 @@ public class SparkLoadPendingTask extends LoadTask {
     private final SparkResource resource;
     private final BrokerDesc brokerDesc;
     private final long dbId;
+    private final String dbName;
     private final String loadLabel;
     private final long loadJobId;
     private final long transactionId;
@@ -105,6 +107,8 @@ public class SparkLoadPendingTask extends LoadTask {
         this.transactionId = loadTaskCallback.getTransactionId();
         this.sparkLoadAppHandle = loadTaskCallback.getHandle();
         this.failMsg = new FailMsg(FailMsg.CancelType.ETL_SUBMIT_FAIL);
+        Database db = Env.getCurrentEnv().getInternalCatalog().getDbNullable(dbId);
+        this.dbName = db == null ? "UNKNOWN_" + UUID.randomUUID().toString() : db.getFullName();
         toLowCaseForFileGroups();
     }
 
@@ -126,7 +130,7 @@ public class SparkLoadPendingTask extends LoadTask {
     private void submitEtlJob() throws LoadException {
         SparkPendingTaskAttachment sparkAttachment = (SparkPendingTaskAttachment) attachment;
         // retry different output path
-        etlJobConfig.outputPath = EtlJobConfig.getOutputPath(resource.getWorkingDir(), dbId, loadLabel, signature);
+        etlJobConfig.outputPath = EtlJobConfig.getOutputPath(resource.getWorkingDir(), dbName.replaceAll(":", "_"), loadLabel, signature);
         sparkAttachment.setOutputPath(etlJobConfig.outputPath);
 
         // handler submit etl job
@@ -142,9 +146,11 @@ public class SparkLoadPendingTask extends LoadTask {
     }
 
     private void createEtlJobConf() throws LoadException {
+
         Database db = Env.getCurrentInternalCatalog()
                 .getDbOrException(dbId, s -> new LoadException("db does not exist. id: " + s));
-
+        String dbName = db.getFullName().split(":")[1];
+        String tableName = "";
         Map<Long, EtlTable> tables = Maps.newHashMap();
         Map<Long, Set<Long>> tableIdToPartitionIds = Maps.newHashMap();
         Set<Long> allPartitionsTableIds = Sets.newHashSet();
@@ -164,6 +170,7 @@ public class SparkLoadPendingTask extends LoadTask {
 
                 OlapTable table = (OlapTable) db.getTableOrException(
                         tableId, s -> new LoadException("table does not exist. id: " + s));
+                tableName = table.getName();
 
                 EtlTable etlTable = null;
                 if (tables.containsKey(tableId)) {
@@ -201,6 +208,8 @@ public class SparkLoadPendingTask extends LoadTask {
         properties.strictMode = ((LoadJob) callback).isStrictMode();
         properties.timezone = ((LoadJob) callback).getTimeZone();
         etlJobConfig = new EtlJobConfig(tables, outputFilePattern, loadLabel, properties);
+        etlJobConfig.dorisDBName = dbName;
+        etlJobConfig.dorisTableName = tableName;
     }
 
     private void prepareTablePartitionInfos(Database db, Map<Long, Set<Long>> tableIdToPartitionIds,
@@ -352,7 +361,8 @@ public class SparkLoadPendingTask extends LoadTask {
                 partitionColumnRefs.add(column.getName());
             }
 
-            for (Map.Entry<Long, PartitionItem> entry : rangePartitionInfo.getAllPartitionItemEntryList(true)) {
+
+            for (Map.Entry<Long, PartitionItem> entry : rangePartitionInfo.getSortedRangeMapAll()) {
                 long partitionId = entry.getKey();
                 if (!partitionIds.contains(partitionId)) {
                     continue;

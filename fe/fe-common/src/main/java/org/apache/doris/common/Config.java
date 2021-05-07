@@ -17,6 +17,8 @@
 
 package org.apache.doris.common;
 
+import java.lang.reflect.Field;
+
 public class Config extends ConfigBase {
 
     @ConfField(description = {"用户自定义配置文件的路径，用于存放 fe_custom.conf。该文件中的配置会覆盖 fe.conf 中的配置",
@@ -564,7 +566,10 @@ public class Config extends ConfigBase {
 
     @ConfField(mutable = true, masterOnly = true, description = {"Spark Load 所使用的 Spark 程序目录",
             "Spark dir for Spark Load"})
-    public static String spark_home_default_dir = System.getenv("DORIS_HOME") + "/lib/spark2x";
+    public static String spark_home_default_dir = "/opt/meituan/spark-2.2";
+
+    @ConfField(mutable = true, masterOnly = true)
+    public static String hdfs_prefix_mt = "hdfs://dfsrouter.vip.sankuai.com:8888";
 
     @ConfField(description = {"Spark load 所使用的依赖项目录", "Spark dependencies dir for Spark Load"})
     public static String spark_resource_path = "";
@@ -573,7 +578,7 @@ public class Config extends ConfigBase {
     public static String spark_launcher_log_dir = sys_log_dir + "/spark_launcher_log";
 
     @ConfField(description = {"Yarn client 的路径", "Yarn client path"})
-    public static String yarn_client_path = System.getenv("DORIS_HOME") + "/lib/yarn-client/hadoop/bin/yarn";
+    public static String yarn_client_path = "/opt/meituan/hadoop/bin/yarn";
 
     @ConfField(description = {"Yarn 配置文件的路径", "Yarn config path"})
     public static String yarn_config_dir = System.getenv("DORIS_HOME") + "/lib/yarn-config";
@@ -2530,6 +2535,16 @@ public class Config extends ConfigBase {
                     + "and the deleted labels can be reused."
     })
     public static int label_num_threshold = 2000;
+    // 禁止在ADD PARTITION时，check quota，由于tablet非常多，check一次占用锁的时间非常长，因此需要禁用。
+    // 禁止在create table时check quota
+    @ConfField(mutable = true, masterOnly = true)
+    public static boolean mt_disable_check_quota_when_add_partition = true;
+
+    @ConfField(mutable = true)
+    public static long GET_APPID_TIMEOUT_MS = 300000L;  //5min
+
+    @ConfField(mutable = true)
+    public static long EXEC_YARNCMD_TIMEOUT_MS = 30000L;   // 30s
 
     @ConfField(description = {"指定 internal catalog 的默认鉴权类",
             "Specify the default authentication class of internal catalog"},

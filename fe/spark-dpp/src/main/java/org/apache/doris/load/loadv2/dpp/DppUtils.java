@@ -29,6 +29,7 @@ import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 
 import java.math.BigDecimal;
+import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
@@ -200,7 +201,7 @@ public class DppUtils {
         }
         // do not flip buffer when the buffer was created by wrap()
         if (!type.equals(DataTypes.StringType)) {
-            buffer.flip();
+            ((Buffer)buffer).flip();
         }
         return buffer;
     }

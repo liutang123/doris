@@ -19,9 +19,8 @@ package org.apache.doris.load.loadv2.dpp;
 
 import org.apache.doris.common.SparkDppException;
 import org.apache.doris.sparkdpp.EtlJobConfig;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
@@ -33,7 +32,7 @@ import java.time.format.DateTimeFormatterBuilder;
 // Parser to validate value for different type
 public abstract class ColumnParser implements Serializable {
 
-    protected static final Logger LOG = LoggerFactory.getLogger(ColumnParser.class);
+    protected static final Logger LOG = LogManager.getLogger(ColumnParser.class);
 
     // thread safe formatter
     public static final DateTimeFormatter DATE_FORMATTER = new DateTimeFormatterBuilder()

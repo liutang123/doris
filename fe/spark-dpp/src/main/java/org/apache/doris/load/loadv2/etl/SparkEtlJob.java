@@ -27,6 +27,7 @@ import org.apache.doris.sparkdpp.EtlJobConfig.EtlFileGroup;
 import org.apache.doris.sparkdpp.EtlJobConfig.EtlIndex;
 import org.apache.doris.sparkdpp.EtlJobConfig.EtlTable;
 
+import com.google.common.base.Splitter;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -35,12 +36,13 @@ import org.apache.commons.collections.map.MultiValueMap;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.log4j.LogManager;
+import org.apache.log4j.Logger;
+import org.apache.parquet.Strings;
 import org.apache.spark.SparkConf;
 import org.apache.spark.deploy.SparkHadoopUtil;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.functions;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -57,11 +59,15 @@ import java.util.Set;
  * 4. dpp (data partition, data sort and data aggregation)
  */
 public class SparkEtlJob {
-    private static final Logger LOG = LoggerFactory.getLogger(SparkEtlJob.class);
+    private static final Logger LOG = LogManager.getLogger(SparkEtlJob.class);
 
     private static final String BITMAP_DICT_FUNC = "bitmap_dict";
     private static final String TO_BITMAP_FUNC = "to_bitmap";
+
+    private static final String MT_HDFS_PREFIX = "hdfs://dfsrouter.vip.sankuai.com:8888";
     private static final String BITMAP_HASH = "bitmap_hash";
+
+    private static final Splitter SPLITTER = Splitter.on(",").trimResults().omitEmptyStrings();
     private static final String BINARY_BITMAP = "binary_bitmap";
 
     private String jobConfigFilePath;
@@ -71,6 +77,10 @@ public class SparkEtlJob {
     private Map<Long, Set<String>> tableToBinaryBitmapColumns;
     private final SparkConf conf;
     private SparkSession spark;
+    private String globalDictTableName;
+    private String distinctKeyTableName;
+    private String dorisIntermediateHiveTable;
+    private List<String> tempTables;
 
     private SparkEtlJob(String jobConfigFilePath) {
         this.jobConfigFilePath = jobConfigFilePath;
@@ -79,6 +89,7 @@ public class SparkEtlJob {
         this.tableToBitmapDictColumns = Maps.newHashMap();
         this.tableToBinaryBitmapColumns = Maps.newHashMap();
         conf = new SparkConf();
+        this.tempTables = Lists.newArrayList();
     }
 
     private void initSpark() {
@@ -113,9 +124,8 @@ public class SparkEtlJob {
             LOG.debug("rdd read json config: " + jsonConfig);
         }
         etlJobConfig = EtlJobConfig.configFromJson(jsonConfig);
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("etl job config: " + etlJobConfig);
-        }
+        etlJobConfig.outputPath = etlJobConfig.outputPath.replace(MT_HDFS_PREFIX, "");
+        LOG.info("etl job config: " + etlJobConfig);
     }
 
     /*
@@ -199,32 +209,68 @@ public class SparkEtlJob {
         // hive db and tables
         EtlFileGroup fileGroup = table.fileGroups.get(0);
         String sourceHiveDBTableName = fileGroup.hiveDbTableName;
-        String dorisHiveDB = sourceHiveDBTableName.split("\\.")[0];
-        String taskId = etlJobConfig.outputPath.substring(etlJobConfig.outputPath.lastIndexOf("/") + 1);
-        String globalDictTableName = String.format(EtlJobConfig.GLOBAL_DICT_TABLE_NAME, tableId);
-        String distinctKeyTableName = String.format(EtlJobConfig.DISTINCT_KEY_TABLE_NAME, tableId, taskId);
-        String dorisIntermediateHiveTable = String.format(
-                EtlJobConfig.DORIS_INTERMEDIATE_HIVE_TABLE_NAME, tableId, taskId);
+
+        String dorisHiveDB = "mart_doris";
+        if (!Strings.isNullOrEmpty(etlJobConfig.customizedProperties.getOrDefault("custom.hive.db", ""))) {
+            dorisHiveDB = etlJobConfig.customizedProperties.get("custom.hive.db");
+        }
+
+        String appId = spark.sparkContext().applicationId().replace("application", "");
+        // todo(wx):  zookeeper lock is too heavy now globalDict build should be build one by one
+        globalDictTableName = String.format(EtlJobConfig.GLOBAL_DICT_TABLE_NAME,
+                etlJobConfig.dorisDBName, etlJobConfig.dorisTableName);
+        distinctKeyTableName = String.format(EtlJobConfig.DISTINCT_KEY_TABLE_NAME,
+                etlJobConfig.dorisDBName, etlJobConfig.dorisTableName, appId);
+        dorisIntermediateHiveTable = String.format(EtlJobConfig.DORIS_INTERMEDIATE_HIVE_TABLE_NAME,
+                etlJobConfig.dorisDBName, etlJobConfig.dorisTableName, appId);
         String sourceHiveFilter = fileGroup.where;
+        // todo(wx): make all magic name of custom prefix in constant.
+
+        globalDictTableName = etlJobConfig.customizedProperties.getOrDefault("custom.global.dict.table", globalDictTableName);
+        boolean buildIndependent = Boolean.parseBoolean(etlJobConfig.customizedProperties.getOrDefault("custom.buildGlobalIndependentDict", ""));
+        if (buildIndependent) {
+            globalDictTableName = globalDictTableName + "_" + spark.sparkContext().applicationId();
+            tempTables.add(globalDictTableName);
+        }
+        tempTables.add(distinctKeyTableName);
+        tempTables.add(dorisIntermediateHiveTable);
 
         // others
-        List<String> mapSideJoinColumns = Lists.newArrayList();
-        int buildConcurrency = 1;
-        List<String> veryHighCardinalityColumn = Lists.newArrayList();
-        int veryHighCardinalityColumnSplitNum = 1;
+        int buildConcurrency = 1; // do not change this
+        String skipNullCols = etlJobConfig.customizedProperties.getOrDefault("custom.skipnull.columns", null);
+        String veryHighCardinalityCols = etlJobConfig.customizedProperties.getOrDefault("custom.veryhighcardinality.columns", null);
+        String veryHighCardColumnSplitNum = etlJobConfig.customizedProperties.getOrDefault("custom.veryhighcolumnsplit.num", "10");
+        String mapSideJoinCols = etlJobConfig.customizedProperties.getOrDefault("custom.mapsidejoin.columns", null);
 
         LOG.info("global dict builder args, dictColumnMap: " + dictColumnMap
                          + ", dorisOlapTableColumnList: " + dorisOlapTableColumnList
                          + ", sourceHiveDBTableName: " + sourceHiveDBTableName
-                         + ", sourceHiveFilter: " + sourceHiveFilter
+                         + ", sourceHiveFilter: "+ sourceHiveFilter
+                         + ", skipNullColumns: " + skipNullCols
+                         + ", veryHighCardinalityColumns: " + veryHighCardinalityCols
+                         + ", veryHighCardinalityColumnSplitNum: " + veryHighCardColumnSplitNum
+                         + ", mapSideJoinColumns: " + mapSideJoinCols
                          + ", distinctKeyTableName: " + distinctKeyTableName
                          + ", globalDictTableName: " + globalDictTableName
                          + ", dorisIntermediateHiveTable: " + dorisIntermediateHiveTable);
         try {
-            GlobalDictBuilder globalDictBuilder = new GlobalDictBuilder(dictColumnMap, dorisOlapTableColumnList,
-                    mapSideJoinColumns, sourceHiveDBTableName, sourceHiveFilter, dorisHiveDB, distinctKeyTableName,
-                    globalDictTableName, dorisIntermediateHiveTable, buildConcurrency, veryHighCardinalityColumn,
-                    veryHighCardinalityColumnSplitNum, spark);
+            if (globalDictTableName.length() > 128 || distinctKeyTableName.length() > 128
+                    || dorisIntermediateHiveTable.length() > 128) {
+                String errorMsg = "internal hive table name is longer than 128. globalDictTableName: "
+                            + globalDictTableName
+                            + ", distinctKeyTableName: " + distinctKeyTableName
+                            + ", dorisIntermediateHiveTable: " + dorisIntermediateHiveTable;
+                throw new Exception(errorMsg);
+            }
+
+            List<String> skipNullColumn = skipNullCols == null ? Lists.newArrayList() : Lists.newArrayList(SPLITTER.split(skipNullCols));
+            List<String> veryHighCardinalityColumn = veryHighCardinalityCols == null ? Lists.newArrayList() : Lists.newArrayList(SPLITTER.split(veryHighCardinalityCols));
+            int veryHighCardinalityColumnSplitNum = Integer.parseInt(veryHighCardColumnSplitNum);
+            List<String> mapSideJoinColumns = mapSideJoinCols == null ? Lists.newArrayList() : Lists.newArrayList(SPLITTER.split(mapSideJoinCols));
+            GlobalDictBuilder globalDictBuilder = new GlobalDictBuilder(
+                    dictColumnMap, dorisOlapTableColumnList, mapSideJoinColumns, sourceHiveDBTableName,
+                    sourceHiveFilter, dorisHiveDB, distinctKeyTableName, globalDictTableName, dorisIntermediateHiveTable,
+                    buildConcurrency, veryHighCardinalityColumn, veryHighCardinalityColumnSplitNum, skipNullColumn, spark);
             globalDictBuilder.createHiveIntermediateTable();
             globalDictBuilder.extractDistinctColumn();
             globalDictBuilder.buildGlobalDict();
@@ -265,10 +311,23 @@ public class SparkEtlJob {
         processDpp();
     }
 
+    private void deleteTmpTable() {
+        for (String table : this.tempTables) {
+            LOG.info("drop table " + table);
+            spark.sql("DROP TABLE IF EXISTS " + table);
+        }
+    }
+
     private void run() throws Exception {
         initConfig();
         checkConfig();
-        processData();
+        try {
+            processData();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        } finally {
+            deleteTmpTable();
+        }
     }
 
     public static void main(String[] args) {
