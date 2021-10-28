@@ -595,13 +595,12 @@ public class TabletInvertedIndex {
     public void addReplica(long tabletId, Replica replica) {
         long stamp = writeLock();
         try {
-            Preconditions.checkState(tabletMetaMap.containsKey(tabletId),
-                    "tablet " + tabletId + " not exists, replica " + replica.getId()
-                    + ", backend " + replica.getBackendId());
-            replicaMetaTable.put(tabletId, replica.getBackendId(), replica);
-            replicaToTabletMap.put(replica.getId(), tabletId);
-            backingReplicaMetaTable.put(replica.getBackendId(), tabletId, replica);
-            if (LOG.isDebugEnabled()) {
+            if (!tabletMetaMap.containsKey(tabletId)) {
+                LOG.error("[INCONSISTENT META] inverted index has no tablet meta, tablet={}", tabletId);
+            } else {
+                replicaMetaTable.put(tabletId, replica.getBackendId(), replica);
+                replicaToTabletMap.put(replica.getId(), tabletId);
+                backingReplicaMetaTable.put(replica.getBackendId(), tabletId, replica);
                 LOG.debug("add replica {} of tablet {} in backend {}",
                         replica.getId(), tabletId, replica.getBackendId());
             }
@@ -613,21 +612,18 @@ public class TabletInvertedIndex {
     public void deleteReplica(long tabletId, long backendId) {
         long stamp = writeLock();
         try {
-            Preconditions.checkState(tabletMetaMap.containsKey(tabletId),
-                    "tablet " + tabletId + " not exists, backend " + backendId);
-            if (replicaMetaTable.containsRow(tabletId)) {
+            // this may happen when fe restart after tablet is empty(bug cause)
+            // add log instead of assertion to observe
+            if (!tabletMetaMap.containsKey(tabletId)) {
+                LOG.error("[INCONSISTENT META] inverted index has no tablet meta, tablet={}", tabletId);
+            } else if (!replicaMetaTable.containsRow(tabletId)) {
+                LOG.error("[INCONSISTENT META] inverted index has no replica meta, tablet={}", tabletId);
+            } else {
                 Replica replica = replicaMetaTable.remove(tabletId, backendId);
                 replicaToTabletMap.remove(replica.getId());
                 replicaMetaTable.remove(tabletId, backendId);
                 backingReplicaMetaTable.remove(backendId, tabletId);
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("delete replica {} of tablet {} in backend {}",
-                            replica.getId(), tabletId, backendId);
-                }
-            } else {
-                // this may happen when fe restart after tablet is empty(bug cause)
-                // add log instead of assertion to observe
-                LOG.error("tablet[{}] contains no replica in inverted index", tabletId);
+                LOG.debug("delete replica {} of tablet {} in backend {}", replica.getId(), tabletId, backendId);
             }
         } finally {
             writeUnlock(stamp);
