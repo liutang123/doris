@@ -116,6 +116,7 @@ import org.apache.doris.common.mt.MTAlertDaemon;
 import org.apache.doris.common.util.Daemon;
 import org.apache.doris.common.util.DynamicPartitionUtil;
 import org.apache.doris.common.util.HttpURLUtil;
+import org.apache.doris.common.mt.MGWClient;
 import org.apache.doris.common.util.MasterDaemon;
 import org.apache.doris.common.util.MetaLockUtils;
 import org.apache.doris.common.util.NetUtils;
@@ -528,6 +529,7 @@ public class Env {
     private InsertOverwriteManager insertOverwriteManager;
 
     private MTAlertDaemon mtAlertDaemon;
+    private Daemon mtMgwDaemon;
 
     public List<TFrontendInfo> getFrontendInfos() {
         List<TFrontendInfo> res = new ArrayList<>();
@@ -764,6 +766,7 @@ public class Env {
         this.mtmvService = new MTMVService();
         this.insertOverwriteManager = new InsertOverwriteManager();
         this.mtAlertDaemon = new MTAlertDaemon();
+        this.mtMgwDaemon = MGWClient.createDaemon();
     }
 
     public static void destroyCheckpoint() {
@@ -1691,6 +1694,7 @@ public class Env {
         }
         // MT
         mtAlertDaemon.start();
+        mtMgwDaemon.start();
     }
 
     private void transferToNonMaster(FrontendNodeType newType) {
@@ -2714,6 +2718,7 @@ public class Env {
 
                     feType = newType;
                     LOG.info("finished to transfer FE type to {}", feType);
+                    new Thread(MGWClient::register).start();
                 }
             } // end runOneCycle
         };

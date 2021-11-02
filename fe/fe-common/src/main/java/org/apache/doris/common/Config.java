@@ -2507,6 +2507,11 @@ public class Config extends ConfigBase {
     };
 
     @ConfField(mutable = true)
+    public static boolean mt_disable_mgw_ops = false;
+    @ConfField(mutable = true)
+    public static int mt_check_mgw_interval_second = 300;
+
+    @ConfField(mutable = true)
     public static boolean mt_audit_query_plan = true;
 
     @ConfField

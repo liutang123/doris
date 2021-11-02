@@ -25,6 +25,7 @@ import org.apache.doris.common.LdapConfig;
 import org.apache.doris.common.Log4jConfig;
 import org.apache.doris.common.ThreadPoolManager;
 import org.apache.doris.common.Version;
+import org.apache.doris.common.mt.MGWClient;
 import org.apache.doris.common.util.JdkUtils;
 import org.apache.doris.common.util.NetUtils;
 import org.apache.doris.httpv2.HttpServer;
@@ -163,6 +164,10 @@ public class DorisFE {
             // TODO: remove this after we remove ApacheHttpClient
             System.setProperty("software.amazon.awssdk.http.service.impl",
                     "software.amazon.awssdk.http.urlconnection.UrlConnectionSdkHttpService");
+
+            // deregister mgw at begin and shutdown
+            new Thread(MGWClient::deregister).start();
+            Runtime.getRuntime().addShutdownHook(new Thread(MGWClient::deregister));
 
             // init catalog and wait it be ready
             Env.getCurrentEnv().initialize(args);
