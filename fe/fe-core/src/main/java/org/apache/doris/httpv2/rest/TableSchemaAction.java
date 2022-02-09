@@ -17,9 +17,11 @@
 
 package org.apache.doris.httpv2.rest;
 
+import org.apache.doris.catalog.AggregateType;
 import org.apache.doris.catalog.Catalog;
 import org.apache.doris.catalog.Column;
 import org.apache.doris.catalog.Database;
+import org.apache.doris.catalog.OlapTable;
 import org.apache.doris.catalog.PrimitiveType;
 import org.apache.doris.catalog.ScalarType;
 import org.apache.doris.catalog.Table;
@@ -39,6 +41,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -86,7 +89,15 @@ public class TableSchemaAction extends RestBaseController {
                         baseInfo.put("type", primitiveType.toString());
                         baseInfo.put("comment", column.getComment());
                         baseInfo.put("name", column.getDisplayName());
+                        baseInfo.put("is_key", Boolean.toString(column.isKey()));
+                        Optional<AggregateType> aggregationType = Optional.ofNullable(column.getAggregationType());
+                        baseInfo.put("aggregation_type", aggregationType.isPresent() ? aggregationType.get().toSql() : "");
                         propList.add(baseInfo);
+                    }
+                    resultMap.put("engine", table.getEngine());
+                    resultMap.put("type", table.getType().name());
+                    if (table instanceof OlapTable) {
+                        resultMap.put("key_type", ((OlapTable)table).getKeysType().toSql());
                     }
                     resultMap.put("status", 200);
                     resultMap.put("properties", propList);
