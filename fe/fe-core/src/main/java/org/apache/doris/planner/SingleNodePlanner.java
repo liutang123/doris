@@ -111,6 +111,7 @@ public class SingleNodePlanner {
     private final PlannerContext ctx;
     private final ArrayList<ScanNode> scanNodes = Lists.newArrayList();
     private Map<Analyzer, List<ScanNode>> selectStmtToScanNodes = Maps.newHashMap();
+    private Map<Analyzer, MaterializedViewSelector> selectStmtToMVSelector = Maps.newHashMap();
 
     public SingleNodePlanner(PlannerContext ctx) {
         this.ctx = ctx;
@@ -122,6 +123,14 @@ public class SingleNodePlanner {
 
     public ArrayList<ScanNode> getScanNodes() {
         return scanNodes;
+    }
+
+    public Map<Analyzer, List<ScanNode>> getSelectStmtToScanNodes() {
+        return selectStmtToScanNodes;
+    }
+
+    public Map<Analyzer, MaterializedViewSelector> getSelectStmtToMVSelector() {
+        return selectStmtToMVSelector;
     }
 
     /**
@@ -1396,6 +1405,7 @@ public class SingleNodePlanner {
                 return selectFailed;
             }
             MaterializedViewSelector materializedViewSelector = new MaterializedViewSelector(selectStmt, analyzer);
+            selectStmtToMVSelector.put(selectStmt.getAnalyzer(), materializedViewSelector);
             for (ScanNode scanNode : scanNodeList) {
                 if (!(scanNode instanceof OlapScanNode)) {
                     continue;

@@ -38,6 +38,9 @@
 #include "runtime/exec_env.h"
 #include "runtime/stream_load/stream_load_executor.h"
 #include "util/byte_buffer.h"
+#include "service/backend_options.h"
+#include "util/string_util.h"
+#include "util/metric_log.h"
 #include "util/time.h"
 #include "util/uid_util.h"
 
@@ -103,6 +106,8 @@ public:
             need_rollback = false;
         }
     }
+
+    void audit() const;
 
     std::string to_json() const;
 

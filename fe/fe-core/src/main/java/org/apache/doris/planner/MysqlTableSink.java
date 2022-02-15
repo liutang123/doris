@@ -23,6 +23,8 @@ import org.apache.doris.thrift.TDataSinkType;
 import org.apache.doris.thrift.TExplainLevel;
 import org.apache.doris.thrift.TMysqlTableSink;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 public class MysqlTableSink extends DataSink {
     private final String host;
     private final int port;
@@ -48,6 +50,11 @@ public class MysqlTableSink extends DataSink {
         sb.append("MYSQL TABLE SINK\n");
         sb.append("host: ").append(host).append("\n");
         return sb.toString();
+    }
+
+    @Override
+    public void writeExplainJson(ObjectNode json) {
+        json.put("type", "MYSQL TABLE SINK");
     }
 
     @Override

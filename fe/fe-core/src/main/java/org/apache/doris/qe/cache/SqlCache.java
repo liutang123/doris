@@ -22,6 +22,8 @@ import org.apache.doris.common.Status;
 import org.apache.doris.common.util.DebugUtil;
 import org.apache.doris.metric.MetricRepo;
 import org.apache.doris.proto.InternalService;
+import org.apache.doris.proto.Types;
+import org.apache.doris.qe.ConnectContext;
 import org.apache.doris.qe.RowBatch;
 import org.apache.doris.thrift.TUniqueId;
 
@@ -65,9 +67,11 @@ public class SqlCache extends Cache {
         return latestTable.sumOfPartitionNum;
     }
 
-    public InternalService.PFetchCacheResult getCacheData(Status status) {
+    public InternalService.PFetchCacheResult getCacheData(Status status, ConnectContext context) {
+        Types.PUniqueId sqlKey = CacheProxy.getMd5(getSqlWithViewStmt());
+        context.setCacheKey(DebugUtil.printId(sqlKey));
         InternalService.PFetchCacheRequest request = InternalService.PFetchCacheRequest.newBuilder()
-                .setSqlKey(CacheProxy.getMd5(getSqlWithViewStmt()))
+                .setSqlKey(sqlKey)
                 .addParams(InternalService.PCacheParam.newBuilder()
                         .setPartitionKey(latestTable.latestPartitionId)
                         .setLastVersion(latestTable.latestVersion)

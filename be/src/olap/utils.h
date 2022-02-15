@@ -67,8 +67,10 @@ private:
 // @param base 原串
 // @param separator 分隔符
 // @param result 切分结果
+// @param sep_len 分隔符长度
 template <typename T>
-Status split_string(const std::string& base, const T separator, std::vector<std::string>* result) {
+Status split_string(const std::string& base, const T separator,
+                        std::vector<std::string>* result, const int sep_len = 1) {
     if (!result) {
         return Status::Error<ErrorCode::INVALID_ARGUMENT>("split_string meet nullptr result input");
     }
@@ -88,7 +90,7 @@ Status split_string(const std::string& base, const T separator, std::vector<std:
             break;
         } else {
             result->push_back(base.substr(offset, next - offset));
-            offset = next + 1;
+            offset = next + sep_len;
         }
     }
 

@@ -482,9 +482,9 @@ void ExecNode::collect_scan_nodes(vector<ExecNode*>* nodes) {
 }
 
 void ExecNode::init_runtime_profile(const std::string& name) {
-    std::stringstream ss;
-    ss << name << " (id=" << _id << ")";
-    _runtime_profile = std::make_unique<RuntimeProfile>(ss.str());
+    auto runtime_profile = new RuntimeProfile(name);
+    runtime_profile->add_info_string("Id", std::to_string(_id));
+    _runtime_profile.reset(runtime_profile);
     _runtime_profile->set_metadata(_id);
 }
 

@@ -52,6 +52,7 @@ import org.apache.doris.nereids.trees.expressions.literal.Literal;
 import org.apache.doris.plsql.Exec;
 import org.apache.doris.plsql.executor.PlSqlOperation;
 import org.apache.doris.plugin.audit.AuditEvent.AuditEventBuilder;
+import org.apache.doris.qe.cache.CacheAnalyzer;
 import org.apache.doris.resource.Tag;
 import org.apache.doris.service.arrowflight.results.FlightSqlChannel;
 import org.apache.doris.statistics.ColumnStatistic;
@@ -180,6 +181,10 @@ public class ConnectContext {
     // This property will only be set when the query starts to execute.
     // So in the query planning stage, do not use any value in this attribute.
     protected QueryDetail queryDetail = null;
+
+    protected CacheAnalyzer.CacheMode cacheMode = CacheAnalyzer.CacheMode.NoNeed;
+
+    protected String cacheKey;
 
     // If set to true, the nondeterministic function will not be rewrote to
     // constant.
@@ -870,6 +875,22 @@ public class ConnectContext {
 
     public String getRemoteHostPortString() {
         return getMysqlChannel().getRemoteHostPortString();
+    }
+
+    public CacheAnalyzer.CacheMode getCacheMode() {
+        return cacheMode;
+    }
+
+    public void setCacheMode(CacheAnalyzer.CacheMode cacheMode) {
+        this.cacheMode = cacheMode;
+    }
+
+    public String getCacheKey() {
+        return cacheKey;
+    }
+
+    public void setCacheKey(String cacheKey) {
+        this.cacheKey = cacheKey;
     }
 
     // kill operation with no protect.

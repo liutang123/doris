@@ -19,6 +19,7 @@ package org.apache.doris.qe;
 
 import org.apache.doris.catalog.Env;
 import org.apache.doris.common.ThreadPoolManager;
+import org.apache.doris.common.mt.MTAudit;
 import org.apache.doris.common.util.DebugUtil;
 import org.apache.doris.mysql.privilege.PrivPredicate;
 import org.apache.doris.qe.ConnectContext.ConnectType;
@@ -106,6 +107,7 @@ public class ConnectScheduler {
         if (ctx.getConnectType().equals(ConnectType.ARROW_FLIGHT_SQL)) {
             flightToken2ConnectionId.put(ctx.getPeerIdentity(), ctx.getConnectionId());
         }
+        MTAudit.logConnection(ctx, "connection.register");
         return true;
     }
 
@@ -120,6 +122,7 @@ public class ConnectScheduler {
             if (ctx.getConnectType().equals(ConnectType.ARROW_FLIGHT_SQL)) {
                 flightToken2ConnectionId.remove(ctx.getPeerIdentity());
             }
+            MTAudit.logConnection(ctx, "connection.unregister");
         }
     }
 

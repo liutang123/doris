@@ -29,6 +29,8 @@ import org.apache.doris.datasource.odbc.sink.OdbcTableSink;
 import org.apache.doris.thrift.TDataSink;
 import org.apache.doris.thrift.TExplainLevel;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 /**
  * A DataSink describes the destination of a plan fragment's output rows.
  * The destination could be another plan fragment on a remote machine,
@@ -48,6 +50,8 @@ public abstract class DataSink {
      * @return
      */
     public abstract String getExplainString(String prefix, TExplainLevel explainLevel);
+
+    public abstract void writeExplainJson(ObjectNode json);
 
     protected abstract TDataSink toThrift();
 

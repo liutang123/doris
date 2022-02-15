@@ -71,6 +71,7 @@
 #include "util/debug_util.h"
 #include "util/disk_info.h"
 #include "util/mem_info.h"
+#include "util/metric_log.h"
 #include "util/thrift_rpc_helper.h"
 #include "util/thrift_server.h"
 #include "util/uid_util.h"
@@ -586,6 +587,9 @@ int main(int argc, char** argv) {
         doris::shutdown_logging();
         exit(1);
     }
+
+    // 7. init metric logs
+    auto res = doris::init_metric_log();
 
     while (!doris::k_doris_exit) {
 #if defined(LEAK_SANITIZER)

@@ -35,6 +35,7 @@ import org.apache.doris.persist.gson.GsonUtils;
 import org.apache.doris.thrift.TColumn;
 import org.apache.doris.thrift.TColumnType;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.base.Strings;
 import com.google.gson.annotations.SerializedName;
 import org.apache.commons.lang3.StringUtils;
@@ -799,6 +800,18 @@ public class Column implements Writable, GsonPostProcessable {
     @Override
     public String toString() {
         return toSql();
+    }
+
+    public void writeExplainJson(ObjectNode json) {
+        json.put("name", name);
+        json.put("type", type.getPrimitiveType().toString());
+        json.put("size", type.getColumnSize());
+        json.put("precision", type.getPrecision());
+        json.put("scale", type.getDecimalDigits());
+        json.put("aggregationType", aggregationType == null ? null : aggregationType.toString());
+        json.put("isKey", isKey);
+        json.put("isAllowNull", isAllowNull);
+        json.put("visible", visible);
     }
 
     @Override

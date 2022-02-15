@@ -22,6 +22,9 @@
 
 #include "http/http_handler.h"
 #include "util/metrics.h"
+#include "runtime/client_cache.h"
+#include "runtime/message_body_sink.h"
+#include "util/metric_log.h"
 
 namespace doris {
 

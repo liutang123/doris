@@ -17,6 +17,7 @@
 
 package org.apache.doris.common;
 
+import org.apache.doris.common.mt.MTLogger;
 import org.apache.doris.httpv2.config.SpringLog4j2Config;
 
 import com.google.common.collect.Maps;
@@ -30,7 +31,9 @@ import org.apache.logging.log4j.core.lookup.StrSubstitutor;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 //
 // don't use trace. use INFO, WARN, ERROR, FATAL
@@ -93,6 +96,7 @@ public class Log4jConfig extends XmlConfiguration {
             + "        </Delete>\n"
             + "      </DefaultRolloverStrategy>\n"
             + "    </RollingFile>\n"
+            + "    <!--REPLACED BY MT APPENDER-->\n"
             + "  </Appenders>\n"
             + "  <Loggers>\n"
             + "    <Root level=\"${sys_log_level}\" includeLocation=\"${include_location_flag}\">\n"
@@ -104,10 +108,10 @@ public class Log4jConfig extends XmlConfiguration {
             + "      <AppenderRef ref=\"Auditfile\"/>\n"
             + "    </Logger>\n"
             + "    <!--REPLACED BY AUDIT AND VERBOSE MODULE NAMES-->\n"
+            + "    <!--REPLACED BY MT LOGGER-->\n"
             + "  </Loggers>\n"
             + "</Configuration>";
     // CHECKSTYLE ON
-
     private static StrSubstitutor strSub;
     private static String sysLogLevel;
     private static String sysLogMode;
@@ -221,6 +225,7 @@ public class Log4jConfig extends XmlConfiguration {
 
         strSub = new StrSubstitutor(new Interpolator(properties));
         newXmlConfTemplate = strSub.replace(newXmlConfTemplate);
+        newXmlConfTemplate = configMT(newXmlConfTemplate);
 
         System.out.println("=====");
         System.out.println(newXmlConfTemplate);
@@ -243,6 +248,34 @@ public class Log4jConfig extends XmlConfiguration {
         } catch (Exception e) {
             throw new IOException("Error occurred while configuring Log4j", e);
         }
+    }
+
+    private static final String[] SOCKET = new String[]{
+            "<AsyncScribe name=\"${name}_appender\" blocking=\"false\">",
+            "    <Property name=\"scribeCategory\">data_${name}</Property>",
+            "    <LcLayout/>",
+            "</AsyncScribe>",
+    };
+    private static final String[] FILE = new String[]{
+            "<XMDFile name=\"${name}_appender\" fileName=\"${name}.log\" xmdFilePath=\"/var/sankuai/logs/data_${name}\" queueSize=\"2048\">",
+            "</XMDFile>",
+    };
+    private static final String[] LOGGER = new String[]{
+            "<Logger name=\"${name}\" level=\"info\" additivity=\"${additivity}\">",
+            "    <AppenderRef ref=\"${name}_appender\"/>",
+            "</Logger>",
+    };
+
+    private static String configMT(String template) {
+        String appender = Arrays.stream(MTLogger.values())
+                .flatMap(log -> Arrays.stream(log.socket ? SOCKET : FILE).map(s -> s.replace("${name}", log.name)))
+                .collect(Collectors.joining("\n    "));
+        String logger = Arrays.stream(MTLogger.values())
+                .flatMap(log -> Arrays.stream(LOGGER).map(s -> s.replace("${name}", log.name)
+                        .replace("${additivity}", String.valueOf(false))))
+                .collect(Collectors.joining("\n    "));
+        return template.replace("<!--REPLACED BY MT APPENDER-->", appender)
+                .replace("<!--REPLACED BY MT LOGGER-->", logger);
     }
 
     public static String getLogXmlConfTemplate() {

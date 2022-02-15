@@ -55,10 +55,13 @@
 #include "util/debug_util.h"
 #include "util/disk_info.h"
 #include "util/doris_metrics.h"
+
+#include "util/metric_log.h"
 #include "util/mem_info.h"
 #include "util/metrics.h"
 #include "util/network_util.h"
 #include "util/perf_counters.h"
+#include "util/string_parser.hpp"
 #include "util/system_metrics.h"
 #include "util/thrift_util.h"
 #include "util/time.h"

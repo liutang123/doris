@@ -35,6 +35,7 @@ import org.apache.doris.catalog.ScalarFunction;
 import org.apache.doris.catalog.ScalarType;
 import org.apache.doris.catalog.StructField;
 import org.apache.doris.catalog.StructType;
+import org.apache.doris.catalog.TableIf;
 import org.apache.doris.catalog.Type;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.ErrorCode;
@@ -46,6 +47,8 @@ import org.apache.doris.qe.SessionVariable;
 import org.apache.doris.thrift.TExprNode;
 import org.apache.doris.thrift.TExprNodeType;
 
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.base.Joiner;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
@@ -2456,6 +2459,32 @@ public class FunctionCallExpr extends Expr {
 
     private void setChildren() {
         orderByElements.forEach(o -> addChild(o.getExpr()));
+    }
+
+    public void writeExplainJson(ObjectNode json) {
+        json.put("fnDb", fnName.getDb());
+        json.put("fnName", fnName.getFunction());
+        json.put("isStar", fnParams.isStar());
+        json.put("isDistinct", fnParams.isDistinct());
+
+        if (fnParams.exprs() != null) {
+            ArrayNode array = json.putArray("fnExprs");
+            for (Expr expr : fnParams.exprs()) {
+                array.add(expr.toSql());
+            }
+        }
+        if (children.size() > 0) {
+            Expr child = children.get(0);
+            json.put("child", child.toSql());
+            if (child instanceof CaseExpr) {
+                child = child.getChild(0);
+            }
+            if (child instanceof SlotRef) {
+                json.put("column", ((SlotRef) child).getColumnName());
+                TableIf table = ((SlotRef) child).getTable();
+                json.put("table", table == null ? null : table.getName());
+            }
+        }
     }
 
     @Override

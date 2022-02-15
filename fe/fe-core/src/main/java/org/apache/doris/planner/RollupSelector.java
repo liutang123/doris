@@ -53,10 +53,21 @@ public final class RollupSelector {
     private final OlapTable table;
     private final Analyzer analyzer;
 
+    private final Set<String> equivalenceColumns = Sets.newHashSet();
+    private final Set<String> unequivalenceColumns = Sets.newHashSet();
+
     public RollupSelector(Analyzer analyzer, TupleDescriptor tupleDesc, OlapTable table) {
         this.analyzer = analyzer;
         this.tupleDesc = tupleDesc;
         this.table = table;
+    }
+
+    public Set<String> getEquivalenceColumns() {
+        return equivalenceColumns;
+    }
+
+    public Set<String> getUnequivalenceColumns() {
+        return unequivalenceColumns;
     }
 
     public long selectBestRollup(

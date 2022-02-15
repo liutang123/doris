@@ -85,6 +85,19 @@ Status NewOlapScanNode::prepare(RuntimeState* state) {
     // could add here, not in the _init_profile() function
     _tablet_counter = ADD_COUNTER(_runtime_profile, "TabletNum", TUnit::UNIT);
     _key_range_counter = ADD_COUNTER(_runtime_profile, "KeyRangesNum", TUnit::UNIT);
+
+    // MT profile
+    _start_scan_timer = ADD_TIMER(_runtime_profile, "StartScanTime");
+    _block_put_cache_timer = ADD_TIMER(_runtime_profile, "BlockPutCacheTime");
+    _block_lookup_cache_timer = ADD_TIMER(_runtime_profile, "BlockLookupCacheTime");
+    _wait_scan_timer = ADD_TIMER(_runtime_profile, "WaitScanTime");
+    _max_wait_scan_timer = ADD_TIMER(_runtime_profile, "MaxWaitScanTime");
+    _scanner_pending_timer = ADD_TIMER(_runtime_profile, "ScannerMaxPendingTimer");
+    _scanner_block_put_timer = ADD_TIMER(_runtime_profile, "ScannerBlockPutTimer");
+    _rowset_num_counter = ADD_COUNTER(_runtime_profile, "RowsetNum", TUnit::UNIT);
+    _segment_num_counter = ADD_COUNTER(_runtime_profile, "SegmentNum", TUnit::UNIT);
+    _rs_reader_init_timer = ADD_TIMER(_runtime_profile, "RowsetReaderInitTime");
+
     return Status::OK();
 }
 
@@ -93,7 +106,15 @@ Status NewOlapScanNode::_init_profile() {
 
     // 1. init segment profile
     _segment_profile.reset(new RuntimeProfile("SegmentIterator"));
+    _segment_profile->add_info_string("Id", std::to_string(_id));
+    _scanner_profile->add_info_string("Id", std::to_string(_id));
     _scanner_profile->add_child(_segment_profile.get(), true, nullptr);
+
+    if (_olap_scan_node.__isset.table_name) {
+        runtime_profile()->add_info_string("Table Name", _olap_scan_node.table_name);
+        _scanner_profile->add_info_string("Table Name", _olap_scan_node.table_name);
+        _segment_profile->add_info_string("Table Name", _olap_scan_node.table_name);
+    }
 
     // 2. init timer and counters
     _reader_init_timer = ADD_TIMER(_scanner_profile, "ReaderInitTime");

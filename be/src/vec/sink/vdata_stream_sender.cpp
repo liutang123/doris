@@ -461,9 +461,10 @@ Status VDataStreamSender::prepare(RuntimeState* state) {
     for (const auto& channel : _channels) {
         instances.emplace_back(channel->get_fragment_instance_id_str());
     }
-    std::string title = fmt::format("VDataStreamSender (dst_id={}, dst_fragments=[{}])",
-                                    _dest_node_id, instances);
-    _profile = _pool->add(new RuntimeProfile(title));
+    auto runtime_profile = new RuntimeProfile("VDataStreamSender");
+    runtime_profile->add_info_string("Dest Id", std::to_string(_dest_node_id));
+    runtime_profile->add_info_string("Dest Instance Id", fmt::format("{}", instances));
+    _profile = _pool->add(runtime_profile);
     init_sink_common_profile();
     SCOPED_TIMER(_profile->total_time_counter());
     _mem_tracker = std::make_unique<MemTracker>("VDataStreamSender:" +

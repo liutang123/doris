@@ -216,6 +216,14 @@ DEFINE_Int32(sys_log_verbose_flags_v, "-1");
 // log buffer level
 DEFINE_String(log_buffer_level, "");
 
+DEFINE_Int64(spdlog_file_size, "536870912");
+DEFINE_Int32(spdlog_max_files, "30");
+DEFINE_String(profile_log_dir, "/var/sankuai/logs/data_doris_query_profile");
+// staging is /var/sankuai/logs/data_doris_staging_loads
+DEFINE_String(metric_log_dir, "/var/sankuai/logs/data_doris_prod_events");
+// staging is /var/sankuai/logs/data_doris_staging_loads
+DEFINE_String(loads_log_dir, "/var/sankuai/logs/data_doris_prod_loads");
+
 // number of threads available to serve backend execution requests
 DEFINE_Int32(be_service_threads, "64");
 
@@ -881,6 +889,8 @@ DEFINE_Int32(cold_data_compaction_thread_num, "2");
 DEFINE_mInt32(cold_data_compaction_interval_sec, "1800");
 
 DEFINE_String(tmp_file_dir, "tmp");
+
+DEFINE_String(mt_domain, "UNKNOWN");
 
 DEFINE_Int32(s3_transfer_executor_pool_size, "2");
 

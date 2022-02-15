@@ -45,6 +45,8 @@ import org.apache.doris.thrift.TPlan;
 import org.apache.doris.thrift.TPlanNode;
 import org.apache.doris.thrift.TPushAggOp;
 
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
@@ -601,6 +603,26 @@ public abstract class PlanNode extends TreeNode<PlanNode> implements PlanStats {
      */
     public String getNodeExplainString(String prefix, TExplainLevel detailLevel) {
         return "";
+    }
+
+    public void writeExplainJson(ObjectNode json) {
+        json.put("id", id.asInt());
+        json.put("planNodeName", planNodeName);
+        json.put("limit", limit);
+        json.put("numNodes", numNodes);
+        json.put("cardinality", cardinality);
+        json.put("avgRowSize", avgRowSize);
+        json.put("compactData", compactData);
+
+        ArrayNode array = json.putArray("children");
+        boolean traverseChildren = children != null
+                && children.size() > 0
+                && !(this instanceof ExchangeNode);
+        if (traverseChildren) {
+            for (PlanNode child : children) {
+                child.writeExplainJson(array.addObject());
+            }
+        }
     }
 
     // Convert this plan node, including all children, to its Thrift representation.

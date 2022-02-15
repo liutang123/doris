@@ -323,6 +323,13 @@ Status BetaRowsetReader::_init_iterator() {
         _iterator.reset();
         return Status::Error<ROWSET_READER_INIT>(s.to_string());
     }
+
+    if (_stats != nullptr) {
+        // here is visit rowset num, not real load; ```real load``` means disk visit
+        // to avoid branch, so just record visit rowset num
+        _stats->rowset_num += 1;
+        _stats->segment_num += _rowset->num_segments();
+    }
     return Status::OK();
 }
 

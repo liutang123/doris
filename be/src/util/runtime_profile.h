@@ -312,6 +312,10 @@ public:
     // that name.
     Counter* get_counter(const std::string& name);
 
+    std::map<std::string, Counter*> get_counters() const {
+        return _counter_map;
+    };
+
     // Adds all counters with 'name' that are registered either in this or
     // in any of the child profiles to 'counters'.
     void get_counters(const std::string& name, std::vector<Counter*>* counters);
@@ -333,8 +337,16 @@ public:
     // the key does not exist.
     const std::string* get_info_string(const std::string& key);
 
+    std::map<std::string, std::string> get_info_strings() const {
+        return _info_strings;
+    };
+
     // Returns the counter for the total elapsed time.
     Counter* total_time_counter() { return &_counter_total_time; }
+
+    int64_t get_local_time() const {
+        return static_cast<int64_t>(_counter_total_time.value() * _local_time_percent * 0.01);
+    }
 
     // Prints the counters in a name: value format.
     // Does not hold locks when it makes any function calls.

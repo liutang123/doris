@@ -24,6 +24,8 @@ import org.apache.doris.thrift.TFetchOption;
 import org.apache.doris.thrift.TResultSink;
 import org.apache.doris.thrift.TResultSinkType;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 /**
  * Result sink that forwards data to
  * 1. the FE data receiver, which result the final query result to user client. Or,
@@ -63,6 +65,11 @@ public class ResultSink extends DataSink {
 
     public void setFetchOption(TFetchOption fetchOption) {
         this.fetchOption = fetchOption;
+    }
+
+    @Override
+    public void writeExplainJson(ObjectNode json) {
+        json.put("type", "RESULT SINK");
     }
 
     @Override

@@ -25,6 +25,8 @@ import org.apache.doris.catalog.PrimitiveType;
 import org.apache.doris.catalog.TableIf;
 import org.apache.doris.thrift.TTupleDescriptor;
 
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.base.Joiner;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
@@ -448,5 +450,17 @@ public class TupleDescriptor {
             }
         }
         return builder.toString();
+    }
+
+    public void writeExplainJson(ObjectNode json) {
+        json.put("id", id.asInt());
+        json.put("isMaterialized", isMaterialized);
+        if (table != null) {
+            table.writeExplainJson(json.putObject("table"));
+        }
+        ArrayNode array = json.putArray("slots");
+        for (SlotDescriptor slot : getMaterializedSlots()) {
+            slot.writeExplainJson(array.addObject());
+        }
     }
 }

@@ -86,6 +86,8 @@ import org.apache.doris.thrift.TScanRangeLocation;
 import org.apache.doris.thrift.TScanRangeLocations;
 import org.apache.doris.thrift.TSortInfo;
 
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.MoreObjects;
@@ -165,6 +167,7 @@ public class OlapScanNode extends ScanNode {
     private long selectedIndexId = -1;
     private int selectedPartitionNum = 0;
     private Collection<Long> selectedPartitionIds = Lists.newArrayList();
+    private boolean partitionPruned = true;
     private long totalBytes = 0;
 
     private SortInfo sortInfo = null;
@@ -179,6 +182,10 @@ public class OlapScanNode extends ScanNode {
     private boolean useTopnOpt = false;
     // support multi topn filter
     private final List<SortNode> topnFilterSortNodes = Lists.newArrayList();
+
+    private RollupSelector rollupSelector;
+    private Set<String> equivalenceColumns;
+    private Set<String> unequivalenceColumns;
 
     // List of tablets will be scanned by current olap_scan_node
     private ArrayList<Long> scanTabletIds = Lists.newArrayList();
@@ -239,8 +246,14 @@ public class OlapScanNode extends ScanNode {
     }
 
 
+    public boolean isBaseIndex() { return selectedIndexId == olapTable.getBaseIndexId();}
+
     public boolean isPreAggregation() {
         return isPreAggregation;
+    }
+
+    public boolean isPartitionPruned() {
+        return partitionPruned;
     }
 
     public boolean getCanTurnOnPreAggr() {
@@ -710,7 +723,10 @@ public class OlapScanNode extends ScanNode {
             partitionPruner = new ListPartitionPrunerV2(keyItemMap, partitionInfo.getPartitionColumns(),
                     columnNameToRange);
         }
-        return partitionPruner.prune();
+        Collection<Long> pids = partitionPruner.prune();
+        partitionPruned = partitionInfo.getPartitionColumns().stream()
+                .map(Column::getName).anyMatch(columnFilters::containsKey);
+        return pids;
     }
 
     private Collection<Long> distributionPrune(
@@ -776,6 +792,11 @@ public class OlapScanNode extends ScanNode {
             TPaloScanRange paloRange = new TPaloScanRange();
             paloRange.setDbName("");
             paloRange.setSchemaHash("0");
+            String dbName = desc.getRef().getName().getDb();
+            if (dbName != null) {
+                paloRange.setDbName(dbName);
+            }
+            paloRange.setTableName(olapTable.getName());
             paloRange.setVersion(visibleVersionStr);
             paloRange.setVersionHash("");
             paloRange.setTabletId(tabletId);
@@ -962,7 +983,7 @@ public class OlapScanNode extends ScanNode {
             }
             return;
         }
-        final RollupSelector rollupSelector = new RollupSelector(analyzer, desc, olapTable);
+        rollupSelector = new RollupSelector(analyzer, desc, olapTable);
         selectedIndexId = rollupSelector.selectBestRollup(selectedPartitionIds, conjuncts, isPreAggregation);
         updateSlotUniqueId();
         if (LOG.isDebugEnabled()) {
@@ -1354,6 +1375,44 @@ public class OlapScanNode extends ScanNode {
         return output.toString();
     }
 
+    public static void writeColumnsJson(ArrayNode json, Set<String> columns) {
+        if (columns != null) {
+            for (String column : columns) {
+                json.add(column);
+            }
+        }
+    }
+
+    @Override
+    public void writeExplainJson(ObjectNode json) {
+        super.writeExplainJson(json);
+
+        writeColumnsJson(json.putArray("equivalenceColumns"), equivalenceColumns);
+        writeColumnsJson(json.putArray("unequivalenceColumns"), unequivalenceColumns);
+
+        ObjectNode rollup = json.putObject("rollup");
+        rollup.put("id", selectedIndexId);
+        boolean isBaseIndex = selectedIndexId == olapTable.getBaseIndexId();
+        rollup.put("isBaseIndex", isBaseIndex);
+        if (!isBaseIndex) {
+            olapTable.writeExplainJson(rollup, selectedIndexId);
+        }
+        if (rollupSelector != null) {
+            writeColumnsJson(rollup.putArray("equivalenceColumns"), rollupSelector.getEquivalenceColumns());
+            writeColumnsJson(rollup.putArray("unequivalenceColumns"), rollupSelector.getUnequivalenceColumns());
+        }
+
+        json.put("isPreAggregation", isPreAggregation);
+        json.put("reasonOfPreAggregation", reasonOfPreAggregation);
+        json.put("canTurnOnPreAggr", canTurnOnPreAggr);
+        json.put("forceOpenPreAgg", forceOpenPreAgg);
+        json.put("selectedTabletsNum", selectedTabletsNum);
+        json.put("totalTabletsNum", totalTabletsNum);
+        json.put("selectedPartitionNum", selectedPartitionNum);
+        json.put("totalPartitionNum", olapTable.getPartitions().size());
+        json.put("isPartitionPruned", isPartitionPruned());
+    }
+
     @Override
     public int getNumInstances() {
         // In pipeline exec engine, the instance num equals be_num * parallel instance.
@@ -1543,6 +1602,8 @@ public class OlapScanNode extends ScanNode {
                 }
             }
         }
+        this.equivalenceColumns = equivalenceColumns;
+        this.unequivalenceColumns = unequivalenceColumns;
     }
 
     private void analyzerPartitionExpr(Analyzer analyzer, PartitionInfo partitionInfo) throws AnalysisException {
@@ -1674,7 +1735,8 @@ public class OlapScanNode extends ScanNode {
 
     @VisibleForTesting
     public String getSelectedIndexName() {
-        return olapTable.getIndexNameById(selectedIndexId);
+        return selectedIndexId == -1 ? olapTable.getName()
+            : olapTable.getIndexNameById(selectedIndexId);
     }
 
     @Override

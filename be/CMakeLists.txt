@@ -162,6 +162,9 @@ set(GPERFTOOLS_HOME "${THIRDPARTY_DIR}/gperftools")
 
 include (cmake/thirdparty.cmake)
 
+add_library(spdlog STATIC IMPORTED)
+set_target_properties(spdlog PROPERTIES IMPORTED_LOCATION ${THIRDPARTY_DIR}/lib/libspdlog.a)
+
 find_program(THRIFT_COMPILER thrift ${CMAKE_SOURCE_DIR}/bin)
 
 set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
@@ -481,6 +484,7 @@ find_package(absl)
 set(COMMON_THIRDPARTY
     Boost::date_time
     ${COMMON_THIRDPARTY}
+    spdlog
 )
 
 if ((ARCH_AMD64 OR ARCH_AARCH64) AND OS_LINUX)

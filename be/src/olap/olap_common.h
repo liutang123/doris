@@ -372,6 +372,13 @@ struct OlapReaderStatistics {
 
     int64_t collect_iterator_merge_next_timer = 0;
     int64_t collect_iterator_normal_next_timer = 0;
+
+    int64_t put_cache_ns = 0;
+    int64_t lookup_cache_ns = 0;
+
+    int64_t segment_num = 0;
+    int64_t rowset_num = 0;
+    int64_t rowset_reader_init_ns = 0;
 };
 
 using ColumnId = uint32_t;

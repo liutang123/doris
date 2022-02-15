@@ -29,6 +29,8 @@ import org.apache.doris.thrift.TExplainLevel;
 import org.apache.doris.thrift.TOdbcTableSink;
 import org.apache.doris.thrift.TOdbcTableType;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 public class OdbcTableSink extends DataSink {
     private final TOdbcTableType odbcType;
     private final String tblName;
@@ -53,6 +55,11 @@ public class OdbcTableSink extends DataSink {
         strBuilder.append(prefix + "TABLENAME OF EXTERNAL TABLE: ").append(tblName).append("\n");
         strBuilder.append(prefix + "EnableTransaction: ").append(useTransaction ? "true" : "false").append("\n");
         return strBuilder.toString();
+    }
+
+    @Override
+    public void writeExplainJson(ObjectNode json) {
+        json.put("type", "ODBC TABLE SINK");
     }
 
     @Override

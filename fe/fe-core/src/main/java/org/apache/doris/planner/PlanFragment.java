@@ -33,6 +33,8 @@ import org.apache.doris.thrift.TPartitionType;
 import org.apache.doris.thrift.TPlanFragment;
 import org.apache.doris.thrift.TResultSinkType;
 
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import org.apache.commons.collections.CollectionUtils;
@@ -343,6 +345,25 @@ public class PlanFragment extends TreeNode<PlanFragment> {
         org.apache.doris.thrift.TExplainLevel explainLevel = org.apache.doris.thrift.TExplainLevel.NORMAL;
         if (planRoot != null) {
             planRoot.getExplainStringMap(explainLevel, planNodeMap);
+        }
+    }
+
+    public void writeExplainJson(ObjectNode json) {
+        json.put("id", fragmentId.asInt());
+        if (planRoot != null) {
+            planRoot.writeExplainJson(json.putObject("planRoot"));
+        }
+        if (outputExprs != null) {
+            ArrayNode array = json.putArray("outputExprs");
+            for (Expr outputExpr : outputExprs) {
+                array.add(outputExpr.toSql());
+            }
+        }
+        if (dataPartition != null) {
+            dataPartition.writeExplainJson(json.putObject("dataPartition"));
+        }
+        if (sink != null) {
+            sink.writeExplainJson(json.putObject("sink"));
         }
     }
 

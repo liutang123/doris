@@ -39,6 +39,8 @@ import org.springframework.util.CollectionUtils;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 /**
  * Data sink that forwards data to an exchange node.
  */
@@ -184,6 +186,12 @@ public class DataStreamSink extends DataSink {
             filtersStr.add(filter.getExplainString(isBuildNode, isBrief, getExchNodeId()));
         }
         return Joiner.on(", ").join(filtersStr) + "\n";
+    }
+
+    @Override
+    public void writeExplainJson(ObjectNode json) {
+        json.put("type", "STREAM DATA SINK");
+        json.put("exchNodeId", exchNodeId.asInt());
     }
 
     @Override

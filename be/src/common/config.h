@@ -263,6 +263,14 @@ DECLARE_Int32(sys_log_verbose_flags_v);
 // log buffer level
 DECLARE_String(log_buffer_level);
 
+DECLARE_Int64(spdlog_file_size);
+DECLARE_Int32(spdlog_max_files);
+DECLARE_String(profile_log_dir);
+// staging is /var/sankuai/logs/data_doris_staging_loads
+DECLARE_String(metric_log_dir);
+// staging is /var/sankuai/logs/data_doris_staging_loads
+DECLARE_String(loads_log_dir);
+
 // number of threads available to serve backend execution requests
 DECLARE_Int32(be_service_threads);
 
@@ -1265,6 +1273,9 @@ DECLARE_mInt32(table_sink_partition_write_max_partition_nums_per_writer);
 
 /** Hive sink configurations **/
 DECLARE_mInt64(hive_sink_max_file_size); // 1GB
+
+// mt config 用来识别是哪个集群的BE，例如doris.data表示:doris.data.sankuai.com,waimai-doris代表waimai-doris.sankuai.com
+DECLARE_String(mt_domain);
 
 #ifdef BE_TEST
 // test s3

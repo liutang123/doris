@@ -53,6 +53,10 @@ public abstract class Planner {
     public abstract void plan(StatementBase queryStmt,
              TQueryOptions queryOptions) throws UserException;
 
+    public SingleNodePlanner getSingleNodePlanner() {
+        throw new RuntimeException("getSingleNodePlanner is not implemented.");
+    }
+
     public String getExplainString(ExplainOptions explainOptions) {
         Preconditions.checkNotNull(explainOptions);
         if (explainOptions.isGraph()) {

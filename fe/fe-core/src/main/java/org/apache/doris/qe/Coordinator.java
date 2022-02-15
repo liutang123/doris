@@ -246,6 +246,7 @@ public class Coordinator implements CoordInterface {
     private boolean enablePipelineEngine = false;
     private boolean enablePipelineXEngine = false;
     private boolean useNereids = false;
+    private Planner planner;
 
     // Runtime filter merge instance address and ID
     public TNetworkAddress runtimeFilterMergeAddr;
@@ -284,6 +285,7 @@ public class Coordinator implements CoordInterface {
 
     // True if all scan node are ExternalScanNode.
     private boolean isAllExternalScan = true;
+    private String databaseName; // Used for audit a query.
 
     // Used for query/insert
     public Coordinator(ConnectContext context, Analyzer analyzer, Planner planner,
@@ -295,6 +297,7 @@ public class Coordinator implements CoordInterface {
     // Used for query/insert/test
     public Coordinator(ConnectContext context, Analyzer analyzer, Planner planner) {
         this.context = context;
+        this.planner = planner;
         this.isBlockQuery = planner.isBlockQuery();
         this.queryId = context.queryId();
         this.fragments = planner.getFragments();
@@ -395,6 +398,29 @@ public class Coordinator implements CoordInterface {
 
     public ConnectContext getConnectContext() {
         return context;
+    }
+
+    public Planner getPlanner() {
+        return planner;
+    }
+
+    public Map<PlanFragmentId, FragmentExecParams> getFragmentExecParamsMap() {
+        return fragmentExecParamsMap;
+    }
+
+    public List<TUniqueId> getInstanceIds(PlanFragmentId fragmentId) {
+        List<TUniqueId> instanceIds = Lists.newArrayList();
+        FragmentExecParams param = fragmentExecParamsMap.get(fragmentId);
+        if (param != null) {
+            for (FInstanceExecParam id : param.instanceExecParams) {
+                instanceIds.add(id.instanceId);
+            }
+        }
+        return instanceIds;
+    }
+
+    public int getInstanceNum() {
+        return instanceIds.size();
     }
 
     public long getJobId() {
@@ -2437,8 +2463,10 @@ public class Coordinator implements CoordInterface {
             // and returned_all_results_ is true.
             // (UpdateStatus() initiates cancellation, if it hasn't already been initiated)
             if (!(returnedAllResults && status.isCancelled()) && !status.ok()) {
-                LOG.warn("one instance report fail, query_id={} instance_id={}, error message: {}",
+                long backendId = params.isSetBackendId() ? params.getBackendId() : -1;
+                LOG.warn("one instance report fail, query_id={} instance_id={}, backend_id={}, error message: {}",
                         DebugUtil.printId(queryId), DebugUtil.printId(params.getFragmentInstanceId()),
+                        backendId,
                         status.getErrorMsg());
                 updateStatus(status);
             }
@@ -2695,7 +2723,11 @@ public class Coordinator implements CoordInterface {
         this.queryOptions.setEnableMemtableOnSinkNode(enableMemTableOnSinkNode);
     }
 
-    // map from a BE host address to the per-node assigned scan ranges;
+    public void setDatabaseName(String databaseName) {
+        this.databaseName = databaseName;
+    }
+
+        // map from a BE host address to the per-node assigned scan ranges;
     // records scan range assignment for a single fragment
     static class FragmentScanRangeAssignment
             extends HashMap<TNetworkAddress, Map<Integer, List<TScanRangeParams>>> {
@@ -3705,6 +3737,11 @@ public class Coordinator implements CoordInterface {
                 }
                 params.setFileScanParams(fileScanRangeParamsMap);
                 paramsList.add(params);
+
+                // send database to BE for audit.
+                if (!Strings.isNullOrEmpty(Coordinator.this.databaseName)) {
+                    params.setDbName(Coordinator.this.databaseName);
+                }
             }
             return paramsList;
         }

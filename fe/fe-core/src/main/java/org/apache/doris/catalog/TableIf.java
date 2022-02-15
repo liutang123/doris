@@ -36,6 +36,7 @@ import org.apache.doris.thrift.TTableDescriptor;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import org.apache.logging.log4j.LogManager;
@@ -548,5 +549,8 @@ public interface TableIf {
 
     default Set<String> getDistributionColumnNames() {
         return Sets.newHashSet();
+    }
+    default void writeExplainJson(ObjectNode json) {
+        throw new RuntimeException("writeExplainJson is not implemented.");
     }
 }

@@ -40,6 +40,7 @@ import org.apache.doris.thrift.THiveLocationParams;
 import org.apache.doris.thrift.THivePartition;
 import org.apache.doris.thrift.THiveTableSink;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 
 import java.util.ArrayList;
@@ -69,6 +70,11 @@ public class HiveTableSink extends DataSink {
         }
         // TODO: explain partitions
         return strBuilder.toString();
+    }
+
+    @Override
+    public void writeExplainJson(ObjectNode json) {
+        throw new RuntimeException("writeExplainJson is not supported.");
     }
 
     @Override

@@ -17,6 +17,7 @@
 
 package org.apache.doris.datasource.jdbc.sink;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.doris.catalog.JdbcTable;
 import org.apache.doris.planner.DataPartition;
 import org.apache.doris.planner.DataSink;
@@ -64,6 +65,11 @@ public class JdbcTableSink extends DataSink {
         strBuilder.append(prefix + "EnableTransaction: ").append(useTransaction ? "true" : "false").append("\n");
         strBuilder.append(prefix + "PreparedStatement SQL: ").append(insertSql).append("\n");
         return strBuilder.toString();
+    }
+
+    @Override
+    public void writeExplainJson(ObjectNode json) {
+        throw new RuntimeException("writeExplainJson is not supported.");
     }
 
     @Override

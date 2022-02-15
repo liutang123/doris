@@ -327,6 +327,46 @@ std::string StreamLoadContext::to_json_for_mini_load() const {
     return s.GetString();
 }
 
+void StreamLoadContext::audit() const {
+    // audit
+    if (!this->db.empty() && !this->table.empty() && !this->label.empty()) {
+        LoadsLog audit_log;
+        audit_log.db = this->db;
+        audit_log.table = this->table;
+        audit_log.label = this->label;
+        switch (this->status.code()) {
+            case TStatusCode::OK:
+                audit_log.status = "Success";
+                break;
+            case TStatusCode::PUBLISH_TIMEOUT:
+                audit_log.status = "PublishTimeout";
+                break;
+            case TStatusCode::LABEL_ALREADY_EXISTS:
+                audit_log.status = "LabelAlreadyExists";
+                break;
+            default:
+                audit_log.status = "Fail";
+                break;
+        }
+
+        if (!this->auth.cluster.empty()) {
+            audit_log.cluster = this->auth.cluster;
+        }
+        if (!this->auth.user.empty()) {
+            audit_log.user = this->auth.user;
+        }
+        if (!this->auth.user_ip.empty()) {
+            audit_log.user_ip = this->auth.user_ip;
+        }
+
+        audit_log.receive_bytes = this->receive_bytes;
+        audit_log.number_loaded_rows = this->number_loaded_rows;
+        audit_log.number_filtered_rows = this->number_filtered_rows;
+        audit_log.load_cost_ms = this->load_cost_millis;
+        emit_loads_log(audit_log);
+    }
+}
+
 std::string StreamLoadContext::brief(bool detail) const {
     std::stringstream ss;
     ss << "id=" << id << ", job_id=" << job_id << ", txn_id=" << txn_id << ", label=" << label

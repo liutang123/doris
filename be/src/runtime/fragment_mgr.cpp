@@ -91,6 +91,9 @@
 #include "vec/runtime/shared_hash_table_controller.h"
 #include "vec/runtime/vdatetime_value.h"
 
+#include "util/metric_log.h"
+#include "util/time.h"
+
 namespace doris {
 
 DEFINE_GAUGE_METRIC_PROTOTYPE_2ARG(fragment_instance_count, MetricUnit::NOUNIT);
@@ -481,9 +484,47 @@ void FragmentMgr::_exec_actual(std::shared_ptr<PlanFragmentExecutor> fragment_ex
         }
     }
 
+    MonotonicStopWatch wall_timer;
+    ThreadCpuStopWatch cpu_timer;
+    wall_timer.start();
+    cpu_timer.start();
     // Callback after remove from this id
     auto status = fragment_executor->status();
     cb(fragment_executor->runtime_state(), &status);
+
+#ifndef BE_TEST
+    // In be ut, fragment_executor->runtime_state() is nullptr
+    MetricLog metric;
+
+    auto& db_name = fragment_executor->runtime_state()->db_name();
+    if (!db_name.empty()) {
+        metric.db_name = db_name;
+    }
+
+    if (fragment_executor->runtime_state()->query_options().query_type == TQueryType::SELECT) {
+        metric.query_type = "SELECT";
+    } else if (fragment_executor->runtime_state()->query_options().query_type == TQueryType::LOAD) {
+        // 包含insert stream load 和 mini load
+        metric.query_type = "LOAD";
+    } else if (fragment_executor->runtime_state()->query_options().query_type == TQueryType::EXTERNAL) {
+        metric.query_type = "EXTERNAL";
+    }
+
+    metric.metric = "fragment/time";
+    metric.value = wall_timer.elapsed_time() / NANOS_PER_MILLIS; // nano to millis
+    metric.query_id = print_id(query_ctx->query_id());
+    metric.fragment_id = print_id(fragment_executor->fragment_instance_id());
+    metric.thread = "fragment";
+    emit_metric_log(metric);
+
+    metric.metric = "fragment/cpu";
+    metric.value = cpu_timer.elapsed_time() / NANOS_PER_MILLIS; // nano to millis
+    emit_metric_log(metric);
+
+    metric.metric = "fragment/peak_mem";
+    metric.value = fragment_executor->runtime_state()->query_mem_tracker()->peak_consumption();
+    emit_metric_log(metric);
+#endif
 }
 
 Status FragmentMgr::exec_plan_fragment(const TExecPlanFragmentParams& params) {

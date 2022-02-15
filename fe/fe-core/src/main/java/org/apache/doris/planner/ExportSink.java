@@ -29,6 +29,7 @@ import org.apache.doris.thrift.TFileType;
 import org.apache.doris.thrift.TNetworkAddress;
 
 import org.apache.commons.lang3.StringEscapeUtils;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 public class ExportSink extends DataSink {
     private final String exportPath;
@@ -69,6 +70,14 @@ public class ExportSink extends DataSink {
                 + ")");
         sb.append("\n");
         return sb.toString();
+    }
+
+    @Override
+    public void writeExplainJson(ObjectNode json) {
+        json.put("type", "EXPORT SINK");
+        json.put("path", exportPath);
+        json.put("columnSeparator", StringEscapeUtils.escapeJava(columnSeparator));
+        json.put("lineDelimiter", StringEscapeUtils.escapeJava(lineDelimiter));
     }
 
     @Override

@@ -45,6 +45,7 @@ public class QueryState {
     private String infoMessage;
     private ErrType errType = ErrType.OTHER_ERR;
     private boolean isQuery = false;
+    private boolean analysisError = false;
     private long affectedRows = 0;
     private int warningRows = 0;
     // make it public for easy to use
@@ -64,6 +65,7 @@ public class QueryState {
         affectedRows = 0;
         warningRows = 0;
         isNereids = false;
+        analysisError = false;
     }
 
     public MysqlStateType getStateType() {
@@ -120,6 +122,14 @@ public class QueryState {
 
     public boolean isQuery() {
         return isQuery;
+    }
+
+    public void setAnalysisError(boolean analysisError) {
+        this.analysisError = analysisError;
+    }
+
+    public boolean isAnalysisError() {
+        return analysisError;
     }
 
     public String getInfoMessage() {

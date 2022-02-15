@@ -21,6 +21,7 @@ import org.apache.doris.analysis.SelectStmt;
 import org.apache.doris.common.Config;
 import org.apache.doris.common.Status;
 import org.apache.doris.proto.InternalService;
+import org.apache.doris.qe.ConnectContext;
 import org.apache.doris.qe.RowBatch;
 import org.apache.doris.thrift.TUniqueId;
 
@@ -60,7 +61,7 @@ public abstract class Cache {
         hitRange = HitRange.None;
     }
 
-    public abstract InternalService.PFetchCacheResult getCacheData(Status status);
+    public abstract InternalService.PFetchCacheResult getCacheData(Status status, ConnectContext context);
 
     public HitRange getHitRange() {
         return hitRange;
@@ -105,4 +106,6 @@ public abstract class Cache {
             return true;
         }
     }
+
+    public abstract String getSqlWithViewStmt();
 }

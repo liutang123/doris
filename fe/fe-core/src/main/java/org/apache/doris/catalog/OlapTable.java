@@ -75,6 +75,8 @@ import org.apache.doris.thrift.TStorageType;
 import org.apache.doris.thrift.TTableDescriptor;
 import org.apache.doris.thrift.TTableType;
 
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
@@ -1589,6 +1591,32 @@ public class OlapTable extends Table implements MTMVRelatedTableIf {
         // After that, some properties of fullSchema and nameToColumn may be not same as properties of base columns.
         // So, here we need to rebuild the fullSchema to ensure the correctness of the properties.
         rebuildFullSchema();
+    }
+
+    @Override
+    public void writeExplainJson(ObjectNode json) {
+        super.writeExplainJson(json);
+        json.put("state", state.toString());
+        json.put("bfFpp", bfFpp);
+        json.put("colocateGroup", colocateGroup);
+        if (bfColumns != null) {
+            ArrayNode array = json.putArray("bfColumns");
+            for (String column : bfColumns) {
+                array.add(column);
+            }
+        }
+
+        writeExplainJson(json, baseIndexId);
+    }
+
+    public void writeExplainJson(ObjectNode json, Long indexId) {
+        MaterializedIndexMeta meta = indexIdToMeta.get(indexId);
+        if (meta != null) {
+            json.put("name", getIndexNameById(indexId));
+            json.put("keysType", meta.getKeysType().toString());
+            json.put("schemaHash", meta.getSchemaHash());
+            json.put("schemaVersion", meta.getSchemaVersion());
+        }
     }
 
     public OlapTable selectiveCopy(Collection<String> reservedPartitions, IndexExtState extState, boolean isForBackup) {

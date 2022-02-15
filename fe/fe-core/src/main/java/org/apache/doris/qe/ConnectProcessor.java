@@ -20,6 +20,7 @@ package org.apache.doris.qe;
 import org.apache.doris.analysis.InsertStmt;
 import org.apache.doris.analysis.KillStmt;
 import org.apache.doris.analysis.QueryStmt;
+import org.apache.doris.analysis.SelectStmt;
 import org.apache.doris.analysis.SqlParser;
 import org.apache.doris.analysis.SqlScanner;
 import org.apache.doris.analysis.StatementBase;
@@ -34,6 +35,7 @@ import org.apache.doris.common.DdlException;
 import org.apache.doris.common.ErrorCode;
 import org.apache.doris.common.NotImplementedException;
 import org.apache.doris.common.UserException;
+import org.apache.doris.common.mt.MTAudit;
 import org.apache.doris.common.util.DebugUtil;
 import org.apache.doris.common.util.SqlParserUtils;
 import org.apache.doris.common.util.SqlUtils;
@@ -204,7 +206,7 @@ public abstract class ConnectProcessor {
                 stmts = new NereidsParser().parseSQL(convertedStmt, ctx.getSessionVariable());
             } catch (NotSupportedException e) {
                 // Parse sql failed, audit it and return
-                handleQueryException(e, convertedStmt, null, null);
+                handleQueryException(e, convertedStmt, null, null, -1);
                 return;
             } catch (Exception e) {
                 // TODO: We should catch all exception here until we support all query syntax.
@@ -228,7 +230,7 @@ public abstract class ConnectProcessor {
                     throwable = nereidsParseException;
                 }
                 // Parse sql failed, audit it and return
-                handleQueryException(throwable, convertedStmt, null, null);
+                handleQueryException(throwable, originStmt, null, null, -1);
                 return;
             }
         }
@@ -245,6 +247,7 @@ public abstract class ConnectProcessor {
         long parseSqlFinishTime = System.currentTimeMillis();
 
         boolean usingOrigSingleStmt = origSingleStmtList != null && origSingleStmtList.size() == stmts.size();
+        long start = System.currentTimeMillis();
         for (int i = 0; i < stmts.size(); ++i) {
             String auditStmt = usingOrigSingleStmt ? origSingleStmtList.get(i) : convertedStmt;
 
@@ -254,11 +257,24 @@ public abstract class ConnectProcessor {
             }
 
             StatementBase parsedStmt = stmts.get(i);
+
+            if (parsedStmt instanceof SelectStmt && nereidsParseException != null
+                && ctx.getSessionVariable().isEnableNereidsPlanner()
+                && !ctx.getSessionVariable().enableFallbackToOriginalPlanner) {
+                Exception exception = new Exception(
+                    String.format("nereids cannot anaylze sql, and fall-back disabled: %s",
+                        parsedStmt.toSql()), nereidsParseException);
+                // audit it and break
+                handleQueryException(exception, auditStmt, null, null, -1);
+                break;
+            }
+
             parsedStmt.setOrigStmt(new OriginStatement(convertedStmt, i));
             parsedStmt.setUserInfo(ctx.getCurrentUserIdentity());
             executor = new StmtExecutor(ctx, parsedStmt);
             executor.getProfile().getSummaryProfile().setParseSqlStartTime(parseSqlStartTime);
             executor.getProfile().getSummaryProfile().setParseSqlFinishTime(parseSqlFinishTime);
+            start = System.currentTimeMillis();
             ctx.setExecutor(executor);
 
             try {
@@ -268,6 +284,7 @@ public abstract class ConnectProcessor {
                         ctx.getState().serverStatus |= MysqlServerStatusFlag.SERVER_MORE_RESULTS_EXISTS;
                         if (ctx.getState().getStateType() != MysqlStateType.ERR) {
                             finalizeCommand();
+                            MTAudit.logQueryAfterExec(ctx, originStmt, start);
                         }
                     }
                 } else if (connectType.equals(ConnectType.ARROW_FLIGHT_SQL)) {
@@ -292,7 +309,7 @@ public abstract class ConnectProcessor {
                 }
             } catch (Throwable throwable) {
                 handleQueryException(throwable, auditStmt, executor.getParsedStmt(),
-                        executor.getQueryStatisticsForAuditLog());
+                        executor.getQueryStatisticsForAuditLog(), start);
                 // execute failed, skip remaining stmts
                 throw throwable;
             }
@@ -322,8 +339,8 @@ public abstract class ConnectProcessor {
     }
 
     // Use a handler for exception to avoid big try catch block which is a little hard to understand
-    protected void handleQueryException(Throwable throwable, String origStmt,
-            StatementBase parsedStmt, Data.PQueryStatistics statistics) {
+    private void handleQueryException(Throwable throwable, String origStmt,
+                                      StatementBase parsedStmt, Data.PQueryStatistics statistics, long start) {
         if (ctx.getMinidump() != null) {
             MinidumpUtils.saveMinidumpString(ctx.getMinidump(), DebugUtil.printId(ctx.queryId()));
         }
@@ -353,6 +370,9 @@ public abstract class ConnectProcessor {
             }
         }
         auditAfterExec(origStmt, parsedStmt, statistics, true);
+        if (start > 0) {
+            MTAudit.logQueryAfterExec(ctx, origStmt, start);
+        }
     }
 
     // analyze the origin stmt and return multi-statements
@@ -423,7 +443,7 @@ public abstract class ConnectProcessor {
                 // TODO
             }
         } catch (Throwable throwable) {
-            handleQueryException(throwable, "", null, null);
+            handleQueryException(throwable, "", null, null, -1);
         } finally {
             table.readUnlock();
         }

@@ -36,6 +36,7 @@ import org.apache.doris.statistics.ColumnStatistic;
 import org.apache.doris.statistics.TableStatsMeta;
 import org.apache.doris.thrift.TTableDescriptor;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
@@ -561,6 +562,12 @@ public abstract class Table extends MetaObject implements Writable, TableIf {
         table.put("Id", Long.toString(id));
         table.put("Name", name);
         return table;
+    }
+
+    public void writeExplainJson(ObjectNode json) {
+        json.put("id", id);
+        json.put("name", name);
+        json.put("type", type.toString());
     }
 
     /*

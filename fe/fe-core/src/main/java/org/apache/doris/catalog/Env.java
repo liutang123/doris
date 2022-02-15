@@ -112,6 +112,7 @@ import org.apache.doris.common.io.Text;
 import org.apache.doris.common.publish.TopicPublisher;
 import org.apache.doris.common.publish.TopicPublisherThread;
 import org.apache.doris.common.publish.WorkloadGroupPublisher;
+import org.apache.doris.common.mt.MTAlertDaemon;
 import org.apache.doris.common.util.Daemon;
 import org.apache.doris.common.util.DynamicPartitionUtil;
 import org.apache.doris.common.util.HttpURLUtil;
@@ -526,6 +527,8 @@ public class Env {
 
     private InsertOverwriteManager insertOverwriteManager;
 
+    private MTAlertDaemon mtAlertDaemon;
+
     public List<TFrontendInfo> getFrontendInfos() {
         List<TFrontendInfo> res = new ArrayList<>();
 
@@ -760,6 +763,7 @@ public class Env {
                 "TopicPublisher", Config.publish_topic_info_interval_ms, systemInfo);
         this.mtmvService = new MTMVService();
         this.insertOverwriteManager = new InsertOverwriteManager();
+        this.mtAlertDaemon = new MTAlertDaemon();
     }
 
     public static void destroyCheckpoint() {
@@ -1685,6 +1689,8 @@ public class Env {
         if (Config.enable_hms_events_incremental_sync) {
             metastoreEventsProcessor.start();
         }
+        // MT
+        mtAlertDaemon.start();
     }
 
     private void transferToNonMaster(FrontendNodeType newType) {

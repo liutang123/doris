@@ -34,6 +34,7 @@ import org.apache.doris.thrift.TNetworkAddress;
 import org.apache.doris.thrift.TResultFileSink;
 import org.apache.doris.thrift.TResultFileSinkOptions;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 
@@ -115,6 +116,12 @@ public class ResultFileSink extends DataSink {
                 break;
         }
         return strBuilder.toString();
+    }
+
+    @Override
+    public void writeExplainJson(ObjectNode json) {
+        json.put("type", "STREAM DATA SINK");
+        json.put("exchNodeId", exchNodeId.asInt());
     }
 
     @Override

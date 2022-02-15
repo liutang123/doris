@@ -75,6 +75,7 @@ import org.apache.doris.thrift.TTabletLocation;
 import org.apache.doris.thrift.TUniqueId;
 import org.apache.doris.transaction.DatabaseTransactionMgr;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Lists;
@@ -196,6 +197,7 @@ public class OlapTableSink extends DataSink {
         TOlapTableSink tSink = tDataSink.getOlapTableSink();
 
         tSink.setTableId(dstTable.getId());
+        tSink.setTableName(dstTable.getName());
         tSink.setTupleId(tupleDescriptor.getId().asInt());
         int numReplicas = 1;
         for (Partition partition : dstTable.getPartitions()) {
@@ -225,6 +227,13 @@ public class OlapTableSink extends DataSink {
         strBuilder.append(prefix + "  TUPLE ID: " + tupleDescriptor.getId() + "\n");
         strBuilder.append(prefix + "  " + DataPartition.RANDOM.getExplainString(explainLevel));
         return strBuilder.toString();
+    }
+
+    @Override
+    public void writeExplainJson(ObjectNode json) {
+        json.put("type", "OLAP TABLE SINK");
+        tupleDescriptor.writeExplainJson(json.putObject("tupleDescriptor"));
+        DataPartition.RANDOM.writeExplainJson(json.putObject("dataPartition"));
     }
 
     @Override

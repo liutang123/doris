@@ -27,6 +27,7 @@
 #include "runtime/query_statistics.h"
 #include "runtime/runtime_state.h"
 #include "util/runtime_profile.h"
+#include "util/metric_log.h"
 #include "vec/core/block.h"
 #include "vec/core/column_with_type_and_name.h"
 #include "vec/exprs/vexpr_context.h"
@@ -148,7 +149,19 @@ Status VExchangeNode::close(RuntimeState* state) {
     if (is_closed()) {
         return Status::OK();
     }
-    return ExecNode::close(state);
+    RETURN_IF_ERROR(ExecNode::close(state));
+#ifndef BE_TEST
+    MetricLog metric;
+    metric.query_id = print_id(state->query_id());
+    metric.fragment_id = print_id(state->fragment_instance_id());
+    metric.metric = "fragment/exchange/time";
+    metric.value = _runtime_profile->total_time_counter()->value() / NANOS_PER_MILLIS;
+    emit_metric_log(metric);
+    metric.metric = "fragment/exchange/rows";
+    metric.value = _rows_returned_counter->value();
+    emit_metric_log(metric);
+#endif
+    return Status::OK();
 }
 
 } // namespace doris::vectorized

@@ -52,7 +52,7 @@ using namespace ErrorCode;
 RuntimeState::RuntimeState(const TUniqueId& fragment_instance_id,
                            const TQueryOptions& query_options, const TQueryGlobals& query_globals,
                            ExecEnv* exec_env)
-        : _profile("Fragment " + print_id(fragment_instance_id)),
+        : _profile("Fragment"),
           _load_channel_profile("<unnamed>"),
           _obj_pool(new ObjectPool()),
           _data_stream_recvrs_pool(new ObjectPool()),
@@ -69,6 +69,7 @@ RuntimeState::RuntimeState(const TUniqueId& fragment_instance_id,
           _normal_row_number(0),
           _error_row_number(0),
           _error_log_file(nullptr) {
+    _profile.add_info_string("Instance Id", print_id(fragment_instance_id));
     Status status = init(fragment_instance_id, query_options, query_globals, exec_env);
     DCHECK(status.ok());
     _runtime_filter_mgr.reset(
@@ -78,7 +79,7 @@ RuntimeState::RuntimeState(const TUniqueId& fragment_instance_id,
 RuntimeState::RuntimeState(const TPlanFragmentExecParams& fragment_exec_params,
                            const TQueryOptions& query_options, const TQueryGlobals& query_globals,
                            ExecEnv* exec_env, QueryContext* ctx)
-        : _profile("Fragment " + print_id(fragment_exec_params.fragment_instance_id)),
+        : _profile("Fragment"),
           _load_channel_profile("<unnamed>"),
           _obj_pool(new ObjectPool()),
           _data_stream_recvrs_pool(new ObjectPool()),
@@ -94,8 +95,10 @@ RuntimeState::RuntimeState(const TPlanFragmentExecParams& fragment_exec_params,
           _num_finished_scan_range(0),
           _normal_row_number(0),
           _error_row_number(0),
+          _error_log_file_path(""),
           _error_log_file(nullptr),
           _query_ctx(ctx) {
+    _profile.add_info_string("Instance Id", print_id(fragment_exec_params.fragment_instance_id));
     Status status =
             init(fragment_exec_params.fragment_instance_id, query_options, query_globals, exec_env);
     DCHECK(status.ok());

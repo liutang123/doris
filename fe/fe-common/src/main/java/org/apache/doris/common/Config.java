@@ -2486,6 +2486,17 @@ public class Config extends ConfigBase {
         "The max number work threads of http upload submitter."
     })
     public static int http_load_submitter_max_worker_threads = 2;
+    @ConfField
+    public static String mt_domain = "UNKNOWN";
+    @ConfField(mutable = true)
+    public static String[] mt_alert_receivers = {
+            "wangshuo33", "liulijia", "wangbo36", "yangzheng13", "lanhuajian", "weixiang06", "shizhiqiang03",
+            "jianghaochen", "fuyu29"
+    };
+    @ConfField(mutable = true)
+    public static boolean mt_audit_query_plan = true;
+    @ConfField
+    public static int mt_audit_threads_num = 100;
 
     @ConfField(mutable = true, masterOnly = true, description = {
             "load label个数阈值，超过该个数后，对于已经完成导入作业或者任务，其label会被删除，被删除的 label 可以被重用。",

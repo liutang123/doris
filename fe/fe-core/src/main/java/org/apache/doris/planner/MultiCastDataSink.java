@@ -17,6 +17,7 @@
 
 package org.apache.doris.planner;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.doris.thrift.TDataSink;
 import org.apache.doris.thrift.TDataSinkType;
 import org.apache.doris.thrift.TDataStreamSink;
@@ -46,6 +47,11 @@ public class MultiCastDataSink extends DataSink {
         }
 
         return sb.toString();
+    }
+
+    @Override
+    public void writeExplainJson(ObjectNode json) {
+        throw new RuntimeException("writeExplainJson is not supported.");
     }
 
     @Override

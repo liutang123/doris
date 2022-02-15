@@ -329,6 +329,10 @@ public class Analyzer {
         }
     }
 
+    public String getScanDatabaseName() {
+            return globalState.scanDatabaseName;
+    }
+
     // state shared between all objects of an Analyzer tree
     // TODO: Many maps here contain properties about tuples, e.g., whether
     //  a tuple is outer/semi joined, etc. Remove the maps in favor of making
@@ -435,6 +439,7 @@ public class Analyzer {
 
         private final Map<SlotId, SlotId> equivalentSlots = Maps.newHashMap();
 
+        private String scanDatabaseName = null;
         private final Map<String, TupleDescriptor> markTuples = Maps.newHashMap();
 
         private final Map<TableRef, TupleId> markTupleIdByInnerRef = Maps.newHashMap();
@@ -502,6 +507,12 @@ public class Analyzer {
             } else {
                 // autoBroadcastJoinThreshold is a "final" field, must set an initial value for it
                 autoBroadcastJoinThreshold = 0;
+            }
+        }
+
+        void setScanDatabaseNameIfNull(String scanDatabaseName) {
+            if (this.scanDatabaseName == null) {
+                this.scanDatabaseName = scanDatabaseName;
             }
         }
     }
@@ -894,6 +905,8 @@ public class Analyzer {
         // in registerColumnRef(). So here the tblName is constructed using tableName.getTbl()
         // instead of table.getName().
         TableName tblName = new TableName(tableName.getCtl(), tableName.getDb(), tableName.getTbl());
+        globalState.setScanDatabaseNameIfNull(database.getFullName());
+
         if (table instanceof View) {
             return new InlineViewRef((View) table, tableRef);
         } else {

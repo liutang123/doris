@@ -95,6 +95,11 @@ public class OriginalPlanner extends Planner {
         return singleNodePlanner.getScanNodes();
     }
 
+    @Override
+    public SingleNodePlanner getSingleNodePlanner() {
+        return singleNodePlanner;
+    }
+
     public void plan(StatementBase queryStmt, TQueryOptions queryOptions)
             throws UserException {
         this.queryOptions = queryOptions;

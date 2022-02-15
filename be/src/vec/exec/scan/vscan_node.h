@@ -389,6 +389,20 @@ protected:
     RuntimeProfile::HighWaterMarkCounter* _free_blocks_memory_usage = nullptr;
     RuntimeProfile::Counter* _scale_up_scanners_counter = nullptr;
 
+    // MT profile
+    RuntimeProfile::Counter* _start_scan_timer = nullptr;
+    RuntimeProfile::Counter* _block_put_cache_timer = nullptr;
+    RuntimeProfile::Counter* _block_lookup_cache_timer = nullptr;
+    uint64_t _max_wait_scan_time = 0; // protected by _scan_batches_lock
+    RuntimeProfile::Counter* _wait_scan_timer = nullptr;
+    RuntimeProfile::Counter* _max_wait_scan_timer = nullptr;
+    uint64_t _max_scanner_pending_time = 0; // protected by _scan_batches_lock
+    RuntimeProfile::Counter* _scanner_pending_timer;
+    RuntimeProfile::Counter* _scanner_block_put_timer;
+    RuntimeProfile::Counter* _rowset_num_counter = nullptr;
+    RuntimeProfile::Counter* _segment_num_counter = nullptr;
+    RuntimeProfile::Counter* _rs_reader_init_timer = nullptr;
+
     std::unordered_map<std::string, int> _colname_to_slot_id;
 
     TPushAggOp::type _push_down_agg_type;

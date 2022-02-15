@@ -285,6 +285,8 @@ public class StreamLoadPlanner {
         params.setDescTbl(analyzer.getDescTbl().toThrift());
         params.setCoord(new TNetworkAddress(FrontendOptions.getLocalHostAddress(), Config.rpc_port));
 
+        params.setDbName(db.getFullName());
+
         TPlanFragmentExecParams execParams = new TPlanFragmentExecParams();
         // user load id (streamLoadTask.id) as query id
         execParams.setQueryId(loadId);

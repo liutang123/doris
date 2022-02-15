@@ -28,6 +28,8 @@ import org.apache.doris.thrift.TDataPartition;
 import org.apache.doris.thrift.TExplainLevel;
 import org.apache.doris.thrift.TPartitionType;
 
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -121,5 +123,15 @@ public class DataPartition {
         }
         str.append("\n");
         return str.toString();
+    }
+
+    public void writeExplainJson(ObjectNode json) {
+        json.put("type", type.toString());
+        if (partitionExprs != null) {
+            ArrayNode exprs = json.putArray("exprs");
+            for (Expr partitionExpr : partitionExprs) {
+                exprs.add(partitionExpr.toSql());
+            }
+        }
     }
 }

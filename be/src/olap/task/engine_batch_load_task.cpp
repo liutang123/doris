@@ -46,6 +46,7 @@
 #include "runtime/memory/mem_tracker_limiter.h"
 #include "runtime/thread_context.h"
 #include "util/doris_metrics.h"
+#include "util/metric_log.h"
 #include "util/pretty_printer.h"
 #include "util/runtime_profile.h"
 #include "util/stopwatch.hpp"
@@ -305,6 +306,50 @@ Status EngineBatchLoadTask::_push(const TPushReq& request,
         DorisMetrics::instance()->push_request_duration_us->increment(duration_ns / 1000);
         DorisMetrics::instance()->push_request_write_bytes->increment(push_handler.write_bytes());
         DorisMetrics::instance()->push_request_write_rows->increment(push_handler.write_rows());
+    }
+    if (type == PushType::PUSH_NORMAL_V2) {
+        LoadsLog auditlog;
+        auditlog.load_type = 1; // spark load audit
+        auditlog.receive_bytes = push_handler.write_bytes();
+        auditlog.number_loaded_rows = push_handler.write_rows();
+        if (res == Status::OK()) {
+            auditlog.status = "Success";
+        } else {
+            auditlog.status = "Fail";
+        }
+        string ETL_OUTPUT_FILE_NAME_DESC_V1 = "version.label.tableId.partitionId.indexId.bucket.schemaHash.parquet";
+        string hdfs_file_path = request.broker_scan_range.ranges[0].path;
+        vector<string> elements;
+        vector<string> names;
+        string hdfs_file_name;
+        if (split_string(hdfs_file_path, '/', &elements, 1) == Status::OK()) {
+            hdfs_file_name = elements[elements.size() - 1];
+        } else {
+            LOG(WARNING)<<"spark load audit log failed caused by can not parse the hdfs dir, hdfs_file_path is: " << hdfs_file_path;
+            return res;
+        }
+        elements.clear();
+
+        static_cast<void>(split_string(hdfs_file_name, '.', &elements));
+        static_cast<void>(split_string(ETL_OUTPUT_FILE_NAME_DESC_V1, '.', &names));
+        // 解析HDFS 文件名, 名字里带着label 信息
+        if (elements.size() == names.size()) {
+            string label = elements[1];
+            auditlog.label = label;
+            elements.clear();
+            // 解析label, label 里带着db和table信息
+            static_cast<void>(split_string(label, "__", &elements, 2));
+            if (elements.size() >= 5) {
+                auditlog.db = elements[0];
+                auditlog.table = elements[1];
+                emit_loads_log(auditlog);
+            } else {
+                LOG(WARNING)<<"spark load audit log failed caused by can not parse db and table from hdfs_file_name in spark load: " << hdfs_file_name;
+            }
+        } else {
+            LOG(WARNING)<<"spark load audit log failed caused by hdfs_file_name in spark load is invalid: " << hdfs_file_name;
+        }
+
     }
     return res;
 }

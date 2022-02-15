@@ -15,36 +15,28 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#pragma once
+package org.apache.doris.common.mt;
 
-#include <vector>
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-#include "gutil/ref_counted.h"
-#include "util/countdown_latch.h"
-#include "util/thread.h"
+public enum MTLogger {
 
-namespace doris {
+    DORIS_AUDIT("doris_audit", true),
+    DORIS_AUDIT_EVENT("doris_audit_event"),
+    ;
 
-class Daemon {
-public:
-    Daemon() : _stop_background_threads_latch(1) {}
-    ~Daemon() = default;
-    // Start background threads
-    void start();
+    public final String name;
+    public final Logger logger;
+    public final boolean socket;
 
-    // Stop background threads
-    void stop();
+    MTLogger(String name) {
+        this(name, false);
+    }
 
-private:
-    void tcmalloc_gc_thread();
-    void memory_maintenance_thread();
-    void memory_gc_thread();
-    void memtable_memory_limiter_tracker_refresh_thread();
-    void calculate_metrics_thread();
-    void je_purge_dirty_pages_thread() const;
-    void report_runtime_query_statistics_thread();
-
-    CountDownLatch _stop_background_threads_latch;
-    std::vector<scoped_refptr<Thread>> _threads;
-};
-} // namespace doris
+    MTLogger(String name, boolean socket) {
+        this.name = name;
+        this.logger = LoggerFactory.getLogger(name);
+        this.socket = socket;
+    }
+}

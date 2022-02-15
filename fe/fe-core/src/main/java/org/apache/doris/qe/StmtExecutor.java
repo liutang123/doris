@@ -103,6 +103,7 @@ import org.apache.doris.common.profile.SummaryProfile;
 import org.apache.doris.common.profile.SummaryProfile.SummaryBuilder;
 import org.apache.doris.common.util.DebugPointUtil;
 import org.apache.doris.common.util.DebugPointUtil.DebugPoint;
+import org.apache.doris.common.mt.MTAudit;
 import org.apache.doris.common.util.DebugUtil;
 import org.apache.doris.common.util.MetaLockUtils;
 import org.apache.doris.common.util.ProfileManager.ProfileType;
@@ -361,6 +362,14 @@ public class StmtExecutor {
 
     public void setPlanner(Planner planner) {
         this.planner = planner;
+    }
+
+    public Coordinator coordinator() {
+        return coord;
+    }
+
+    public boolean isCached() {
+        return isCached;
     }
 
     public boolean isForwardToMaster() {
@@ -755,6 +764,7 @@ public class StmtExecutor {
             context.getState().setIsQuery(true);
         }
 
+        MTAudit.logQueryBeforeExec(context, this);
         try {
             // parsedStmt maybe null here, we parse it. Or the predicate will not work.
             parseByLegacy();
@@ -882,6 +892,9 @@ public class StmtExecutor {
             LOG.warn("execute Exception. {}", context.getQueryIdentifier(), e);
             context.getState().setError(e.getMysqlErrorCode(), e.getMessage());
             context.getState().setErrType(QueryState.ErrType.ANALYSIS_ERR);
+            if (e instanceof AnalysisException) {
+                context.getState().setAnalysisError(true);
+            }
         } catch (JdbcClientException e) {
             LOG.warn("execute Exception. {}", context.getQueryIdentifier(), e);
             context.getState().setError(ErrorCode.ERR_UNKNOWN_ERROR,
@@ -1471,6 +1484,7 @@ public class StmtExecutor {
         }
         CacheMode mode = cacheAnalyzer.getCacheMode();
         Queriable queryStmt = (Queriable) parsedStmt;
+        context.setCacheMode(mode);
         boolean isSendFields = false;
         if (cacheResult != null) {
             isCached = true;
@@ -1592,6 +1606,7 @@ public class StmtExecutor {
             coordBase = coord;
         }
 
+        setDatabaseNameForAudit((Coordinator)coordBase);
         try {
             coordBase.exec();
             profile.getSummaryProfile().setQueryScheduleFinishTime();
@@ -2076,6 +2091,8 @@ public class StmtExecutor {
                             ? coord.getQueryOptions().isEnableMemtableOnSinkNode() : false;
                     coord.getQueryOptions().setEnableMemtableOnSinkNode(isEnableMemtableOnSinkNode);
                 }
+                setDatabaseNameForAudit(coord);
+
                 coord.exec();
                 int execTimeout = context.getExecTimeout();
                 if (LOG.isDebugEnabled()) {
@@ -2936,6 +2953,19 @@ public class StmtExecutor {
 
     public Coordinator getCoord() {
         return coord;
+    }
+
+    private void setDatabaseNameForAudit(Coordinator coord) {
+        String databaseForAudit = context.getDatabase();
+        if (Strings.isNullOrEmpty(databaseForAudit)) {
+            // If use do not exec `use xxx;` use scan data base instead.
+            databaseForAudit = analyzer.getScanDatabaseName();
+        }
+        if (!Strings.isNullOrEmpty(databaseForAudit)) {
+            coord.setDatabaseName(databaseForAudit);
+        } else {
+            // Use may exec such sql : select 1;
+        }
     }
 
     public List<String> getColumns() {

@@ -15,36 +15,24 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#pragma once
+package org.apache.doris.common.mt;
 
-#include <vector>
+import com.sankuai.xm.pub.push.Pusher;
+import com.sankuai.xm.pub.push.PusherBuilder;
 
-#include "gutil/ref_counted.h"
-#include "util/countdown_latch.h"
-#include "util/thread.h"
+public final class MTUtil {
 
-namespace doris {
+    private static final String CLIENT_ID = "0812090313119182";
+    private static final String CLIENT_SECRET = "64e91cae57d9be0461413845f040599d";
+    private static final String PUB_FULL_URL = "https://xmapi.vip.sankuai.com/api/pub/push";
+    private static final Long FROM_UID = 137443448803L;
 
-class Daemon {
-public:
-    Daemon() : _stop_background_threads_latch(1) {}
-    ~Daemon() = default;
-    // Start background threads
-    void start();
+    public static Pusher getXmPusher() {
+        return PusherBuilder.defaultBuilder()
+                .withAppkey(CLIENT_ID)
+                .withApptoken(CLIENT_SECRET)
+                .withTargetUrl(PUB_FULL_URL)
+                .withFromUid(FROM_UID).build();
+    }
 
-    // Stop background threads
-    void stop();
-
-private:
-    void tcmalloc_gc_thread();
-    void memory_maintenance_thread();
-    void memory_gc_thread();
-    void memtable_memory_limiter_tracker_refresh_thread();
-    void calculate_metrics_thread();
-    void je_purge_dirty_pages_thread() const;
-    void report_runtime_query_statistics_thread();
-
-    CountDownLatch _stop_background_threads_latch;
-    std::vector<scoped_refptr<Thread>> _threads;
-};
-} // namespace doris
+}

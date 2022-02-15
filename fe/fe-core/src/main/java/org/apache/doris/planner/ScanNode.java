@@ -54,6 +54,7 @@ import org.apache.doris.thrift.TScanRange;
 import org.apache.doris.thrift.TScanRangeLocation;
 import org.apache.doris.thrift.TScanRangeLocations;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
@@ -737,5 +738,12 @@ public abstract class ScanNode extends PlanNode {
 
     public boolean shouldUseOneInstance() {
         return hasLimit() && conjuncts.isEmpty();
+    }
+
+    @Override
+    public void writeExplainJson(ObjectNode json) {
+        super.writeExplainJson(json);
+        desc.writeExplainJson(json.putObject("desc"));
+        json.put("sortColumn", sortColumn);
     }
 }

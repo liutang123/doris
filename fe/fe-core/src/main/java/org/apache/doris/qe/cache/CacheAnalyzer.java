@@ -468,7 +468,7 @@ public class CacheAnalyzer {
             return null;
         }
         Status status = new Status();
-        InternalService.PFetchCacheResult cacheResult = cache.getCacheData(status);
+        InternalService.PFetchCacheResult cacheResult = cache.getCacheData(status, context);
         if (status.ok() && cacheResult != null && cacheResult.getStatus() == InternalService.PCacheStatus.CACHE_OK) {
             int rowCount = 0;
             int dataSize = 0;

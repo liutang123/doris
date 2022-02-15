@@ -121,7 +121,7 @@ Status VSortNode::prepare(RuntimeState* state) {
 
     RETURN_IF_ERROR(_vsort_exec_exprs.prepare(state, child(0)->row_desc(), _row_descriptor));
     _child_get_next_timer = ADD_TIMER(runtime_profile(), "ChildGetResultTime");
-    _get_next_timer = ADD_TIMER(runtime_profile(), "GetResultTime");
+    _get_next_timer = ADD_TIMER(runtime_profile(), "GetNextTime");
     _sink_timer = ADD_TIMER(runtime_profile(), "PartialSortTotalTime");
     return Status::OK();
 }

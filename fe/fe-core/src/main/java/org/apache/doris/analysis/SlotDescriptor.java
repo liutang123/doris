@@ -26,6 +26,7 @@ import org.apache.doris.catalog.OlapTable;
 import org.apache.doris.catalog.Type;
 import org.apache.doris.thrift.TSlotDescriptor;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
@@ -70,6 +71,7 @@ public class SlotDescriptor {
 
     private ColumnStats stats;  // only set if 'column' isn't set
     private boolean isAgg;
+    private boolean isMultiRef;
     // If set to false, then such slots will be ignored during
     // materialize them.Used to optimize to read less data and less memory usage
     private boolean needMaterialize = true;
@@ -358,4 +360,14 @@ public class SlotDescriptor {
         return parent.getTable() instanceof OlapTable;
     }
 
+    public void writeExplainJson(ObjectNode json) {
+        json.put("id", id.asInt());
+        json.put("isMaterialized", isMaterialized);
+        json.put("isNullable", isNullable);
+        json.put("isAgg", isAgg);
+        json.put("isMultiRef", isMultiRef);
+        if (column != null) {
+            column.writeExplainJson(json.putObject("column"));
+        }
+    }
 }

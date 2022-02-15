@@ -38,6 +38,8 @@ import org.apache.doris.qe.ConnectContext;
 import org.apache.doris.rewrite.mvrewrite.MVExprEquivalent;
 import org.apache.doris.rewrite.mvrewrite.MVSelectFailedException;
 
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
@@ -741,6 +743,32 @@ public class MaterializedViewSelector {
             result.add(fnExpr);
         }
         return result;
+    }
+
+    public void writeExplainJson(ObjectNode json) {
+        Set<Long> tableIds = Sets.newHashSet();
+        tableIds.addAll(columnNamesInPredicates.keySet());
+        tableIds.addAll(columnNamesInGrouping.keySet());
+        tableIds.addAll(aggColumnsInQuery.keySet());
+        tableIds.addAll(columnNamesInQueryOutput.keySet());
+
+        ArrayNode columns = json.putArray("columns");
+        for (Long tableId : tableIds) {
+            ObjectNode table = columns.addObject();
+            table.put("id", tableId);
+            OlapScanNode.writeColumnsJson(table.putArray("predicateColumns"), columnNamesInPredicates.get(tableId));
+            OlapScanNode.writeColumnsJson(table.putArray("groupingColumns"), columnNamesInGrouping.get(tableId));
+            OlapScanNode.writeColumnsJson(table.putArray("outputColumns"), columnNamesInQueryOutput.get(tableId));
+            ArrayNode aggColumns = table.putArray("aggColumns");
+            if (aggColumnsInQuery.get(tableId) != null) {
+                for (FunctionCallExpr expr : aggColumnsInQuery.get(tableId)) {
+                    expr.writeExplainJson(aggColumns.addObject());
+                }
+            }
+        }
+        json.put("isSPJQuery", isSPJQuery);
+        json.put("disableSPJGView", disableSPJGView);
+        json.put("isPreAggregation", isPreAggregation);
     }
 
     public class BestIndexInfo {

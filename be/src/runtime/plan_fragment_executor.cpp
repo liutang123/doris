@@ -59,6 +59,7 @@
 #include "util/threadpool.h"
 #include "util/time.h"
 #include "util/uid_util.h"
+#include "util/metric_log.h"
 #include "vec/core/block.h"
 #include "vec/exec/scan/new_es_scan_node.h"
 #include "vec/exec/scan/new_file_scan_node.h"
@@ -483,6 +484,15 @@ void PlanFragmentExecutor::report_profile() {
 
 void PlanFragmentExecutor::send_report(bool done) {
     Status status = Status::OK();
+
+    if (done) {
+        log_report();
+    }
+
+    if (!_report_status_cb) {
+        return;
+    }
+
     {
         std::lock_guard<std::mutex> l(_status_lock);
         status = _status;
@@ -533,6 +543,29 @@ Status PlanFragmentExecutor::update_status(Status status) {
                      << status;
     }
     return _status;
+}
+
+void PlanFragmentExecutor::log_report() {
+    std::vector<RuntimeProfile*> children;
+    profile()->get_all_children(&children);
+    children.push_back(profile());
+    profile()->compute_time_in_profile();
+
+    for (const auto& profile : children) {
+        XMDLog log("profile_logger");
+        log.tag("query_id", print_id(_query_ctx->query_id())).tag("instance_id", print_id(_runtime_state->fragment_instance_id()));
+        log.tag("db_name", runtime_state()->db_name()).tag_format_v("profile_name", profile->name());
+        log.tag("local_time", std::to_string(profile->get_local_time()));
+        for (const auto& info : profile->get_info_strings()) {
+            log.tag_format_kv(info.first, info.second);
+        }
+        for (const auto& counter : profile->get_counters()) {
+            auto value = counter.second->type() == TUnit::DOUBLE_VALUE ?
+                    std::to_string(counter.second->double_value()) : std::to_string(counter.second->value());
+            log.tag_format_k(counter.first, value);
+        }
+        log.log();
+    }
 }
 
 void PlanFragmentExecutor::stop_report_thread() {
@@ -599,6 +632,10 @@ void PlanFragmentExecutor::close() {
     if (_closed) {
         return;
     }
+
+    LOG_INFO("PlanFragmentExecutor::close")
+            .tag("query_id", _query_ctx->query_id())
+            .tag("instance_id", _runtime_state->fragment_instance_id());
 
     // Prepare may not have been called, which sets _runtime_state
     if (_runtime_state != nullptr) {

@@ -111,6 +111,25 @@ protected:
 private:
     Status _build_key_ranges_and_filters();
 
+protected:
+    struct TabletScanStats {
+        std::string db_name;
+        int64_t wall_time_millis = 0;
+        int64_t cpu_time_millis = 0;
+        int64_t raw_scan_rows = 0;
+        int64_t compressed_bytes_read = 0;
+        int64_t bytes_read = 0;
+        void merge(const TabletScanStats& rhs) {
+            wall_time_millis += rhs.wall_time_millis;
+            cpu_time_millis += rhs.cpu_time_millis;
+            raw_scan_rows += rhs.raw_scan_rows;
+            compressed_bytes_read += rhs.compressed_bytes_read;
+            bytes_read += rhs.bytes_read;
+        }
+    };
+    // protect by _scan_batches_lock
+    std::map<int64_t, TabletScanStats> _tablet_scan_stats;
+
 private:
     TOlapScanNode _olap_scan_node;
     std::vector<std::unique_ptr<TPaloScanRange>> _scan_ranges;

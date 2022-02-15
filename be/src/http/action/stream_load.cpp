@@ -374,6 +374,9 @@ void StreamLoadAction::free_handler_ctx(std::shared_ptr<void> param) {
     if (ctx->body_sink != nullptr) {
         ctx->body_sink->cancel("sender is gone");
     }
+    // audit
+    ctx->audit();
+
     // remove stream load context from stream load manager and the resource will be released
     ctx->exec_env()->new_load_stream_mgr()->remove(ctx->id);
 }
