@@ -215,6 +215,7 @@ Status Channel<Parent>::send_remote_block(PBlock* block, bool eos, Status exec_s
     }
 
     {
+        DorisMetrics::instance()->exchange_requests_total->increment(1);
         SCOPED_SWITCH_THREAD_MEM_TRACKER_LIMITER(ExecEnv::GetInstance()->orphan_mem_tracker());
         auto send_remote_block_closure =
                 AutoReleaseClosure<PTransmitDataParams, DummyBrpcCallback<PTransmitDataResult>>::

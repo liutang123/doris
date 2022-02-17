@@ -205,6 +205,7 @@ Status ExchangeSinkBuffer<Parent>::add_block(TransmitInfo<Parent>&& request) {
             _queue_dependency->block();
         }
     }
+    DorisMetrics::instance()->exchange_requests_total->increment(1);
     if (send_now) {
         RETURN_IF_ERROR(_send_rpc(ins_id));
     }

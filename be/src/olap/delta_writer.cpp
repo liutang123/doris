@@ -89,11 +89,11 @@ BaseDeltaWriter::~BaseDeltaWriter() {
     // cancel and wait all memtables in flush queue to be finished
     static_cast<void>(_memtable_writer->cancel());
 
-    if (_rowset_builder->tablet() != nullptr) {
-        const FlushStatistic& stat = _memtable_writer->get_flush_token_stats();
-        _rowset_builder->tablet()->flush_bytes->increment(stat.flush_size_bytes);
-        _rowset_builder->tablet()->flush_finish_count->increment(stat.flush_finish_count);
-    }
+//    if (_rowset_builder->tablet() != nullptr) {
+//        const FlushStatistic& stat = _memtable_writer->get_flush_token_stats();
+//        _rowset_builder->tablet()->flush_bytes->increment(stat.flush_size_bytes);
+//        _rowset_builder->tablet()->flush_finish_count->increment(stat.flush_finish_count);
+//    }
 }
 
 DeltaWriter::~DeltaWriter() = default;

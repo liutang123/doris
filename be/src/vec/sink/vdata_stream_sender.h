@@ -358,6 +358,7 @@ protected:
         }
         _send_remote_block_callback->join();
         if (_send_remote_block_callback->cntl_->Failed()) {
+            DorisMetrics::instance()->exchange_requests_failed->increment(1);
             std::string err = fmt::format(
                     "failed to send brpc batch, error={}, error_text={}, client: {}, "
                     "latency = {}",

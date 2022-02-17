@@ -53,6 +53,9 @@ DEFINE_COUNTER_METRIC_PROTOTYPE_2ARG(push_request_duration_us, MetricUnit::MICRO
 DEFINE_COUNTER_METRIC_PROTOTYPE_2ARG(push_request_write_bytes, MetricUnit::BYTES);
 DEFINE_COUNTER_METRIC_PROTOTYPE_2ARG(push_request_write_rows, MetricUnit::ROWS);
 
+DEFINE_COUNTER_METRIC_PROTOTYPE_2ARG(exchange_requests_total, MetricUnit::REQUESTS);
+DEFINE_COUNTER_METRIC_PROTOTYPE_2ARG(exchange_requests_failed, MetricUnit::REQUESTS);
+
 #define DEFINE_ENGINE_COUNTER_METRIC(name, type, status)                                        \
     DEFINE_COUNTER_METRIC_PROTOTYPE_5ARG(name, MetricUnit::REQUESTS, "", engine_requests_total, \
                                          Labels({{"type", #type}, {"status", #status}}));
@@ -115,8 +118,15 @@ DEFINE_COUNTER_METRIC_PROTOTYPE_5ARG(stream_load_rows_total, MetricUnit::ROWS, "
 DEFINE_COUNTER_METRIC_PROTOTYPE_2ARG(load_rows, MetricUnit::ROWS);
 DEFINE_COUNTER_METRIC_PROTOTYPE_2ARG(load_bytes, MetricUnit::BYTES);
 
+DEFINE_COUNTER_METRIC_PROTOTYPE_2ARG(add_batch_total, MetricUnit::OPERATIONS);
+DEFINE_COUNTER_METRIC_PROTOTYPE_2ARG(add_batch_duration_us, MetricUnit::MICROSECONDS);
+DEFINE_COUNTER_METRIC_PROTOTYPE_2ARG(add_batch_cpu_us, MetricUnit::MICROSECONDS);
+DEFINE_COUNTER_METRIC_PROTOTYPE_2ARG(add_batch_wait_us, MetricUnit::MICROSECONDS);
+DEFINE_COUNTER_METRIC_PROTOTYPE_2ARG(add_batch_close_wait_us, MetricUnit::MICROSECONDS);
+
 DEFINE_COUNTER_METRIC_PROTOTYPE_2ARG(memtable_flush_total, MetricUnit::OPERATIONS);
 DEFINE_COUNTER_METRIC_PROTOTYPE_2ARG(memtable_flush_duration_us, MetricUnit::MICROSECONDS);
+DEFINE_COUNTER_METRIC_PROTOTYPE_2ARG(memtable_flush_cpu_us, MetricUnit::MICROSECONDS);
 
 DEFINE_GAUGE_METRIC_PROTOTYPE_2ARG(memory_pool_bytes_total, MetricUnit::BYTES);
 DEFINE_GAUGE_CORE_METRIC_PROTOTYPE_2ARG(process_thread_num, MetricUnit::NOUNIT);
@@ -193,6 +203,9 @@ DorisMetrics::DorisMetrics() : _metric_registry(_s_registry_name) {
     INT_COUNTER_METRIC_REGISTER(_server_metric_entity, push_request_write_bytes);
     INT_COUNTER_METRIC_REGISTER(_server_metric_entity, push_request_write_rows);
 
+    INT_COUNTER_METRIC_REGISTER(_server_metric_entity, exchange_requests_total);
+    INT_COUNTER_METRIC_REGISTER(_server_metric_entity, exchange_requests_failed);
+
     // engine_requests_total
     INT_COUNTER_METRIC_REGISTER(_server_metric_entity, create_tablet_requests_total);
     INT_COUNTER_METRIC_REGISTER(_server_metric_entity, create_tablet_requests_failed);
@@ -234,8 +247,15 @@ DorisMetrics::DorisMetrics() : _metric_registry(_s_registry_name) {
     INT_COUNTER_METRIC_REGISTER(_server_metric_entity, stream_receive_bytes_total);
     INT_COUNTER_METRIC_REGISTER(_server_metric_entity, stream_load_rows_total);
 
+    INT_COUNTER_METRIC_REGISTER(_server_metric_entity, add_batch_total);
+    INT_COUNTER_METRIC_REGISTER(_server_metric_entity, add_batch_duration_us);
+    INT_COUNTER_METRIC_REGISTER(_server_metric_entity, add_batch_cpu_us);
+    INT_COUNTER_METRIC_REGISTER(_server_metric_entity, add_batch_wait_us);
+    INT_COUNTER_METRIC_REGISTER(_server_metric_entity, add_batch_close_wait_us);
+
     INT_COUNTER_METRIC_REGISTER(_server_metric_entity, memtable_flush_total);
     INT_COUNTER_METRIC_REGISTER(_server_metric_entity, memtable_flush_duration_us);
+    INT_COUNTER_METRIC_REGISTER(_server_metric_entity, memtable_flush_cpu_us);
 
     INT_GAUGE_METRIC_REGISTER(_server_metric_entity, memory_pool_bytes_total);
     INT_GAUGE_METRIC_REGISTER(_server_metric_entity, process_thread_num);

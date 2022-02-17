@@ -136,9 +136,11 @@ Status FlushToken::_do_flush_memtable(MemTable* memtable, int32_t segment_id, in
                   << ", memsize: " << memtable->memory_usage()
                   << ", rows: " << memtable->stat().raw_rows;
     int64_t duration_ns;
-    SCOPED_RAW_TIMER(&duration_ns);
+    ThreadCpuStopWatch flush_cpu_timer;
+    flush_cpu_timer.start();
     signal::set_signal_task_id(_rowset_writer->load_id());
     {
+        SCOPED_RAW_TIMER(&duration_ns);
         SCOPED_CONSUME_MEM_TRACKER(memtable->flush_mem_tracker());
         std::unique_ptr<vectorized::Block> block = memtable->to_block();
         SKIP_MEMORY_CHECK(RETURN_IF_ERROR(
@@ -147,6 +149,7 @@ Status FlushToken::_do_flush_memtable(MemTable* memtable, int32_t segment_id, in
     _memtable_stat += memtable->stat();
     DorisMetrics::instance()->memtable_flush_total->increment(1);
     DorisMetrics::instance()->memtable_flush_duration_us->increment(duration_ns / 1000);
+    DorisMetrics::instance()->memtable_flush_cpu_us->increment(flush_cpu_timer.elapsed_time() / 1000);
     VLOG_CRITICAL << "after flush memtable for tablet: " << memtable->tablet_id()
                   << ", flushsize: " << *flush_size;
     return Status::OK();

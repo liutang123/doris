@@ -27,21 +27,21 @@
 namespace doris {
 using namespace ErrorCode;
 
-extern MetricPrototype METRIC_query_scan_bytes;
-extern MetricPrototype METRIC_query_scan_rows;
+//extern MetricPrototype METRIC_query_scan_bytes;
+//extern MetricPrototype METRIC_query_scan_rows;
 extern MetricPrototype METRIC_query_scan_count;
-DEFINE_COUNTER_METRIC_PROTOTYPE_2ARG(flush_bytes, MetricUnit::BYTES);
-DEFINE_COUNTER_METRIC_PROTOTYPE_2ARG(flush_finish_count, MetricUnit::OPERATIONS);
+//DEFINE_COUNTER_METRIC_PROTOTYPE_2ARG(flush_bytes, MetricUnit::BYTES);
+//DEFINE_COUNTER_METRIC_PROTOTYPE_2ARG(flush_finish_count, MetricUnit::OPERATIONS);
 
 BaseTablet::BaseTablet(TabletMetaSharedPtr tablet_meta) : _tablet_meta(std::move(tablet_meta)) {
     _metric_entity = DorisMetrics::instance()->metric_registry()->register_entity(
             fmt::format("Tablet.{}", tablet_id()), {{"tablet_id", std::to_string(tablet_id())}},
             MetricEntityType::kTablet);
-    INT_COUNTER_METRIC_REGISTER(_metric_entity, query_scan_bytes);
-    INT_COUNTER_METRIC_REGISTER(_metric_entity, query_scan_rows);
+//    INT_COUNTER_METRIC_REGISTER(_metric_entity, query_scan_bytes);
+//    INT_COUNTER_METRIC_REGISTER(_metric_entity, query_scan_rows);
     INT_COUNTER_METRIC_REGISTER(_metric_entity, query_scan_count);
-    INT_COUNTER_METRIC_REGISTER(_metric_entity, flush_bytes);
-    INT_COUNTER_METRIC_REGISTER(_metric_entity, flush_finish_count);
+//    INT_COUNTER_METRIC_REGISTER(_metric_entity, flush_bytes);
+//    INT_COUNTER_METRIC_REGISTER(_metric_entity, flush_finish_count);
 }
 
 BaseTablet::~BaseTablet() {

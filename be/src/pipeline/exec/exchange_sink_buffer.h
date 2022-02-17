@@ -37,6 +37,7 @@
 #include "runtime/query_statistics.h"
 #include "runtime/runtime_state.h"
 #include "service/backend_options.h"
+#include "util/doris_metrics.h"
 #include "util/ref_count_closure.h"
 
 namespace doris {
@@ -161,6 +162,7 @@ public:
     void call() noexcept override {
         try {
             if (::doris::DummyBrpcCallback<Response>::cntl_->Failed()) {
+                DorisMetrics::instance()->exchange_requests_failed->increment(1);
                 std::string err = fmt::format(
                         "failed to send brpc when exchange, error={}, error_text={}, client: {}, "
                         "latency = {}",

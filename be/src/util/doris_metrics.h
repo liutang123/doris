@@ -60,6 +60,9 @@ public:
 
     IntCounter* report_all_tablets_requests_skip = nullptr;
 
+    IntCounter* exchange_requests_total;
+    IntCounter* exchange_requests_failed;
+
     IntCounter* schema_change_requests_total = nullptr;
     IntCounter* schema_change_requests_failed = nullptr;
     IntCounter* create_rollup_requests_total = nullptr;
@@ -107,6 +110,13 @@ public:
 
     IntCounter* memtable_flush_total = nullptr;
     IntCounter* memtable_flush_duration_us = nullptr;
+    IntCounter* memtable_flush_cpu_us = nullptr;
+
+    IntCounter* add_batch_total;
+    IntCounter* add_batch_duration_us;
+    IntCounter* add_batch_cpu_us;
+    IntCounter* add_batch_wait_us;
+    IntCounter* add_batch_close_wait_us;
 
     IntGauge* memory_pool_bytes_total = nullptr;
     IntGauge* process_thread_num = nullptr;

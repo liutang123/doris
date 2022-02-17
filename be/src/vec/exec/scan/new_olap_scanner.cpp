@@ -669,8 +669,8 @@ void NewOlapScanner::_collect_profile_before_close() {
     DorisMetrics::instance()->query_scan_bytes->increment(_compressed_bytes_read);
     DorisMetrics::instance()->query_scan_rows->increment(_raw_rows_read);
     auto& tablet = _tablet_reader_params.tablet;
-    tablet->query_scan_bytes->increment(_compressed_bytes_read);
-    tablet->query_scan_rows->increment(_raw_rows_read);
+//    tablet->query_scan_bytes->increment(_compressed_bytes_read);
+//    tablet->query_scan_rows->increment(_raw_rows_read);
     tablet->query_scan_count->increment(1);
 }
 

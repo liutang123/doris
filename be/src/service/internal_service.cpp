@@ -437,6 +437,9 @@ void PInternalServiceImpl::tablet_writer_add_block(google::protobuf::RpcControll
     int64_t submit_task_time_ns = MonotonicNanos();
     bool ret = _heavy_work_pool.try_offer([request, response, done, submit_task_time_ns, this]() {
         int64_t wait_execution_time_ns = MonotonicNanos() - submit_task_time_ns;
+        DorisMetrics::instance()->add_batch_wait_us->increment(wait_execution_time_ns / 1000);
+        ThreadCpuStopWatch execution_cpu_timer;
+        execution_cpu_timer.start();
         brpc::ClosureGuard closure_guard(done);
         int64_t execution_time_ns = 0;
         {
@@ -451,6 +454,9 @@ void PInternalServiceImpl::tablet_writer_add_block(google::protobuf::RpcControll
             }
             st.to_protobuf(response->mutable_status());
         }
+        DorisMetrics::instance()->add_batch_total->increment(1);
+        DorisMetrics::instance()->add_batch_duration_us->increment(execution_time_ns / 1000);
+        DorisMetrics::instance()->add_batch_cpu_us->increment(execution_cpu_timer.elapsed_time() / 1000);
         response->set_execution_time_us(execution_time_ns / NANOS_PER_MICRO);
         response->set_wait_execution_time_us(wait_execution_time_ns / NANOS_PER_MICRO);
     });
