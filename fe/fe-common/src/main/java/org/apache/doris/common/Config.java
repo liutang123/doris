@@ -448,7 +448,7 @@ public class Config extends ConfigBase {
 
     @ConfField(mutable = true, masterOnly = true, description = {"导入 Publish 阶段的最大超时时间，单位是秒。",
             "Maximal waiting time for all publish version tasks of one transaction to be finished, in seconds."})
-    public static int publish_version_timeout_second = 30; // 30 seconds
+    public static int publish_version_timeout_second = 3; // 3 seconds
 
     @ConfField(mutable = true, masterOnly = true, description = {"导入 Publish 阶段的等待时间，单位是秒。超过此时间，"
             + "则只需每个tablet包含一个成功副本，则导入成功。值为 -1 时，表示无限等待。",
@@ -529,7 +529,7 @@ public class Config extends ConfigBase {
 
     @ConfField(mutable = true, masterOnly = true, description = {"Stream load 的默认超时时间，单位是秒。",
             "Default timeout for stream load job, in seconds."})
-    public static int stream_load_default_timeout_second = 86400 * 3; // 3days
+    public static int stream_load_default_timeout_second = 1800; // 1800s
 
     @ConfField(mutable = true, masterOnly = true, description = {"Stream load 的默认预提交超时时间，单位是秒。",
             "Default pre-commit timeout for stream load job, in seconds."})

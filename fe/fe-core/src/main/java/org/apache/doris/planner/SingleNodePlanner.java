@@ -247,13 +247,8 @@ public class SingleNodePlanner {
     private PlanNode createQueryPlan(QueryStmt stmt, Analyzer analyzer, long defaultOrderByLimit, long sqlSelectLimit)
             throws UserException {
         long newDefaultOrderByLimit = defaultOrderByLimit;
-        long defaultLimit = analyzer.getContext().getSessionVariable().getDefaultOrderByLimit();
         if (newDefaultOrderByLimit == -1) {
-            if (defaultLimit <= -1) {
-                newDefaultOrderByLimit = Long.MAX_VALUE;
-            } else {
-                newDefaultOrderByLimit = defaultLimit;
-            }
+            newDefaultOrderByLimit = 1000000;
         }
         PlanNode root;
         if (stmt instanceof SelectStmt) {
