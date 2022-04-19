@@ -60,6 +60,7 @@ public final class ProcService {
         root.register("diagnose", new DiagnoseProcDir());
         root.register("binlog", new BinlogProcDir());
         root.register("be_blacklist", new BlackListProcDir(MTBlackListCalDaemon.getBlackListMap()));
+        root.register("tablet_inverted_index", new TabletInvertedIndexProcDir(Env.getCurrentEnv()));
     }
 
     // 通过指定的路径获得对应的PROC Node

@@ -45,6 +45,8 @@ import com.google.common.collect.Ordering;
 import com.google.common.collect.Sets;
 import com.google.common.collect.Table;
 import com.google.common.collect.TreeMultimap;
+import com.google.common.collect.ImmutableMap;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -648,6 +650,15 @@ public class TabletInvertedIndex {
                 return Lists.newArrayList(replicaMetaTable.row(tabletId).values());
             }
             return Lists.newArrayList();
+        } finally {
+            readUnlock(stamp);
+        }
+    }
+
+    public Map<Long, Replica> getReplicasByBackendId(long backendId) {
+        long stamp = readLock();
+        try {
+            return ImmutableMap.copyOf(backingReplicaMetaTable.row(backendId));
         } finally {
             readUnlock(stamp);
         }

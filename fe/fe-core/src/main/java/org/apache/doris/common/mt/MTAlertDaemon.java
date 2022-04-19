@@ -17,6 +17,14 @@
 
 package org.apache.doris.common.mt;
 
+import org.apache.doris.catalog.Database;
+import org.apache.doris.catalog.Env;
+import org.apache.doris.catalog.MaterializedIndex;
+import org.apache.doris.catalog.OlapTable;
+import org.apache.doris.catalog.Partition;
+import org.apache.doris.catalog.Replica;
+import org.apache.doris.catalog.Table;
+import org.apache.doris.catalog.Tablet;
 import org.apache.doris.common.Config;
 import org.apache.doris.common.util.Daemon;
 import org.slf4j.Logger;
@@ -24,6 +32,11 @@ import org.slf4j.LoggerFactory;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.List;
+import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -36,6 +49,8 @@ public class MTAlertDaemon extends Daemon {
     private static final int ALERT_MESSAGE_LEN = 3000;
     private static final long MAX_INTERVAL_MS = 30 * 60 * 1000L;
     private static final long MIN_INTERVAL_MS = 3 * 60 * 1000L;
+
+    public static List<Replica> biggestReplicas = new ArrayList<>();
 
     public static void warn(String message) {
         // non-strict
@@ -56,6 +71,13 @@ public class MTAlertDaemon extends Daemon {
 
     @Override
     protected void runOneCycle() {
+        try {
+            biggestReplicas = getBigReplicas(100);
+        } catch (Exception e) {
+            LOG.error("[MT] get biggest replicas error", e);
+            error("get biggest replicas error", e);
+        }
+
         if (MQ.isEmpty()) {
             this.setInterval(Math.max(MIN_INTERVAL_MS, this.getInterval() / 2));
         } else {
@@ -68,6 +90,42 @@ public class MTAlertDaemon extends Daemon {
             MQ.clear();
             this.setInterval(Math.min(MAX_INTERVAL_MS, this.getInterval() * 2));
         }
+    }
+
+    private List<Replica> getBigReplicas(int count) {
+        PriorityQueue<Replica> heap = new PriorityQueue<>(count, Comparator.comparingLong(Replica::getDataSize));
+
+        List<Database> allDB = new ArrayList<>(Env.getServingEnv().getInternalCatalog().getDbs());
+        for (Database db : allDB) {
+            for (Table table : db.getTables()) {
+                if (table.getType() != Table.TableType.OLAP) {
+                    continue;
+                }
+                OlapTable olapTable = (OlapTable) table;
+                olapTable.readLock();
+                try {
+                    Collection<Partition> allPartitions = olapTable.getAllPartitions();
+                    for (Partition partition : allPartitions) {
+                        for (MaterializedIndex index : partition.getMaterializedIndices(MaterializedIndex.IndexExtState.ALL)) {
+                            for (Tablet tablet : index.getTablets()) {
+                                for (Replica replica : tablet.getReplicas()) {
+                                    Replica r = heap.peek();
+                                    if (heap.size() < count || r == null || r.getDataSize() < replica.getDataSize()) {
+                                        heap.add(replica);
+                                        if (heap.size() > count) {
+                                            heap.poll();
+                                        }
+                                    }
+                                }
+                            }
+                        } // end for indices
+                    } // end for partitions
+                } finally {
+                    olapTable.readUnlock();
+                }
+            } // end for tables
+        } // end for dbs
+        return new ArrayList<>(heap);
     }
 
 }

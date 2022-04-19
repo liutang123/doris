@@ -40,9 +40,14 @@ public class TableProcDir implements ProcDirInterface {
     public static final String INDEX_SCHEMA = "index_schema";
     private static final String PARTITIONS = "partitions";
     private static final String TEMP_PARTITIONS = "temp_partitions";
+    private static final String PARTITION_REPLICAS = "partition_replicas";
 
-    private static final ImmutableList<String> CHILDREN_NODES =
-            new ImmutableList.Builder<String>().add(PARTITIONS).add(TEMP_PARTITIONS).add(INDEX_SCHEMA).build();
+    private static final ImmutableList<String> CHILDREN_NODES = new ImmutableList.Builder<String>()
+            .add(PARTITIONS)
+            .add(TEMP_PARTITIONS)
+            .add(INDEX_SCHEMA)
+            .add(PARTITION_REPLICAS)
+            .build();
 
     private DatabaseIf db;
     private TableIf table;
@@ -93,6 +98,12 @@ public class TableProcDir implements ProcDirInterface {
             }
         } else if (entryName.equals(INDEX_SCHEMA)) {
             return new IndexInfoProcDir(db, table);
+        } else if (entryName.equals(PARTITION_REPLICAS)) {
+            if (table.getType() == TableType.OLAP) {
+                return new PartitionReplicasProcDir(db, (OlapTable) table);
+            } else {
+                throw new AnalysisException("Table[" + table.getName() + "] is not a OLAP table");
+            }
         } else {
             throw new AnalysisException("Not implemented yet: " + entryName);
         }
