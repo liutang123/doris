@@ -84,14 +84,14 @@ public class CatalogRecycleBin extends Daemon implements Writable {
         return true;
     }
 
-    public synchronized boolean recycleTable(long dbId, Table table) {
+    public synchronized boolean recycleTable(long dbId, Table table, boolean isReplay) {
         if (idToTable.containsKey(table.getId())) {
             LOG.error("table[{}] already in recycle bin.", table.getId());
             return false;
         }
 
         // erase table with same name
-        eraseTableWithSameName(dbId, table.getName());
+        eraseTableWithSameName(dbId, table.getName(), isReplay);
 
         // recycle table
         RecycleTableInfo tableInfo = new RecycleTableInfo(dbId, table);
@@ -190,7 +190,7 @@ public class CatalogRecycleBin extends Daemon implements Writable {
 
             if (isExpire(tableId, currentTimeMs)) {
                 if (table.getType() == TableType.OLAP) {
-                    onEraseOlapTable((OlapTable) table);
+                    onEraseOlapTable((OlapTable) table, false);
                 }
 
                 // erase table
@@ -204,7 +204,7 @@ public class CatalogRecycleBin extends Daemon implements Writable {
         } // end for tables
     }
 
-    private void onEraseOlapTable(OlapTable olapTable) {
+    private void onEraseOlapTable(OlapTable olapTable, boolean isReplay) {
         // inverted index
         TabletInvertedIndex invertedIndex = Catalog.getCurrentInvertedIndex();
         for (Partition partition : olapTable.getPartitions()) {
@@ -239,7 +239,7 @@ public class CatalogRecycleBin extends Daemon implements Writable {
         Catalog.getCurrentColocateIndex().removeTable(olapTable.getId());
     }
 
-    private synchronized void eraseTableWithSameName(long dbId, String tableName) {
+    private synchronized void eraseTableWithSameName(long dbId, String tableName, boolean isReplay) {
         Iterator<Map.Entry<Long, RecycleTableInfo>> iterator = idToTable.entrySet().iterator();
         while (iterator.hasNext()) {
             Map.Entry<Long, RecycleTableInfo> entry = iterator.next();
@@ -251,7 +251,7 @@ public class CatalogRecycleBin extends Daemon implements Writable {
             Table table = tableInfo.getTable();
             if (table.getName().equals(tableName)) {
                 if (table.getType() == TableType.OLAP) {
-                    onEraseOlapTable((OlapTable) table);
+                    onEraseOlapTable((OlapTable) table, isReplay);
                 }
 
                 iterator.remove();

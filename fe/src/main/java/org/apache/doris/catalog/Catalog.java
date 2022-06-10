@@ -2453,7 +2453,7 @@ public class Catalog {
 
                 // save table names for recycling
                 Set<String> tableNames = db.getTableNamesWithLock();
-                unprotectDropDb(db);
+                unprotectDropDb(db, false);
                 Catalog.getCurrentRecycleBin().recycleDatabase(db, tableNames);
             } finally {
                 db.writeUnlock();
@@ -2472,9 +2472,9 @@ public class Catalog {
         LOG.info("finish drop database[{}]", dbName);
     }
 
-    public void unprotectDropDb(Database db) {
+    public void unprotectDropDb(Database db, boolean isReplay) {
         for (Table table : db.getTables()) {
-            unprotectDropTable(db, table.getId());
+            unprotectDropTable(db, table.getId(), isReplay);
         }
     }
 
@@ -2501,7 +2501,7 @@ public class Catalog {
             db.writeLock();
             try {
                 Set<String> tableNames = db.getTableNamesWithLock();
-                unprotectDropDb(db);
+                unprotectDropDb(db, true);
                 Catalog.getCurrentRecycleBin().recycleDatabase(db, tableNames);
             } finally {
                 db.writeUnlock();
@@ -4114,7 +4114,7 @@ public class Catalog {
                 }
             }
 
-            unprotectDropTable(db, table.getId());
+            unprotectDropTable(db, table.getId(), false);
 
             DropInfo info = new DropInfo(db.getId(), table.getId(), -1L);
             editLog.logDropTable(info);
@@ -4125,7 +4125,7 @@ public class Catalog {
         LOG.info("finished dropping table: {} from db: {}", tableName, dbName);
     }
 
-    public boolean unprotectDropTable(Database db, long tableId) {
+    public boolean unprotectDropTable(Database db, long tableId, boolean isReplay) {
         Table table = db.getTable(tableId);
         // delete from db meta
         if (table == null) {
@@ -4151,7 +4151,7 @@ public class Catalog {
         }
 
         db.dropTable(table.getName());
-        Catalog.getCurrentRecycleBin().recycleTable(db.getId(), table);
+        Catalog.getCurrentRecycleBin().recycleTable(db.getId(), table, isReplay);
 
         LOG.info("finished dropping table[{}] in db[{}]", table.getName(), db.getFullName());
         return true;
@@ -4160,7 +4160,7 @@ public class Catalog {
     public void replayDropTable(Database db, long tableId) {
         db.writeLock();
         try {
-            unprotectDropTable(db, tableId);
+            unprotectDropTable(db, tableId, true);
         } finally {
             db.writeUnlock();
         }
