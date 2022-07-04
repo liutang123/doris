@@ -124,6 +124,7 @@ public class OdbcTable extends Table {
     public static String databaseProperName(TOdbcTableType tableType, String name) {
         switch (tableType) {
             case MYSQL:
+            case DLC:
                 return formatName(name, "`", "`", false, false);
             case SQLSERVER:
                 return formatName(name, "[", "]", false, false);

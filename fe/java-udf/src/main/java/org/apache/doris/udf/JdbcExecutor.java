@@ -77,6 +77,7 @@ public class JdbcExecutor {
     private int minIdleSize;
     private int maxIdelTime;
     private int maxWaitTime;
+    private TOdbcTableType tableType;
 
     public JdbcExecutor(byte[] thriftParams) throws Exception {
         TJdbcExecutorCtorParams request = new TJdbcExecutorCtorParams();
@@ -91,6 +92,7 @@ public class JdbcExecutor {
         maxIdelTime = Integer.valueOf(System.getProperty("JDBC_MAX_IDEL_TIME", "300000"));
         maxWaitTime = Integer.valueOf(System.getProperty("JDBC_MAX_WAIT_TIME", "5000"));
         minIdleSize = minPoolSize > 0 ? 1 : 0;
+        tableType = request.table_type;
         LOG.info("JdbcExecutor set minPoolSize = " + minPoolSize
                 + ", maxPoolSize = " + maxPoolSize
                 + ", maxIdelTime = " + maxIdelTime
@@ -98,6 +100,10 @@ public class JdbcExecutor {
                 + ", maxWaitTime = " + maxWaitTime);
         init(request.driver_path, request.statement, request.batch_size, request.jdbc_driver_class,
                 request.jdbc_url, request.jdbc_user, request.jdbc_password, request.op, request.table_type);
+    }
+
+    public boolean isDLC() {
+        return tableType == TOdbcTableType.DLC;
     }
 
     public void close() throws Exception {
@@ -129,7 +135,9 @@ public class JdbcExecutor {
             resultColumnTypeNames = new ArrayList<>(columnCount);
             block = new ArrayList<>(columnCount);
             for (int i = 0; i < columnCount; ++i) {
-                resultColumnTypeNames.add(resultSetMetaData.getColumnClassName(i + 1));
+                if (!isDLC()) {
+                    resultColumnTypeNames.add(resultSetMetaData.getColumnClassName(i + 1));
+                }
                 block.add((Object[]) Array.newInstance(Object.class, batchSizeNum));
             }
             return columnCount;

@@ -150,7 +150,8 @@ public class JdbcScanNode extends ScanNode {
                 || jdbcType == TOdbcTableType.CLICKHOUSE
                 || jdbcType == TOdbcTableType.SAP_HANA
                 || jdbcType == TOdbcTableType.TRINO
-                || jdbcType == TOdbcTableType.PRESTO)) {
+                || jdbcType == TOdbcTableType.PRESTO
+                || jdbcType == TOdbcTableType.DLC)) {
             sql.append(" LIMIT ").append(limit);
         }
 

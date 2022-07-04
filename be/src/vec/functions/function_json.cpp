@@ -16,6 +16,9 @@
 // under the License.
 
 #include <rapidjson/document.h>
+#include <rapidjson/encodings.h>
+#include <rapidjson/pointer.h>
+#include <rapidjson/rapidjson.h>
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 
@@ -206,6 +209,10 @@ rapidjson::Value* get_json_object(std::string_view json_string, std::string_view
 #endif
     std::vector<std::string> paths(tok.begin(), tok.end());
     get_parsed_paths(paths, &tmp_parsed_paths);
+    if (tmp_parsed_paths.empty()) {
+        return document;
+    }
+
     parsed_paths = &tmp_parsed_paths;
 
     if (!(*parsed_paths)[0].is_valid) {
@@ -619,6 +626,57 @@ struct FunctionJsonQuoteImpl {
     }
 };
 
+struct FunctionJsonExtractImpl {
+    static constexpr auto name = "json_extract";
+
+    static rapidjson::Value parse_json(const ColumnString* json_col, const ColumnString* path_col,
+                                       rapidjson::Document::AllocatorType& allocator,
+                                       const int row) {
+        rapidjson::Value value;
+        rapidjson::Document document;
+
+        const auto obj = json_col->get_data_at(row);
+        std::string_view json_string(obj.data, obj.size);
+        const auto path = path_col->get_data_at(row);
+        std::string_view path_string(path.data, path.size);
+
+        auto root = get_json_object<JSON_FUN_STRING>(json_string, path_string, &document);
+        if (root != nullptr) {
+            value.CopyFrom(*root, allocator);
+        }
+        return value;
+    }
+
+    static void execute(const std::vector<const ColumnString*>& data_columns,
+                        ColumnString& result_column, size_t input_rows_count) {
+        rapidjson::Document document;
+        rapidjson::Document::AllocatorType& allocator = document.GetAllocator();
+        rapidjson::StringBuffer buf;
+        rapidjson::Writer<rapidjson::StringBuffer> writer(buf);
+
+        const auto json_col = data_columns[0];
+        for (size_t row = 0; row < input_rows_count; row++) {
+            rapidjson::Value value;
+            if (data_columns.size() == 2) {
+                value = parse_json(json_col, data_columns[1], allocator, row);
+            } else {
+                value.SetArray();
+                value.Reserve(data_columns.size() - 1, allocator);
+                for (size_t col = 1; col < data_columns.size(); ++col) {
+                    value.PushBack(parse_json(json_col, data_columns[col], allocator, row),
+                                   allocator);
+                }
+            }
+
+            // write value as string
+            buf.Clear();
+            writer.Reset(buf);
+            value.Accept(writer);
+            result_column.insert_data(buf.GetString(), buf.GetSize());
+        }
+    }
+};
+
 template <typename Impl>
 class FunctionJson : public IFunction {
 public:
@@ -661,14 +719,281 @@ using FunctionGetJsonDouble = FunctionBinaryStringOperateToNullType<GetJsonDoubl
 using FunctionGetJsonInt = FunctionBinaryStringOperateToNullType<GetJsonInt>;
 using FunctionGetJsonString = FunctionBinaryStringOperateToNullType<GetJsonString>;
 
+class FunctionJsonValid : public IFunction {
+public:
+    static constexpr auto name = "json_valid";
+    static FunctionPtr create() { return std::make_shared<FunctionJsonValid>(); }
+
+    String get_name() const override { return name; }
+
+    size_t get_number_of_arguments() const override { return 1; }
+
+    DataTypePtr get_return_type_impl(const DataTypes& arguments) const override {
+        return make_nullable(std::make_shared<DataTypeInt32>());
+    }
+
+    bool use_default_implementation_for_nulls() const override { return false; }
+
+    bool use_default_implementation_for_constants() const override { return true; }
+
+    Status execute_impl(FunctionContext* context, Block& block, const ColumnNumbers& arguments,
+                        size_t result, size_t input_rows_count) override {
+        const IColumn& col_from = *(block.get_by_position(arguments[0]).column);
+
+        auto null_map = ColumnUInt8::create(input_rows_count, 0);
+
+        const ColumnString* col_from_string = check_and_get_column<ColumnString>(col_from);
+        if (auto* nullable = check_and_get_column<ColumnNullable>(col_from)) {
+            col_from_string =
+                    check_and_get_column<ColumnString>(*nullable->get_nested_column_ptr());
+        }
+
+        if (!col_from_string) {
+            return Status::RuntimeError("Illegal column {} should be ColumnString",
+                                        col_from.get_name());
+        }
+
+        auto col_to = ColumnVector<vectorized::Int32>::create();
+        auto& vec_to = col_to->get_data();
+        size_t size = col_from.size();
+        vec_to.resize(size);
+
+        // parser can be reused for performance
+        JsonbParser parser;
+        for (size_t i = 0; i < input_rows_count; ++i) {
+            if (col_from.is_null_at(i)) {
+                null_map->get_data()[i] = 1;
+                vec_to[i] = 0;
+                continue;
+            }
+
+            const auto& val = col_from_string->get_data_at(i);
+            if (parser.parse(val.data, val.size)) {
+                vec_to[i] = 1;
+            } else {
+                vec_to[i] = 0;
+            }
+        }
+
+        block.replace_by_position(result,
+                                  ColumnNullable::create(std::move(col_to), std::move(null_map)));
+
+        return Status::OK();
+    }
+};
+
+class FunctionJsonContains : public IFunction {
+public:
+    static constexpr auto name = "json_contains";
+    static FunctionPtr create() { return std::make_shared<FunctionJsonContains>(); }
+
+    String get_name() const override { return name; }
+
+    size_t get_number_of_arguments() const override { return 3; }
+
+    DataTypePtr get_return_type_impl(const DataTypes& arguments) const override {
+        return make_nullable(std::make_shared<DataTypeInt32>());
+    }
+
+    bool use_default_implementation_for_nulls() const override { return false; }
+
+    bool json_contains_object(const rapidjson::Value& target,
+                              const rapidjson::Value& search_value) {
+        if (!target.IsObject() || !search_value.IsObject()) {
+            return false;
+        }
+
+        for (auto itr = search_value.MemberBegin(); itr != search_value.MemberEnd(); ++itr) {
+            if (!target.HasMember(itr->name) || !json_contains(target[itr->name], itr->value)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    bool json_contains_array(const rapidjson::Value& target, const rapidjson::Value& search_value) {
+        if (!target.IsArray() || !search_value.IsArray()) {
+            return false;
+        }
+
+        for (auto itr = search_value.Begin(); itr != search_value.End(); ++itr) {
+            bool found = false;
+            for (auto target_itr = target.Begin(); target_itr != target.End(); ++target_itr) {
+                if (json_contains(*target_itr, *itr)) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    bool json_contains(const rapidjson::Value& target, const rapidjson::Value& search_value) {
+        if (target == search_value) {
+            return true;
+        }
+
+        if (target.IsObject() && search_value.IsObject()) {
+            return json_contains_object(target, search_value);
+        }
+
+        if (target.IsArray() && search_value.IsArray()) {
+            return json_contains_array(target, search_value);
+        }
+
+        return false;
+    }
+
+    Status execute_impl(FunctionContext* context, Block& block, const ColumnNumbers& arguments,
+                        size_t result, size_t input_rows_count) override {
+        const IColumn& col_json = *(block.get_by_position(arguments[0]).column);
+        const IColumn& col_search = *(block.get_by_position(arguments[1]).column);
+        const IColumn& col_path = *(block.get_by_position(arguments[2]).column);
+
+        auto null_map = ColumnUInt8::create(input_rows_count, 0);
+
+        auto ptr = col_json.convert_to_full_column_if_const();
+        const ColumnString* col_json_string = &assert_cast<const ColumnString&>(*ptr.get());
+
+        auto ptr1 = col_search.convert_to_full_column_if_const();
+        const ColumnString* col_search_string = &assert_cast<const ColumnString&>(*ptr1.get());
+
+        auto ptr2 = col_path.convert_to_full_column_if_const();
+        const ColumnString* col_path_string = &assert_cast<const ColumnString&>(*ptr2.get());
+
+        if (!col_json_string || !col_search_string || !col_path_string) {
+            return Status::RuntimeError("Illegal column should be ColumnString");
+        }
+
+        auto col_to = ColumnVector<vectorized::Int32>::create();
+        auto& vec_to = col_to->get_data();
+        size_t size = col_json.size();
+        vec_to.resize(size);
+
+        for (size_t i = 0; i < input_rows_count; ++i) {
+            if (col_json.is_null_at(i) || col_search.is_null_at(i) || col_path.is_null_at(i)) {
+                null_map->get_data()[i] = 1;
+                vec_to[i] = 0;
+                continue;
+            }
+
+            const auto& json_val = col_json_string->get_data_at(i);
+            const auto& search_val = col_search_string->get_data_at(i);
+            const auto& path_val = col_path_string->get_data_at(i);
+
+            std::string_view json_string(json_val.data, json_val.size);
+            std::string_view search_string(search_val.data, search_val.size);
+            std::string_view path_string(path_val.data, path_val.size);
+
+            rapidjson::Document document;
+            auto target_val = get_json_object<JSON_FUN_STRING>(json_string, path_string, &document);
+            if (target_val == nullptr || target_val->IsNull()) {
+                vec_to[i] = 0;
+            } else {
+                rapidjson::Document search_doc;
+                search_doc.Parse(search_string.data(), search_string.size());
+                if (json_contains(*target_val, search_doc)) {
+                    vec_to[i] = 1;
+                } else {
+                    vec_to[i] = 0;
+                }
+            }
+        }
+
+        block.replace_by_position(result,
+                                  ColumnNullable::create(std::move(col_to), std::move(null_map)));
+
+        return Status::OK();
+    }
+};
+
+class FunctionJsonUnquote : public IFunction {
+public:
+    static constexpr auto name = "json_unquote";
+    static FunctionPtr create() { return std::make_shared<FunctionJsonUnquote>(); }
+
+    String get_name() const override { return name; }
+
+    size_t get_number_of_arguments() const override { return 1; }
+
+    DataTypePtr get_return_type_impl(const DataTypes& arguments) const override {
+        return make_nullable(std::make_shared<DataTypeString>());
+    }
+
+    bool use_default_implementation_for_nulls() const override { return false; }
+
+    bool use_default_implementation_for_constants() const override { return true; }
+
+    Status execute_impl(FunctionContext* context, Block& block, const ColumnNumbers& arguments,
+                        size_t result, size_t input_rows_count) override {
+        const IColumn& col_from = *(block.get_by_position(arguments[0]).column);
+
+        auto null_map = ColumnUInt8::create(input_rows_count, 0);
+
+        const ColumnString* col_from_string = check_and_get_column<ColumnString>(col_from);
+        if (auto* nullable = check_and_get_column<ColumnNullable>(col_from)) {
+            col_from_string =
+                    check_and_get_column<ColumnString>(*nullable->get_nested_column_ptr());
+        }
+
+        if (!col_from_string) {
+            return Status::RuntimeError("Illegal column {} should be ColumnString",
+                                        col_from.get_name());
+        }
+
+        auto col_to = ColumnString::create();
+        col_to->reserve(input_rows_count);
+
+        // parser can be reused for performance
+        rapidjson::Document document;
+        for (size_t i = 0; i < input_rows_count; ++i) {
+            if (col_from.is_null_at(i)) {
+                null_map->get_data()[i] = 1;
+                col_to->insert_data(nullptr, 0);
+                continue;
+            }
+
+            const auto& json_str = col_from_string->get_data_at(i);
+            if (json_str.size < 2 || json_str.data[0] != '"' ||
+                json_str.data[json_str.size - 1] != '"') {
+                // non-quoted string
+                col_to->insert_data(json_str.data, json_str.size);
+            } else {
+                document.Parse(json_str.data, json_str.size);
+                if (document.HasParseError() || !document.IsString()) {
+                    return Status::RuntimeError(
+                            fmt::format("Invalid JSON text in argument 1 to function {}: {}", name,
+                                        std::string_view(json_str.data, json_str.size)));
+                }
+                col_to->insert_data(document.GetString(), document.GetStringLength());
+            }
+        }
+
+        block.replace_by_position(result,
+                                  ColumnNullable::create(std::move(col_to), std::move(null_map)));
+
+        return Status::OK();
+    }
+};
+
 void register_function_json(SimpleFunctionFactory& factory) {
     factory.register_function<FunctionGetJsonInt>();
     factory.register_function<FunctionGetJsonDouble>();
     factory.register_function<FunctionGetJsonString>();
+    factory.register_function<FunctionJsonUnquote>();
 
     factory.register_function<FunctionJsonAlwaysNotNullable<FunctionJsonArrayImpl>>();
     factory.register_function<FunctionJsonAlwaysNotNullable<FunctionJsonObjectImpl>>();
     factory.register_function<FunctionJson<FunctionJsonQuoteImpl>>();
+    factory.register_function<FunctionJson<FunctionJsonExtractImpl>>();
+
+    factory.register_function<FunctionJsonValid>();
+    factory.register_function<FunctionJsonContains>();
 }
 
 } // namespace doris::vectorized

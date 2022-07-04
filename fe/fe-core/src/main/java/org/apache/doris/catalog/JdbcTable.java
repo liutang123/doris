@@ -77,6 +77,7 @@ public class JdbcTable extends Table {
         tempMap.put("sap_hana", TOdbcTableType.SAP_HANA);
         tempMap.put("trino", TOdbcTableType.TRINO);
         tempMap.put("presto", TOdbcTableType.PRESTO);
+        tempMap.put("dlc", TOdbcTableType.DLC);
         TABLE_TYPE_MAP = Collections.unmodifiableMap(tempMap);
     }
 

@@ -374,7 +374,8 @@ enum TOdbcTableType {
     CLICKHOUSE,
     SAP_HANA,
     TRINO,
-    PRESTO
+    PRESTO,
+    DLC
 }
 
 struct TJdbcExecutorCtorParams {

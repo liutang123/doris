@@ -611,7 +611,7 @@ terminal String
     KW_MTMV,
     KW_AUTO;
 
-terminal COMMA, COLON, DOT, DOTDOTDOT, AT, STAR, LPAREN, RPAREN, SEMICOLON, LBRACKET, RBRACKET, DIVIDE, MOD, ADD, SUBTRACT;
+terminal COMMA, COLON, DOT, DOTDOTDOT, AT, STAR, LPAREN, RPAREN, SEMICOLON, LBRACKET, RBRACKET, DIVIDE, MOD, ADD, SUBTRACT, ARROW;
 terminal BITAND, BITOR, BITXOR, BITNOT;
 terminal EQUAL, NOT, LESSTHAN, GREATERTHAN, SET_VAR;
 terminal COMMENTED_PLAN_HINT_START, COMMENTED_PLAN_HINT_END;
@@ -916,6 +916,7 @@ precedence left KW_OVER;
 precedence left KW_COLLATE;
 precedence left KW_PARTITION;
 precedence left KW_PARTITIONS;
+precedence left ARROW;
 precedence right KW_TEMPORARY;
 precedence right LBRACKET;
 precedence left KW_ENGINE;
@@ -5902,6 +5903,13 @@ non_pred_expr ::=
   | expr_pipe_list:exprs
   {:
     RESULT = new FunctionCallExpr("concat", exprs);
+  :}
+  | expr:e ARROW expr:index
+  {: 
+    ArrayList<Expr> exprs = new ArrayList<>();
+    exprs.add(e);
+    exprs.add(index);
+    RESULT = new FunctionCallExpr("json_extract", new FunctionParams(exprs)); 
   :}
   | cast_expr:c
   {: RESULT = c; :}

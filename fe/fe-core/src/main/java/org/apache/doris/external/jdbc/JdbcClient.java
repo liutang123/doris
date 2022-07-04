@@ -45,6 +45,9 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Getter
 public class JdbcClient {
@@ -178,7 +181,7 @@ public class JdbcClient {
         Connection conn = getConnection();
         Statement stmt = null;
         ResultSet rs = null;
-        if (isOnlySpecifiedDatabase) {
+        if (isOnlySpecifiedDatabase && !Objects.equals(dbType, JdbcResource.DLC)) {
             return getSpecifiedDatabase(conn);
         }
         List<String> databaseNames = Lists.newArrayList();
@@ -187,6 +190,7 @@ public class JdbcClient {
             switch (dbType) {
                 case JdbcResource.MYSQL:
                 case JdbcResource.CLICKHOUSE:
+                case JdbcResource.DLC:
                     rs = stmt.executeQuery("SHOW DATABASES");
                     break;
                 case JdbcResource.POSTGRESQL:
@@ -289,6 +293,9 @@ public class JdbcClient {
                 case JdbcResource.PRESTO:
                     rs = databaseMetaData.getTables(catalogName, dbName, null, types);
                     break;
+                case JdbcResource.DLC:
+                    rs = databaseMetaData.getTables(null, dbName, null, null);
+                    break;
                 default:
                     throw new JdbcClientException("Unknown database type");
             }
@@ -341,6 +348,8 @@ public class JdbcClient {
                 case JdbcResource.PRESTO:
                     rs = databaseMetaData.getTables(catalogName, dbName, null, types);
                     break;
+                case JdbcResource.DLC:
+                    rs = databaseMetaData.getTables(null, dbName, null, null);
                 default:
                     throw new JdbcClientException("Unknown database type: " + dbType);
             }
@@ -413,6 +422,7 @@ public class JdbcClient {
                 case JdbcResource.CLICKHOUSE:
                 case JdbcResource.SQLSERVER:
                 case JdbcResource.SAP_HANA:
+                case JdbcResource.DLC:
                     rs = databaseMetaData.getColumns(null, dbName, tableName, null);
                     break;
                 case JdbcResource.ORACLE:
@@ -441,10 +451,26 @@ public class JdbcClient {
                 JdbcFieldSchema field = new JdbcFieldSchema();
                 field.setColumnName(rs.getString("COLUMN_NAME"));
                 field.setDataType(rs.getInt("DATA_TYPE"));
-                field.setDataTypeName(rs.getString("TYPE_NAME"));
-                field.setColumnSize(rs.getInt("COLUMN_SIZE"));
-                field.setDecimalDigits(rs.getInt("DECIMAL_DIGITS"));
-                field.setNumPrecRadix(rs.getInt("NUM_PREC_RADIX"));
+                if (Objects.equals(dbType, JdbcResource.DLC)) {
+                    String type_name = rs.getString("TYPE_NAME");
+                    String pattern = "decimal\\((\\d+),(\\d+)\\)";
+                    Pattern r = Pattern.compile(pattern);
+                    Matcher m = r.matcher(type_name);
+                    if (m.find()) {
+                        int precision = Integer.parseInt(m.group(1));
+                        int scale = Integer.parseInt(m.group(2));
+                        field.setDataTypeName("decimal");
+                        field.setColumnSize(precision);
+                        field.setDecimalDigits(scale);
+                    } else {
+                        field.setDataTypeName(type_name);
+                    }
+                } else {
+                    field.setDataTypeName(rs.getString("TYPE_NAME"));
+                    field.setColumnSize(rs.getInt("COLUMN_SIZE"));
+                    field.setDecimalDigits(rs.getInt("DECIMAL_DIGITS"));
+                    field.setNumPrecRadix(rs.getInt("NUM_PREC_RADIX"));
+                }
                 /**
                  *  Whether it is allowed to be NULL
                  *  0 (columnNoNulls)
@@ -482,8 +508,41 @@ public class JdbcClient {
             case JdbcResource.TRINO:
             case JdbcResource.PRESTO:
                 return trinoTypeToDoris(fieldSchema);
+            case JdbcResource.DLC:
+                return dlcTypeToDoris(fieldSchema);
             default:
                 throw new JdbcClientException("Unknown database type");
+        }
+    }
+
+    public Type dlcTypeToDoris(JdbcFieldSchema fieldSchema) {
+        String dlcType = fieldSchema.getDataTypeName();
+        switch (dlcType) {
+            case "boolean":
+                return Type.BOOLEAN;
+            case "int":
+                return Type.INT;
+            case "bigint":
+                return Type.BIGINT;
+            case "float":
+                return Type.FLOAT;
+            case "double":
+                return Type.DOUBLE;
+            case "decimal": {
+                int precision = fieldSchema.getColumnSize();
+                int scale = fieldSchema.getDecimalDigits();
+                return createDecimalOrStringType(precision, scale);
+            }
+            case "timestamp":
+                return ScalarType.getDefaultDateType(Type.DATETIME);
+            case "date":
+                return ScalarType.getDefaultDateType(Type.DATE);
+            case "string":
+            case "varchar":
+            case "text":
+                return ScalarType.createStringType();
+            default:
+                return Type.UNSUPPORTED;
         }
     }
 
