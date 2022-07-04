@@ -27,12 +27,15 @@
 
 set -eo pipefail
 
-build_version_prefix="doris"
-build_version_major=1
-build_version_minor=2
-build_version_patch=8
-build_version_rc_version="rc01"
+build_version_prefix="tencent-cdw-doris"
+build_version_major="1"
+build_version_minor="2"
+build_version_patch="8"
+build_version_rc_version="rc03"
 
+# The patch nums for tencent
+user=doris
+SKIP_LINE_NUM=5
 build_version="${build_version_prefix}-${build_version_major}.${build_version_minor}.${build_version_patch}-${build_version_rc_version}"
 
 unset LANG
@@ -59,8 +62,8 @@ fi
 cd "${DORIS_HOME}"
 
 if [[ -d '.git' ]]; then
-    revision="$(git log -1 --pretty=format:"%H")"
-    short_revision="$(git log -1 --pretty=format:"%h")"
+    revision="$(git log -1 --skip=$SKIP_LINE_NUM --pretty=format:"%H")"
+    short_revision="$(git log -1 --skip=$SKIP_LINE_NUM --pretty=format:"%h")"
     url="git://${hostname}"
 else
     revision="Unknown"

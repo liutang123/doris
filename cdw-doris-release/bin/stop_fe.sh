@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+curdir="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+
+DORIS_HOME="$(
+    cd "${curdir}/.."
+    pwd
+)"
+export DORIS_HOME
+
+PID_DIR="$(
+    cd "${curdir}"
+    pwd
+)"
+export PID_DIR
+
+while read -r line; do
+    envline="$(echo "${line}" |
+        sed 's/[[:blank:]]*=[[:blank:]]*/=/g' |
+        sed 's/^[[:blank:]]*//g' |
+        grep -E "^[[:upper:]]([[:upper:]]|_|[[:digit:]])*=" ||
+        true)"
+    envline="$(eval "echo ${envline}")"
+    if [[ "${envline}" == *"="* ]]; then
+        eval 'export "${envline}"'
+    fi
+done <"${DORIS_HOME}/conf/fe.conf"
+
+signum=9
+if [[ "$1" = "--grace" ]]; then
+    signum=15
+fi
+
+pidfile="${PID_DIR}/fe.pid"
+if [[ -f "${pidfile}" ]]; then
+    pid="$(cat "${pidfile}")"
+else
+    pid=""
+fi
+
+# fix if pidfile is not correct 
+if command -v pgrep >/dev/null 2>&1; then
+    g_pid="$(pgrep -u doris -f 'org.apache.doris.PaloFe' -n)"
+    if [[ -z "${g_pid}" ]]; then
+        echo "failed to get pid of doris FE by pgrep."
+    elif [[ "${file_pid}" != "${g_pid}" ]]; then
+        echo "file pid and pgrep pid are not equal. Using pgrep pid."
+        pid="${g_pid}"
+    fi
+else
+    echo "pgrep command is not available on this system."
+fi
+
+# check if pid valid
+if test -z "${pid}"; then
+    echo "doris Fe is already stopped or invalid pid."
+    if [[ -f "${pidfile}" ]]; then rm "${pidfile}"; fi
+    exit 0
+fi
+
+# check if pid process exist
+if ! kill -0 "${pid}" 2>&1; then
+    echo "ERROR: Fe process ${pid} does not exist or no doris Fe process found. Removing pid file."
+    if [[ -f "${pidfile}" ]]; then rm "${pidfile}"; fi
+    exit 0
+fi
+
+pidcomm="$(basename "$(ps -p "${pid}" -o comm=)")"
+# check if pid process is frontend process
+if [[ "java" != "${pidcomm}" ]]; then
+    echo "ERROR: pid process may not be fe. "
+    if [[ -f "${pidfile}" ]]; then rm "${pidfile}"; fi
+    exit 0
+fi
+
+# kill pid process and check it
+if kill "-${signum}" "${pid}" >/dev/null 2>&1; then
+    while true; do
+        if kill -0 "${pid}" >/dev/null 2>&1; then
+            echo "waiting fe to stop, pid: ${pid}"
+            sleep 2
+        else
+            echo "stop ${pidcomm}, and remove pid file. "
+            if [[ -f "${pidfile}" ]]; then rm "${pidfile}"; fi
+            exit 0
+        fi
+    done
+else
+    echo "ERROR: failed to stop ${pid}"
+    exit 0
+fi
+
