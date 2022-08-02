@@ -86,20 +86,21 @@ void emit_metric_log(const MetricLog& log, int64_t emit_threshold) {
 }
 
 void emit_loads_log(const LoadsLog& load) {
-    std::stringstream ss;
-    ss << " db=" << load.db
-       << " table=" << load.table
-       << " label=" << load.label
-       << " status=" << load.status
-       << " cluster=" << (load.cluster.empty() ? "default_cluster" : load.cluster)
-       << " user=" << load.user
-       << " user_ip=" << load.user_ip
-       << " receive_bytes=" << load.receive_bytes
-       << " number_loaded_rows=" << load.number_loaded_rows
-       << " number_filtered_rows=" << load.number_filtered_rows
-       << " load_cost_ms=" << load.load_cost_ms
-       << " load_type=" << load.load_type;
-    spdlog::get("loads_logger")->info(ss.str());
+    XMDLog log("loads_logger");
+    log.tag("db", load.db);
+    log.tag("table", load.table);
+    log.tag("label", load.label);
+    log.tag("status", load.status);
+    log.tag_format_v("message", load.message);
+    log.tag("cluster", load.cluster.empty() ? "default_cluster" : load.cluster);
+    log.tag("user", load.user);
+    log.tag("user_ip", load.user_ip);
+    log.tag("receive_bytes", std::to_string(load.receive_bytes));
+    log.tag("number_loaded_rows",std::to_string(load.number_loaded_rows));
+    log.tag("number_filtered_rows",std::to_string(load.number_filtered_rows));
+    log.tag("load_cost_ms",std::to_string(load.load_cost_ms));
+    log.tag("load_type",std::to_string(load.load_type));
+    log.log();
 }
 
 void put_format_k(std::stringstream& buf, const std::string& str) {

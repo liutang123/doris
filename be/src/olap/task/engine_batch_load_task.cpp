@@ -314,8 +314,10 @@ Status EngineBatchLoadTask::_push(const TPushReq& request,
         auditlog.number_loaded_rows = push_handler.write_rows();
         if (res == Status::OK()) {
             auditlog.status = "Success";
+            auditlog.message = "OK";
         } else {
             auditlog.status = "Fail";
+            auditlog.message = "error code: " + std::to_string(res);
         }
         string ETL_OUTPUT_FILE_NAME_DESC_V1 = "version.label.tableId.partitionId.indexId.bucket.schemaHash.parquet";
         string hdfs_file_path = request.broker_scan_range.ranges[0].path;

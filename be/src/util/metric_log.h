@@ -53,6 +53,7 @@ struct LoadsLog {
     std::string table;
     std::string label;
     std::string status;
+    std::string message;
 
     // optional fields
     // ---------------

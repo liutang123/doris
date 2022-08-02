@@ -348,7 +348,11 @@ void StreamLoadContext::audit() const {
                 audit_log.status = "Fail";
                 break;
         }
-
+        if (this->status.ok()) {
+            audit_log.message = "OK";
+        } else {
+            audit_log.message = status.to_string();
+        }
         if (!this->auth.cluster.empty()) {
             audit_log.cluster = this->auth.cluster;
         }
