@@ -98,7 +98,7 @@ public class BatchRollupJobTest {
             Assert.assertEquals(AlterJobV2.JobState.FINISHED, alterJobV2.getJobState());
             ++finishedNum;
             if (finishedNum == 3) {
-                int i = 3;
+                int i = 30;
                 while (tbl.getState() != OlapTableState.NORMAL && i > 0) {
                     Thread.sleep(1000);
                     i--;
@@ -154,7 +154,7 @@ public class BatchRollupJobTest {
             CancelAlterTableStmt cancelStmt = (CancelAlterTableStmt) UtFrameUtils.parseAndAnalyzeStmt(stmtStr, ctx);
             Env.getCurrentEnv().cancelAlter(cancelStmt);
 
-            int i = 3;
+            int i = 30;
             while (tbl.getState() != OlapTableState.NORMAL && i > 0) {
                 Thread.sleep(1000);
                 i--;

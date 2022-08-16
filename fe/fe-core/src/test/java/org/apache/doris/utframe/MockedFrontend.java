@@ -193,7 +193,8 @@ public class MockedFrontend {
         Thread feThread = new Thread(new FERunnable(this, args), FE_PROCESS);
         feThread.start();
         // wait the catalog to be ready until timeout (30 seconds)
-        waitForCatalogReady(30 * 1000);
+        waitForCatalogReady(15 * 60 * 1000L);
+        System.out.println("Fe process is started");
     }
 
     private void waitForCatalogReady(long timeoutMs) throws FeStartException {

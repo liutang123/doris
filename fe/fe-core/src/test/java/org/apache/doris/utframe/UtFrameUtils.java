@@ -88,6 +88,9 @@ public class UtFrameUtils {
         ctx.setRemoteIP(remoteIp);
         ctx.setEnv(Env.getCurrentEnv());
         ctx.setThreadLocalInfo();
+        Config.max_create_table_timeout_second = 600;
+        Config.tablet_create_timeout_second = 60;
+        Config.tablet_delete_timeout_second = 60;
         return ctx;
     }
 
