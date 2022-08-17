@@ -151,7 +151,7 @@ public class DatabaseTransactionMgr {
     // count the number of running txns of database, except for the routine load txn
     private volatile int runningTxnNums = 0;
     private volatile int runningTxnReplicaNums = 0;
-
+    private Map<Long, Integer> tableIdToRunningTxnNums = Maps.newHashMap();
     // count only the number of running routine load txns of database
     private volatile int runningRoutineLoadTxnNums = 0;
 
@@ -388,7 +388,7 @@ public class DatabaseTransactionMgr {
                 }
             }
 
-            checkRunningTxnExceedLimit(sourceType);
+            checkRunningTxnExceedLimit(sourceType, tableIdList);
 
             tid = idGenerator.getNextTransactionId();
             TransactionState transactionState = new TransactionState(dbId, tableIdList,
@@ -1469,6 +1469,9 @@ public class DatabaseTransactionMgr {
                     runningRoutineLoadTxnNums++;
                 } else {
                     runningTxnNums++;
+                    for (Long tableId : transactionState.getTableIdList()) {
+                        tableIdToRunningTxnNums.compute(tableId, (id, num) -> (num == null ? 0 : num) + 1);
+                    }
                 }
             }
         } else {
@@ -1477,6 +1480,18 @@ public class DatabaseTransactionMgr {
                     runningRoutineLoadTxnNums--;
                 } else {
                     runningTxnNums--;
+                    for (Long tableId : transactionState.getTableIdList()) {
+                        Integer num = tableIdToRunningTxnNums.get(tableId);
+                        if (num != null) {
+                            int n = num - 1;
+                            if (n > 0) {
+                                tableIdToRunningTxnNums.put(tableId, n);
+                            } else {
+                                tableIdToRunningTxnNums.remove(tableId);
+                            }
+                        }
+                    }
+                    runningTxnReplicaNums -= transactionState.getReplicaNum();
                 }
             }
             idToFinalStatusTransactionState.put(transactionState.getTransactionId(), transactionState);
@@ -1492,6 +1507,11 @@ public class DatabaseTransactionMgr {
     public void registerTxnReplicas(long txnId, int replicaNum) throws UserException {
         writeLock();
         try {
+            int replicaLimit = Config.max_running_txn_replica_num_per_db;
+            if (replicaLimit >= 0 && runningTxnReplicaNums + replicaNum >= replicaLimit) {
+                throw new UserException("current running txn replica nums on db " + dbId + " is "
+                        + runningTxnReplicaNums + ", larger than limit " + replicaLimit);
+            }
             TransactionState transactionState = idToRunningTransactionState.get(txnId);
             if (transactionState == null) {
                 throw new UserException("running transaction not found, txnId=" + txnId);
@@ -1884,8 +1904,8 @@ public class DatabaseTransactionMgr {
         return infos;
     }
 
-    protected void checkRunningTxnExceedLimit(TransactionState.LoadJobSourceType sourceType)
-            throws BeginTransactionException, MetaNotFoundException {
+    protected void checkRunningTxnExceedLimit(TransactionState.LoadJobSourceType sourceType,
+                                              List<Long> tableIdList) throws BeginTransactionException, MetaNotFoundException {
         switch (sourceType) {
             case ROUTINE_LOAD_TASK:
                 // no need to check limit for routine load task:
@@ -1898,6 +1918,15 @@ public class DatabaseTransactionMgr {
                 if (runningTxnNums >= txnQuota) {
                     throw new BeginTransactionException("current running txns on db " + dbId + " is "
                             + runningTxnNums + ", larger than limit " + txnQuota);
+                }
+                if (Config.max_running_txn_num_per_table > 0) {
+                    for (Long tableId : tableIdList) {
+                        int num = tableIdToRunningTxnNums.getOrDefault(tableId, 0);
+                        if (num >= Config.max_running_txn_num_per_table) {
+                            throw new BeginTransactionException("current running txns on table " + tableId + " is "
+                                    + num + ", larger than limit " + Config.max_running_txn_num_per_table);
+                        }
+                    }
                 }
                 break;
         }
