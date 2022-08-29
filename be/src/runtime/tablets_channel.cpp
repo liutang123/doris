@@ -368,6 +368,17 @@ void TabletsChannel::_commit_txn(DeltaWriter* writer, const PTabletWriterAddBloc
     }
 }
 
+FlushStatistic BaseTabletsChannel::flush_statistic() {
+    FlushStatistic flush_info;
+    for (auto& it : _tablet_writers) {
+        FlushToken* flush_token = it.second->flush_token();
+        if (flush_token) {
+            flush_info += flush_token->get_stats();
+        }
+    }
+    return flush_info;
+}
+
 void BaseTabletsChannel::_add_error_tablet(
         google::protobuf::RepeatedPtrField<PTabletError>* tablet_errors, int64_t tablet_id,
         Status error) const {

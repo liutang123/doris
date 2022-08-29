@@ -24,13 +24,16 @@
 #include "olap/storage_engine.h"
 #include "runtime/memory/mem_tracker.h"
 #include "runtime/tablets_channel.h"
+#include "util/doris_metrics.h"
+#include "util/time.h"
+#include "util/metric_log.h"
 
 namespace doris {
 
 bvar::Adder<int64_t> g_loadchannel_cnt("loadchannel_cnt");
 
 LoadChannel::LoadChannel(const UniqueId& load_id, int64_t timeout_s, bool is_high_priority,
-                         const std::string& sender_ip, int64_t backend_id, bool enable_profile)
+                         const std::string& sender_ip, int64_t backend_id, bool enable_profile, const PTabletWriterOpenRequest& params)
         : _load_id(load_id),
           _timeout_s(timeout_s),
           _is_high_priority(is_high_priority),
@@ -38,6 +41,18 @@ LoadChannel::LoadChannel(const UniqueId& load_id, int64_t timeout_s, bool is_hig
           _backend_id(backend_id),
           _enable_profile(enable_profile) {
     g_loadchannel_cnt << 1;
+
+    _channel_profile.reset(new RuntimeProfile("NodeChannel"));
+    _channel_profile->add_info_string("QueryId", print_id(params.id()));
+    _channel_profile->add_info_string("DbId", std::to_string(params.schema().db_id()));
+    _channel_profile->add_info_string("TableId", std::to_string(params.schema().table_id()));
+    _add_batch_execution_timer = ADD_TIMER(_channel_profile, "AddBatchExecutionTime");
+    _add_batch_wait_execution_timer = ADD_TIMER(_channel_profile, "AddBatchWaitExecutionTime");
+    _add_batch_close_wait_timer = ADD_TIMER(_channel_profile, "AddBatchCloseWaitTime");
+    _add_batch_memtable_flush_timer = ADD_TIMER(_channel_profile, "AddBatchMemTableFlushTime");
+    _add_batch_memtable_flush_counter = ADD_COUNTER(_channel_profile, "AddBatchMemTableFlushCount", TUnit::UNIT);
+    _add_batch_write_data_into_memtable_timer = ADD_TIMER(_channel_profile, "AddBatchWriteDataIntoMemTableTime");
+
     // _last_updated_time should be set before being inserted to
     // _load_channels in load_channel_mgr, or it may be erased
     // immediately by gc thread.
@@ -46,6 +61,7 @@ LoadChannel::LoadChannel(const UniqueId& load_id, int64_t timeout_s, bool is_hig
 }
 
 LoadChannel::~LoadChannel() {
+    log_profile();
     g_loadchannel_cnt << -1;
     std::stringstream rows_str;
     for (const auto& entry : _tablets_channels_rows) {
@@ -139,14 +155,27 @@ Status LoadChannel::add_batch(const PTabletWriterAddBlockRequest& request,
     }
 
     // 2. add block to tablets channel
-    if (request.has_block()) {
-        RETURN_IF_ERROR(channel->add_batch(request, response));
-        _add_batch_number_counter->update(1);
+    int64_t write_data_into_memtable_time = 0;
+    {
+        SCOPED_RAW_TIMER(&write_data_into_memtable_time);
+        if (request.has_block()) {
+            RETURN_IF_ERROR(channel->add_batch(request, response));
+            _add_batch_number_counter->update(1);
+        }
     }
+    _add_batch_write_data_into_memtable_timer->update(write_data_into_memtable_time / 1000);
 
     // 3. handle eos
     if (request.has_eos() && request.eos()) {
-        st = _handle_eos(channel.get(), request, response);
+        int64_t close_wait_time = 0;
+        {
+            SCOPED_RAW_TIMER(&close_wait_time);
+            st = _handle_eos(channel.get(), request, response);
+        }
+        FlushStatistic flush_info = channel->flush_statistic();
+        _add_batch_memtable_flush_counter->update(flush_info.flush_finish_count);
+        _add_batch_memtable_flush_timer->update(flush_info.flush_time_ns / 1000);
+        _add_batch_close_wait_timer->update(close_wait_time / 1000);
         _report_profile(response);
         if (!st.ok()) {
             return st;
@@ -227,7 +256,35 @@ Status LoadChannel::cancel() {
     for (auto& it : _tablets_channels) {
         static_cast<void>(it.second->cancel());
     }
+
+    if (!_canceled_for_metric) {
+        FlushStatistic total_flush_info;
+        for (auto& it : _tablets_channels) {
+            total_flush_info += it.second->flush_statistic();
+        }
+        _add_batch_memtable_flush_counter->update(total_flush_info.flush_finish_count);
+        _add_batch_memtable_flush_timer->update(total_flush_info.flush_time_ns / 1000);
+        _canceled_for_metric = true;
+    }
+
     return Status::OK();
+}
+
+
+void LoadChannel::log_profile() {
+    XMDLog log("profile_logger");
+    log.tag_format_kv("profile_name", _channel_profile->name());
+    for (const auto& info : _channel_profile->get_info_strings()) {
+        log.tag_format_kv(info.first, info.second);
+    }
+    for (const auto& counter : _channel_profile->get_counters()) {
+        auto value = counter.second->type() == TUnit::DOUBLE_VALUE ?
+                     std::to_string(counter.second->double_value()) : std::to_string(counter.second->value());
+        log.tag_format_k(counter.first, value);
+    }
+#ifndef BE_TEST
+    log.log();
+#endif
 }
 
 } // namespace doris

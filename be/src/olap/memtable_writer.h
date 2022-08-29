@@ -111,6 +111,8 @@ public:
 
     uint64_t flush_running_count() const;
 
+    FlushToken* flush_token() { return _flush_token.get(); }
+
 private:
     // push a full memtable to flush executor
     Status _flush_memtable_async();

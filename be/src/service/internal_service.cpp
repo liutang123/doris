@@ -445,7 +445,7 @@ void PInternalServiceImpl::tablet_writer_add_block(google::protobuf::RpcControll
         {
             SCOPED_RAW_TIMER(&execution_time_ns);
             signal::set_signal_task_id(request->id());
-            auto st = _exec_env->load_channel_mgr()->add_batch(*request, response);
+            auto st = _exec_env->load_channel_mgr()->add_batch(*request, response, wait_execution_time_ns);
             if (!st.ok()) {
                 LOG(WARNING) << "tablet writer add block failed, message=" << st
                              << ", id=" << request->id() << ", index_id=" << request->index_id()

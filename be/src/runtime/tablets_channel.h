@@ -32,6 +32,7 @@
 #include <vector>
 
 #include "common/status.h"
+#include <olap/memtable_flush_executor.h>
 #include "util/bitmap.h"
 #include "util/runtime_profile.h"
 #include "util/spinlock.h"
@@ -112,6 +113,8 @@ public:
     size_t total_received_rows() const { return _total_received_rows; }
 
     size_t num_rows_filtered() const { return _num_rows_filtered; }
+
+    FlushStatistic flush_statistic();
 
 protected:
     Status _get_current_seq(int64_t& cur_seq, const PTabletWriterAddBlockRequest& request);

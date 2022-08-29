@@ -57,7 +57,7 @@ public:
     Status open(const PTabletWriterOpenRequest& request);
 
     Status add_batch(const PTabletWriterAddBlockRequest& request,
-                     PTabletWriterAddBlockResult* response);
+                     PTabletWriterAddBlockResult* response, int64_t wait_execution_time_ns = 0);
 
     // cancel all tablet stream for 'load_id' load
     Status cancel(const PTabletWriterCancelRequest& request);

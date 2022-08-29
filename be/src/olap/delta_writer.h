@@ -30,6 +30,7 @@
 
 #include "common/status.h"
 #include "olap/delta_writer_context.h"
+#include "olap/memtable_flush_executor.h"
 #include "olap/memtable_writer.h"
 #include "olap/olap_common.h"
 #include "olap/rowset/rowset.h"
@@ -98,6 +99,8 @@ public:
     int64_t total_received_rows() const { return _memtable_writer->total_received_rows(); }
 
     int64_t num_rows_filtered() const;
+
+    FlushToken* flush_token() { return _memtable_writer->flush_token(); }
 
 protected:
     virtual void _init_profile(RuntimeProfile* profile);

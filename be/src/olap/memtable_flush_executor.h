@@ -43,6 +43,37 @@ struct FlushStatistic {
     std::atomic_uint64_t flush_size_bytes = 0;
     std::atomic_uint64_t flush_disk_size_bytes = 0;
     std::atomic_uint64_t flush_wait_time_ns = 0;
+
+    FlushStatistic& operator+=(const FlushStatistic& rhs) {
+        flush_time_ns += rhs.flush_time_ns;
+        flush_running_count += flush_running_count;
+        flush_finish_count += rhs.flush_finish_count;
+        flush_size_bytes += rhs.flush_size_bytes;
+        flush_disk_size_bytes += rhs.flush_disk_size_bytes;
+        flush_wait_time_ns += rhs.flush_wait_time_ns;
+        return *this;
+    }
+
+    FlushStatistic& operator=(const FlushStatistic& rhs) {
+        flush_time_ns = rhs.flush_time_ns.load();
+        flush_running_count = rhs.flush_running_count.load();
+        flush_finish_count = rhs.flush_finish_count.load();
+        flush_size_bytes = rhs.flush_size_bytes.load();
+        flush_disk_size_bytes = rhs.flush_disk_size_bytes.load();
+        flush_wait_time_ns = rhs.flush_wait_time_ns.load();
+        return *this;
+    }
+
+    FlushStatistic(const FlushStatistic& other) {
+        flush_time_ns = other.flush_time_ns.load();
+        flush_running_count = other.flush_running_count.load();
+        flush_finish_count = other.flush_finish_count.load();
+        flush_size_bytes = other.flush_size_bytes.load();
+        flush_disk_size_bytes = other.flush_disk_size_bytes.load();
+        flush_wait_time_ns = other.flush_wait_time_ns.load();
+    }
+
+    FlushStatistic() {}
 };
 
 std::ostream& operator<<(std::ostream& os, const FlushStatistic& stat);

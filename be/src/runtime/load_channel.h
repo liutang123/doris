@@ -38,6 +38,7 @@
 #include "util/spinlock.h"
 #include "util/thrift_util.h"
 #include "util/uid_util.h"
+#include <olap/memtable_flush_executor.h>
 
 namespace doris {
 
@@ -52,7 +53,7 @@ class BaseTabletsChannel;
 class LoadChannel {
 public:
     LoadChannel(const UniqueId& load_id, int64_t timeout_s, bool is_high_priority,
-                const std::string& sender_ip, int64_t backend_id, bool enable_profile);
+                const std::string& sender_ip, int64_t backend_id, bool enable_profile, const PTabletWriterOpenRequest& params);
     ~LoadChannel();
 
     // open a new load channel if not exist
@@ -77,6 +78,14 @@ public:
 
     RuntimeProfile::Counter* get_mgr_add_batch_timer() { return _mgr_add_batch_timer; }
     RuntimeProfile::Counter* get_handle_mem_limit_timer() { return _handle_mem_limit_timer; }
+
+    RuntimeProfile* profile() {return _channel_profile.get(); }
+
+    void update_wait_execution_time(int64_t value) { _add_batch_wait_execution_timer->update(value); }
+
+    void update_execution_time(int64_t value) { _add_batch_execution_timer->update(value); }
+
+    void log_profile();
 
 protected:
     Status _get_tablets_channel(std::shared_ptr<BaseTabletsChannel>& channel, bool& is_finished,
@@ -130,6 +139,16 @@ private:
     int64_t _backend_id;
 
     bool _enable_profile;
+
+    std::unique_ptr<RuntimeProfile> _channel_profile;
+    bool _canceled_for_metric = false;
+    RuntimeProfile::Counter* _add_batch_execution_timer = nullptr;
+    RuntimeProfile::Counter* _add_batch_wait_execution_timer = nullptr;
+    RuntimeProfile::Counter* _add_batch_close_wait_timer = nullptr;
+    RuntimeProfile::Counter* _add_batch_memtable_flush_timer = nullptr;
+    RuntimeProfile::Counter* _add_batch_memtable_flush_counter = nullptr;
+    RuntimeProfile::Counter* _add_batch_write_data_into_memtable_timer = nullptr;
+
 };
 
 inline std::ostream& operator<<(std::ostream& os, LoadChannel& load_channel) {

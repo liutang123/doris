@@ -104,7 +104,7 @@ Status LoadChannelMgr::open(const PTabletWriterOpenRequest& params) {
 
             channel.reset(new LoadChannel(load_id, channel_timeout_s, is_high_priority,
                                           params.sender_ip(), params.backend_id(),
-                                          params.enable_profile()));
+                                          params.enable_profile(), params));
             _load_channels.insert({load_id, channel});
         }
     }
@@ -138,7 +138,7 @@ Status LoadChannelMgr::_get_load_channel(std::shared_ptr<LoadChannel>& channel, 
 }
 
 Status LoadChannelMgr::add_batch(const PTabletWriterAddBlockRequest& request,
-                                 PTabletWriterAddBlockResult* response) {
+                                 PTabletWriterAddBlockResult* response, int64_t wait_execution_time_ns) {
     UniqueId load_id(request.id());
     // 1. get load channel
     std::shared_ptr<LoadChannel> channel;
@@ -147,23 +147,28 @@ Status LoadChannelMgr::add_batch(const PTabletWriterAddBlockRequest& request,
     if (!status.ok() || is_eof) {
         return status;
     }
+    channel->update_wait_execution_time(wait_execution_time_ns / 1000);
     SCOPED_TIMER(channel->get_mgr_add_batch_timer());
+    int64_t execution_time_ns = 0;
+    {
+        SCOPED_RAW_TIMER(&execution_time_ns);
+        if (!channel->is_high_priority()) {
+            // 2. check if mem consumption exceed limit
+            // If this is a high priority load task, do not handle this.
+            // because this may block for a while, which may lead to rpc timeout.
+            SCOPED_TIMER(channel->get_handle_mem_limit_timer());
+            ExecEnv::GetInstance()->memtable_memory_limiter()->handle_memtable_flush();
+        }
 
-    if (!channel->is_high_priority()) {
-        // 2. check if mem consumption exceed limit
-        // If this is a high priority load task, do not handle this.
-        // because this may block for a while, which may lead to rpc timeout.
-        SCOPED_TIMER(channel->get_handle_mem_limit_timer());
-        ExecEnv::GetInstance()->memtable_memory_limiter()->handle_memtable_flush();
-    }
-
-    // 3. add batch to load channel
-    // batch may not exist in request(eg: eos request without batch),
-    // this case will be handled in load channel's add batch method.
-    Status st = channel->add_batch(request, response);
-    if (UNLIKELY(!st.ok())) {
-        static_cast<void>(channel->cancel());
-        return st;
+        // 3. add batch to load channel
+        // batch may not exist in request(eg: eos request without batch),
+        // this case will be handled in load channel's add batch method.
+        Status st = channel->add_batch(request, response);
+        channel->update_execution_time(execution_time_ns / 1000);
+        if (UNLIKELY(!st.ok())) {
+            static_cast<void>(channel->cancel());
+            return st;
+        }
     }
 
     // 4. handle finish
