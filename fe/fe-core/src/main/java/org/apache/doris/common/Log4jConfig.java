@@ -257,7 +257,7 @@ public class Log4jConfig extends XmlConfiguration {
             "</AsyncScribe>",
     };
     private static final String[] FILE = new String[]{
-            "<XMDFile name=\"${name}_appender\" fileName=\"${name}.log\" xmdFilePath=\"/var/sankuai/logs/data_${name}\" queueSize=\"2048\">",
+            "<XMDFile name=\"${name}_appender\" fileName=\"${name}.log\" xmdFilePath=\"${directory}/data_${name}\" queueSize=\"2048\">",
             "</XMDFile>",
     };
     private static final String[] LOGGER = new String[]{
@@ -268,11 +268,12 @@ public class Log4jConfig extends XmlConfiguration {
 
     private static String configMT(String template) {
         String appender = Arrays.stream(MTLogger.values())
-                .flatMap(log -> Arrays.stream(log.socket ? SOCKET : FILE).map(s -> s.replace("${name}", log.name)))
+                .flatMap(log -> Arrays.stream(log.socket && Config.mt_audit_use_socket ? SOCKET : FILE)
+                        .map(s -> s.replace("${name}", log.name).replace("${directory}", Config.mt_audit_dir)))
                 .collect(Collectors.joining("\n    "));
         String logger = Arrays.stream(MTLogger.values())
-                .flatMap(log -> Arrays.stream(LOGGER).map(s -> s.replace("${name}", log.name)
-                        .replace("${additivity}", String.valueOf(false))))
+                .flatMap(log -> Arrays.stream(LOGGER)
+                        .map(s -> s.replace("${name}", log.name).replace("${additivity}", String.valueOf(false))))
                 .collect(Collectors.joining("\n    "));
         return template.replace("<!--REPLACED BY MT APPENDER-->", appender)
                 .replace("<!--REPLACED BY MT LOGGER-->", logger);

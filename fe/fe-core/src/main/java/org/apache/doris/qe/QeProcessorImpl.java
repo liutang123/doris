@@ -18,6 +18,10 @@
 package org.apache.doris.qe;
 
 import org.apache.doris.catalog.Env;
+import com.google.common.base.Strings;
+import com.google.common.collect.Sets;
+import org.apache.doris.analysis.CreateTableAsSelectStmt;
+import org.apache.doris.analysis.InsertStmt;
 import org.apache.doris.common.Config;
 import org.apache.doris.common.ThreadPoolManager;
 import org.apache.doris.common.UserException;
@@ -56,6 +60,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -172,7 +177,15 @@ public final class QeProcessorImpl implements QeProcessor {
         // expression limit
         QueryLimitContext ctx = new QueryLimitContext(queryInfo, userInstanceNum, userQueryNum);
         queryInfo.coord.setLimitContext(GsonUtils.GSON.toJson(ctx));
+        boolean isInsert = Optional.of(queryInfo)
+                .map(QueryInfo::getExecutor)
+                .map(StmtExecutor::getParsedStmt)
+                .map(s -> s instanceof InsertStmt || s instanceof CreateTableAsSelectStmt)
+                .orElse(false);
         for (Expression exp : trafficLimitRules) {
+            if (isInsert && !Config.mt_traffic_limit_insert) {
+                break;
+            }
             try {
                 Boolean limit = exp.getValue(ctx, Boolean.class);
                 if (limit == null) {
@@ -347,17 +360,19 @@ public final class QeProcessorImpl implements QeProcessor {
     public static final class QueryInfo {
         private final ConnectContext connectContext;
         private final Coordinator coord;
+        private final StmtExecutor executor;
         private final String sql;
 
         // from Export, Pull load, Insert
         public QueryInfo(Coordinator coord) {
-            this(null, null, coord);
+            this(null, null, coord, null);
         }
 
         // from query
-        public QueryInfo(ConnectContext connectContext, String sql, Coordinator coord) {
+        public QueryInfo(ConnectContext connectContext, String sql, Coordinator coord, StmtExecutor executor) {
             this.connectContext = connectContext;
             this.coord = coord;
+            this.executor = executor;
             this.sql = sql;
         }
 
@@ -367,6 +382,10 @@ public final class QeProcessorImpl implements QeProcessor {
 
         public Coordinator getCoord() {
             return coord;
+        }
+
+        public StmtExecutor getExecutor() {
+            return executor;
         }
 
         public String getSql() {

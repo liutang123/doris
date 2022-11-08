@@ -1608,7 +1608,7 @@ public class StmtExecutor {
         } else {
             coord = new Coordinator(context, analyzer, planner, context.getStatsErrorEstimator());
             QeProcessorImpl.INSTANCE.registerQuery(context.queryId(),
-                    new QeProcessorImpl.QueryInfo(context, originStmt.originStmt, coord));
+            new QeProcessorImpl.QueryInfo(context, originStmt.originStmt, coord, this));
             profile.addExecutionProfile(coord.getExecutionProfile());
             coordBase = coord;
         }
@@ -2088,7 +2088,7 @@ public class StmtExecutor {
                 coord.setLoadZeroTolerance(context.getSessionVariable().getEnableInsertStrict());
                 coord.setQueryType(TQueryType.LOAD);
                 profile.addExecutionProfile(coord.getExecutionProfile());
-                QueryInfo queryInfo = new QueryInfo(ConnectContext.get(), this.getOriginStmtInString(), coord);
+                QueryInfo queryInfo = new QueryInfo(ConnectContext.get(), this.getOriginStmtInString(), coord, this);
                 QeProcessorImpl.INSTANCE.registerQuery(context.queryId(), queryInfo);
 
                 Table table = insertStmt.getTargetTable();
@@ -2904,7 +2904,7 @@ public class StmtExecutor {
             profile.addExecutionProfile(coord.getExecutionProfile());
             try {
                 QeProcessorImpl.INSTANCE.registerQuery(context.queryId(),
-                        new QeProcessorImpl.QueryInfo(context, originStmt.originStmt, coord));
+                        new QeProcessorImpl.QueryInfo(context, originStmt.originStmt, coord, this));
             } catch (UserException e) {
                 throw new RuntimeException("Failed to execute internal SQL. " + Util.getRootCauseMessage(e), e);
             }
