@@ -58,6 +58,7 @@ public class FeNameFormatTest {
 
         // check success file name prefix
         ExceptionChecker.expectThrowsNoException(() -> FeNameFormat.checkOutfileSuccessFileName("fakeType", "_success"));
+        ExceptionChecker.expectThrowsNoException(() -> FeNameFormat.checkTableName(largeTblName));
     }
 
 }

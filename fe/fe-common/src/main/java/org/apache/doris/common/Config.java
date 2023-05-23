@@ -1485,7 +1485,7 @@ public class Config extends ConfigBase {
     public static int lower_case_table_names = 0;
 
     @ConfField(mutable = true, masterOnly = true)
-    public static int table_name_length_limit = 64;
+    public static int table_name_length_limit = 256;
 
     /*
      * The job scheduling interval of the schema change handler.
