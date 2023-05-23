@@ -73,6 +73,7 @@ public final class MetricRepo {
     public static LongCounterMetric COUNTER_REQUEST_ALL;
     public static LongCounterMetric COUNTER_QUERY_ALL;
     public static LongCounterMetric COUNTER_QUERY_ERR;
+    public static LongCounterMetric COUNTER_QUERY_TIMEOUT_ERR;
     public static LongCounterMetric COUNTER_QUERY_TABLE;
     public static LongCounterMetric COUNTER_QUERY_OLAP_TABLE;
     public static LongCounterMetric COUNTER_QUERY_HIVE_TABLE;
@@ -295,6 +296,8 @@ public final class MetricRepo {
         DORIS_METRIC_REGISTER.addMetrics(COUNTER_QUERY_ALL);
         COUNTER_QUERY_ERR = new LongCounterMetric("query_err", MetricUnit.REQUESTS, "total error query");
         DORIS_METRIC_REGISTER.addMetrics(COUNTER_QUERY_ERR);
+        COUNTER_QUERY_TIMEOUT_ERR = new LongCounterMetric("query_timeout_total", MetricUnit.REQUESTS, "total timeout error query");
+        DORIS_METRIC_REGISTER.addMetrics(COUNTER_QUERY_TIMEOUT_ERR);
         COUNTER_QUERY_TABLE = new LongCounterMetric("query_table", MetricUnit.REQUESTS, "total query from table");
         DORIS_METRIC_REGISTER.addMetrics(COUNTER_QUERY_TABLE);
         COUNTER_QUERY_OLAP_TABLE = new LongCounterMetric("query_olap_table", MetricUnit.REQUESTS,
@@ -495,6 +498,8 @@ public final class MetricRepo {
                 new LongCounterMetric("thrift_rpc_total", MetricUnit.NOUNIT, ""));
         THRIFT_COUNTER_RPC_LATENCY = addLabeledMetrics("method", () ->
                 new LongCounterMetric("thrift_rpc_latency_ms", MetricUnit.MILLISECONDS, ""));
+        MT_COUNT_DB_QUERY_TIMEOUT_ERR = addLabeledMetrics("db", () ->
+                new LongCounterMetric("query_timeout_err_db", MetricUnit.NOUNIT, ""));
 
         // MT metrics
         GaugeMetric<Long> mtGaugeQueryInstanceMax = new GaugeMetric<Long>("query_instance_max",

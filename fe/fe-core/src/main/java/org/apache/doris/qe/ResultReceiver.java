@@ -19,6 +19,7 @@ package org.apache.doris.qe;
 
 import org.apache.doris.common.Status;
 import org.apache.doris.common.util.DebugUtil;
+import org.apache.doris.metric.MetricRepo;
 import org.apache.doris.proto.InternalService;
 import org.apache.doris.proto.Types;
 import org.apache.doris.rpc.BackendServiceProxy;
@@ -35,6 +36,7 @@ import org.apache.thrift.TDeserializer;
 import org.apache.thrift.TException;
 
 import java.util.concurrent.CancellationException;
+import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -175,6 +177,18 @@ public class ResultReceiver {
         } catch (TimeoutException e) {
             LOG.warn("fetch result timeout, finstId={}", DebugUtil.printId(finstId), e);
             status.setStatus(new Status(TStatusCode.TIMEOUT, "query timeout"));
+            if (ConnectContext.get() != null) {
+                // 添加超时指标
+                ConnectContext ctx = ConnectContext.get();
+                int instanceNum = Optional.of(ctx).map(ConnectContext::getExecutor)
+                        .map(StmtExecutor::coordinator).map(Coordinator::getInstanceNum).orElse(0);
+                if (instanceNum > 0) {
+                    // 超时count总量
+                    MetricRepo.COUNTER_QUERY_TIMEOUT_ERR.increase(1L);
+                    // DB维度超时count量
+                    MetricRepo.MT_COUNT_DB_QUERY_TIMEOUT_ERR.getOrAdd(ctx.getDatabase()).increase(1L);
+                }
+            }
         } finally {
             synchronized (this) {
                 currentThread = null;
