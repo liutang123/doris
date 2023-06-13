@@ -45,6 +45,7 @@ const static std::string HEADER_JSON = "application/json";
 const static std::string OP = "op";
 const static std::string DATA_SIZE = "data_size";
 const static std::string HEADER = "header";
+const static std::string DUMP_PB_FILE = "dump_pb";
 
 MetaAction::MetaAction(ExecEnv* exec_env, TPrivilegeHier::type hier, TPrivilegeType::type type)
         : HttpHandlerWithAuth(exec_env, hier, type) {}
@@ -52,10 +53,15 @@ Status MetaAction::_handle_header(HttpRequest* req, std::string* json_meta) {
     req->add_output_header(HttpHeaders::CONTENT_TYPE, HEADER_JSON.c_str());
     std::string req_tablet_id = req->param(TABLET_ID_KEY);
     std::string req_enable_base64 = req->param(ENABLE_BYTE_TO_BASE64);
+    std::string dump_pb_file = req->param(DUMP_PB_FILE);
     uint64_t tablet_id = 0;
     bool enable_byte_to_base64 = false;
+    bool enable_dump_pb = false;
     if (std::strcmp(req_enable_base64.c_str(), "true") == 0) {
         enable_byte_to_base64 = true;
+    }
+    if (std::strcmp(dump_pb_file.c_str(), "true") == 0) {
+        enable_dump_pb = true;
     }
     try {
         tablet_id = std::stoull(req_tablet_id);
@@ -87,6 +93,20 @@ Status MetaAction::_handle_header(HttpRequest* req, std::string* json_meta) {
             data_size["remote_data_size"] = tablet->tablet_remote_size();
         }
         *json_meta = data_size.ToString();
+        return Status::OK();
+    } else if(operation == DUMP_PB_FILE) {
+        TabletMetaSharedPtr tablet_meta(new TabletMeta());
+        tablet->generate_tablet_meta_copy(tablet_meta);
+        json2pb::Pb2JsonOptions json_options;
+        json_options.pretty_json = true;
+        json_options.bytes_to_base64 = enable_byte_to_base64;
+        tablet_meta->to_json(json_meta, json_options);
+        if (enable_dump_pb) {
+            string target_path = config::jeprofile_dir + "/" + std::to_string(tablet_id) + ".hdr";
+            if (!tablet_meta->save(target_path).ok()) {
+                return Status::InternalError("dump meta pb file failed, target path: " + target_path);
+            }
+        }
         return Status::OK();
     }
     return Status::InternalError("invalid operation");
