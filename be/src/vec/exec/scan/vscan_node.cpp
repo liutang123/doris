@@ -113,32 +113,51 @@ Status VScanNode::init(const TPlanNode& tnode, RuntimeState* state) {
     return Status::OK();
 }
 
+void VScanNode::set_shared_scan(RuntimeState* state, bool shared_scan, bool should_create_scanner) {
+    _shared_scan_opt = shared_scan;
+    if (_is_pipeline_scan) {
+        if (_shared_scan_opt) {
+            _shared_scanner_controller =
+                    state->get_query_ctx()->get_shared_scanner_controller();
+            auto queue_id = _shared_scanner_controller->should_build_scanner_and_queue_id(id());
+            _should_create_scanner = should_create_scanner;
+            _context_queue_id = queue_id;
+        } else {
+            _context_queue_id = 0;
+        }
+    }
+}
+
 Status VScanNode::prepare(RuntimeState* state) {
     RETURN_IF_ERROR(ExecNode::prepare(state));
 
     // init profile for runtime filter
     RuntimeFilterConsumer::_init_profile(_runtime_profile.get());
 
-    if (_is_pipeline_scan) {
-        if (_shared_scan_opt) {
-            _shared_scanner_controller = state->get_query_ctx()->get_shared_scanner_controller();
-            auto [should_create_scanner, queue_id] =
-                    _shared_scanner_controller->should_build_scanner_and_queue_id(id());
-            _should_create_scanner = should_create_scanner;
-            _context_queue_id = queue_id;
-        } else {
-            _should_create_scanner = true;
-            _context_queue_id = 0;
-        }
-    }
+    // TODO llj remove this
+    // pipeline 时， ExecNode::init把_is_pipeline_scan设置为true，_shared_scan_opt默认为false
+    // 下列代码会将_should_create_scanner设置为true，下边的_init_profile永远执行
+
+//    if (_is_pipeline_scan) {
+//        if (_shared_scan_opt) {
+//            _shared_scanner_controller = state->get_query_ctx()->get_shared_scanner_controller();
+//            auto [should_create_scanner, queue_id] =
+//                    _shared_scanner_controller->should_build_scanner_and_queue_id(id());
+//            _should_create_scanner = should_create_scanner;
+//            _context_queue_id = queue_id;
+//        } else {
+//            _should_create_scanner = true;
+//            _context_queue_id = 0;
+//        }
+//    }
 
     // 1: running at not pipeline mode will init profile.
     // 2: the scan node should create scanner at pipeline mode will init profile.
     // during pipeline mode with more instances, olap scan node maybe not new VScanner object,
     // so the profile of VScanner and SegmentIterator infos are always empty, could not init those.
-    if (!_is_pipeline_scan || _should_create_scanner) {
+//    if (!_is_pipeline_scan || _should_create_scanner) {
         RETURN_IF_ERROR(_init_profile());
-    }
+//    }
     // if you want to add some profile in scan node, even it have not new VScanner object
     // could add here, not in the _init_profile() function
     _get_next_timer = ADD_TIMER(_runtime_profile, "GetNextTime");
@@ -320,7 +339,7 @@ Status VScanNode::close(RuntimeState* state) {
 
 void VScanNode::release_resource(RuntimeState* state) {
     if (_scanner_ctx.get()) {
-        if (!state->enable_pipeline_exec() || _should_create_scanner) {
+        if (_should_create_scanner) {
             // stop and wait the scanner scheduler to be done
             // _scanner_ctx may not be created for some short circuit case.
             _scanner_ctx->set_should_stop();

@@ -90,7 +90,8 @@ ExecNode::ExecNode(ObjectPool* pool, const TPlanNode& tnode, const DescriptorTbl
           _rows_returned_rate(nullptr),
           _memory_used_counter(nullptr),
           _is_closed(false),
-          _ref(0) {
+          _ref(0),
+          _mock_index_0_ref(0) {
     if (tnode.__isset.output_tuple_id) {
         _output_row_descriptor.reset(new RowDescriptor(descs, {tnode.output_tuple_id}, {true}));
     }
@@ -106,11 +107,12 @@ Status ExecNode::init(const TPlanNode& tnode, RuntimeState* state) {
         RETURN_IF_ERROR(vectorized::VExpr::create_expr_tree(tnode.vconjunct, context));
         _conjuncts.emplace_back(context);
     } else if (tnode.__isset.conjuncts) {
-        for (auto& conjunct : tnode.conjuncts) {
-            vectorized::VExprContextSPtr context;
-            RETURN_IF_ERROR(vectorized::VExpr::create_expr_tree(conjunct, context));
-            _conjuncts.emplace_back(context);
-        }
+//        for (auto& conjunct : tnode.conjuncts) {
+//            vectorized::VExprContextSPtr context;
+//            RETURN_IF_ERROR(vectorized::VExpr::create_expr_tree(conjunct, context));
+//            _conjuncts.emplace_back(context);
+//        }
+        RETURN_IF_ERROR(vectorized::VExpr::create_expr_trees(tnode.conjuncts, _conjuncts));
     }
 
     // create the projections expr
@@ -123,6 +125,11 @@ Status ExecNode::init(const TPlanNode& tnode, RuntimeState* state) {
 }
 
 Status ExecNode::prepare(RuntimeState* state) {
+    RETURN_IF_ERROR(prepare_global(state));
+    return prepare_local(state);
+}
+
+Status ExecNode::prepare_global(RuntimeState* state) {
     DCHECK(_runtime_profile.get() != nullptr);
     _span = state->get_tracer()->StartSpan(get_name());
     OpentelemetryScope scope {_span};
@@ -136,9 +143,7 @@ Status ExecNode::prepare(RuntimeState* state) {
     _mem_tracker = std::make_unique<MemTracker>("ExecNode:" + _runtime_profile->name(),
                                                 _runtime_profile.get(), nullptr, "PeakMemoryUsage");
 
-    for (auto& conjunct : _conjuncts) {
-        RETURN_IF_ERROR(conjunct->prepare(state, intermediate_row_desc()));
-    }
+    RETURN_IF_ERROR(vectorized::VExpr::prepare(_conjuncts, state, intermediate_row_desc()));
 
     RETURN_IF_ERROR(vectorized::VExpr::prepare(_projections, state, intermediate_row_desc()));
 
@@ -148,11 +153,24 @@ Status ExecNode::prepare(RuntimeState* state) {
     return Status::OK();
 }
 
+Status ExecNode::prepare_local(RuntimeState* state) {
+    CHECK(state->instance_index() == 0) << "Not implements local state in ExecNode prepare_local";
+    return Status::OK();
+}
+
 Status ExecNode::alloc_resource(doris::RuntimeState* state) {
-    for (auto& conjunct : _conjuncts) {
-        RETURN_IF_ERROR(conjunct->open(state));
-    }
+        RETURN_IF_ERROR(alloc_global_resource(state));
+        return alloc_local_resource(state);
+}
+
+Status ExecNode::alloc_global_resource(doris::RuntimeState* state) {
+    RETURN_IF_ERROR(vectorized::VExpr::open(_conjuncts, state));
     RETURN_IF_ERROR(vectorized::VExpr::open(_projections, state));
+    return Status::OK();
+}
+
+Status ExecNode::alloc_local_resource(doris::RuntimeState* state) {
+    CHECK(state->instance_index() == 0) << "Not implements local state in ExecNode alloc local";
     return Status::OK();
 }
 
@@ -177,6 +195,11 @@ Status ExecNode::collect_query_statistics(QueryStatistics* statistics) {
 }
 
 void ExecNode::release_resource(doris::RuntimeState* state) {
+    release_global_resource(state);
+    release_local_resource(state);
+}
+
+void ExecNode::release_global_resource(doris::RuntimeState* state) {
     if (!_is_resource_released) {
         if (_rows_returned_counter != nullptr) {
             COUNTER_SET(_rows_returned_counter, _num_rows_returned);
@@ -185,6 +208,11 @@ void ExecNode::release_resource(doris::RuntimeState* state) {
         runtime_profile()->add_to_span(_span);
         _is_resource_released = true;
     }
+}
+
+void ExecNode::release_local_resource(doris::RuntimeState* state) {
+    CHECK(state->instance_index() == 0) << "Not implements release local state in ExecNode";
+    _mock_index_0_is_resource_released = true;
 }
 
 Status ExecNode::close(RuntimeState* state) {
@@ -205,19 +233,6 @@ Status ExecNode::close(RuntimeState* state) {
     }
     release_resource(state);
     return result;
-}
-
-void ExecNode::add_runtime_exec_option(const std::string& str) {
-    std::lock_guard<std::mutex> l(_exec_options_lock);
-
-    if (_runtime_exec_options.empty()) {
-        _runtime_exec_options = str;
-    } else {
-        _runtime_exec_options.append(", ");
-        _runtime_exec_options.append(str);
-    }
-
-    runtime_profile()->add_info_string("ExecOption", _runtime_exec_options);
 }
 
 Status ExecNode::create_tree(RuntimeState* state, ObjectPool* pool, const TPlan& plan,
@@ -507,7 +522,7 @@ void ExecNode::release_block_memory(vectorized::Block& block, uint16_t child_idx
     block.clear_column_data(child(child_idx)->row_desc().num_materialized_slots());
 }
 
-void ExecNode::reached_limit(vectorized::Block* block, bool* eos) {
+void ExecNode::reached_limit(vectorized::Block* block, bool* eos, int index) {
     if (_limit != -1 and _num_rows_returned + block->rows() >= _limit) {
         block->set_num_rows(_limit - _num_rows_returned);
         *eos = true;

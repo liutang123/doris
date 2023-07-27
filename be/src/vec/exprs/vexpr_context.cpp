@@ -110,12 +110,6 @@ doris::Status VExprContext::clone(RuntimeState* state, VExprContextSPtr& new_ctx
     return _root->open(state, new_ctx.get(), FunctionContext::THREAD_LOCAL);
 }
 
-void VExprContext::clone_fn_contexts(VExprContext* other) {
-    for (auto& _fn_context : _fn_contexts) {
-        other->_fn_contexts.push_back(_fn_context->clone());
-    }
-}
-
 int VExprContext::register_function_context(RuntimeState* state,
                                             const doris::TypeDescriptor& return_type,
                                             const std::vector<doris::TypeDescriptor>& arg_types) {

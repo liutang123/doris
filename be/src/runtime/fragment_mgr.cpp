@@ -851,6 +851,7 @@ Status FragmentMgr::exec_plan_fragment(const TPipelineFragmentParams& params,
 
     std::shared_ptr<QueryContext> query_ctx;
     RETURN_IF_ERROR(_get_query_ctx(params, params.query_id, true, query_ctx));
+    // get fragment context
     auto pre_and_submit = [&](int i) {
         const auto& local_params = params.local_params[i];
 

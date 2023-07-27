@@ -64,7 +64,9 @@ RuntimeState::RuntimeState(const TUniqueId& fragment_instance_id,
           _load_job_id(-1),
           _normal_row_number(0),
           _error_row_number(0),
-          _error_log_file(nullptr) {
+          _error_log_file(nullptr),
+          _index(0),
+          _total_instance_num(1) {
     Status status = init(fragment_instance_id, query_options, query_globals, exec_env);
     DCHECK(status.ok());
 }
@@ -89,7 +91,9 @@ RuntimeState::RuntimeState(const TPlanFragmentExecParams& fragment_exec_params,
           _num_finished_scan_range(0),
           _normal_row_number(0),
           _error_row_number(0),
-          _error_log_file(nullptr) {
+          _error_log_file(nullptr),
+          _index(0),
+          _total_instance_num(1) {
     if (fragment_exec_params.__isset.runtime_filter_params) {
         _runtime_filter_mgr->set_runtime_filter_params(fragment_exec_params.runtime_filter_params);
     }
@@ -118,7 +122,9 @@ RuntimeState::RuntimeState(const TPipelineInstanceParams& pipeline_params,
           _num_finished_scan_range(0),
           _normal_row_number(0),
           _error_row_number(0),
-          _error_log_file(nullptr) {
+          _error_log_file(nullptr),
+          _index(0),
+          _total_instance_num(1) {
     if (pipeline_params.__isset.runtime_filter_params) {
         _runtime_filter_mgr->set_runtime_filter_params(pipeline_params.runtime_filter_params);
     }
@@ -134,7 +140,9 @@ RuntimeState::RuntimeState(const TQueryGlobals& query_globals)
           _data_stream_recvrs_pool(new ObjectPool()),
           _unreported_error_idx(0),
           _is_cancelled(false),
-          _per_fragment_instance_idx(0) {
+          _per_fragment_instance_idx(0),
+          _index(0),
+          _total_instance_num(1) {
     _query_options.batch_size = DEFAULT_BATCH_SIZE;
     if (query_globals.__isset.time_zone && query_globals.__isset.nano_seconds) {
         _timezone = query_globals.time_zone;

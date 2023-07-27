@@ -118,6 +118,7 @@ protected:
     bool _is_closed = false;
 };
 
+// For ExecNode
 template <typename NodeType>
 class OperatorBuilder : public OperatorBuilderBase {
 public:
@@ -134,6 +135,7 @@ protected:
     NodeType* _node;
 };
 
+// For DataSink
 template <typename SinkType>
 class DataSinkOperatorBuilder : public OperatorBuilderBase {
 public:
@@ -323,14 +325,16 @@ public:
     ~StreamingOperator() override = default;
 
     Status prepare(RuntimeState* state) override {
-        _node->increase_ref();
+        _node->increase_ref(state->instance_index());
         _use_projection = _node->has_output_row_descriptor();
         return Status::OK();
     }
 
     Status open(RuntimeState* state) override {
-        RETURN_IF_ERROR(_node->alloc_resource(state));
-        return Status::OK();
+        if (state->instance_index() == 0) {
+            RETURN_IF_ERROR(_node->alloc_global_resource(state));
+        }
+        return _node->alloc_local_resource(state);
     }
 
     Status sink(RuntimeState* state, vectorized::Block* in_block,
@@ -342,9 +346,7 @@ public:
         if (is_closed()) {
             return Status::OK();
         }
-        if (!_node->decrease_ref()) {
-            _node->release_resource(state);
-        }
+        _node->decrease_ref(state);
         _is_closed = true;
         return Status::OK();
     }

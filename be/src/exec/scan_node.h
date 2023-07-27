@@ -85,8 +85,6 @@ public:
     // called after prepare()
     virtual Status set_scan_ranges(const std::vector<TScanRangeParams>& scan_ranges) = 0;
 
-    bool is_scan_node() const override { return true; }
-
     RuntimeProfile::Counter* bytes_read_counter() const { return _bytes_read_counter; }
     RuntimeProfile::Counter* rows_read_counter() const { return _rows_read_counter; }
     RuntimeProfile::Counter* total_throughput_counter() const { return _total_throughput_counter; }

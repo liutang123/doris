@@ -169,6 +169,8 @@ public:
 
     void set_be_number(int be_number) { _be_number = be_number; }
     int be_number(void) const { return _be_number; }
+    int instance_index() const { return _index; }
+    int total_instances_num() const { return _total_instance_num; }
 
     // Sets _process_status with err_msg if no error has been set yet.
     void set_process_status(const std::string& err_msg) {
@@ -475,6 +477,10 @@ private:
 
     // used as send id
     int _be_number;
+
+    // 单fragment中不同instance在本be执行时的索引。
+    const int _index;
+    const int _total_instance_num;
 
     // Non-OK if an error has occurred and query execution should abort. Used only for
     // asynchronously reporting such errors (e.g., when a UDF reports an error), so this

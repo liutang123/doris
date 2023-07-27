@@ -101,8 +101,6 @@ public:
         return _is_clone ? FunctionContext::THREAD_LOCAL : FunctionContext::FRAGMENT_LOCAL;
     }
 
-    void clone_fn_contexts(VExprContext* other);
-
     bool force_materialize_slot() const { return _force_materialize_slot; }
 
     void set_force_materialize_slot() { _force_materialize_slot = true; }

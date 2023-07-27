@@ -142,6 +142,9 @@ bool PipelineTask::has_dependency() {
     if (_pipeline->has_dependency()) {
         return true;
     }
+    if (!_pipeline->is_opened()) {
+        return true;
+    }
 
     if (!query_context()->is_ready_to_execute()) {
         return true;
@@ -186,17 +189,19 @@ Status PipelineTask::execute(bool* eos) {
     if (!_opened) {
         {
             SCOPED_RAW_TIMER(&time_spent);
-            auto st = _open();
-            if (st.is<ErrorCode::PIP_WAIT_FOR_RF>()) {
-                set_state(PipelineTaskState::BLOCKED_FOR_RF);
-                return Status::OK();
-            } else if (st.is<ErrorCode::PIP_WAIT_FOR_SC>()) {
-                set_state(PipelineTaskState::BLOCKED_FOR_SOURCE);
-                return Status::OK();
+            if (_state->instance_index() == 0 || _pipeline->is_opened()) {
+                auto st = _open();
+                if (st.is<ErrorCode::PIP_WAIT_FOR_RF>()) {
+                    set_state(PipelineTaskState::BLOCKED_FOR_RF);
+                    return Status::OK();
+                } else if (st.is<ErrorCode::PIP_WAIT_FOR_SC>()) {
+                    set_state(PipelineTaskState::BLOCKED_FOR_SOURCE);
+                    return Status::OK();
+                }
+                RETURN_IF_ERROR(st);
             }
-            RETURN_IF_ERROR(st);
         }
-        if (has_dependency()) {
+        if (has_dependency()) { // move this before open?
             set_state(PipelineTaskState::BLOCKED_FOR_DEPENDENCY);
             return Status::OK();
         }

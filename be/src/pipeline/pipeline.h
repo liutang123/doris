@@ -49,10 +49,15 @@ class Pipeline : public std::enable_shared_from_this<Pipeline> {
 public:
     Pipeline() = delete;
     explicit Pipeline(PipelineId pipeline_id, std::weak_ptr<PipelineFragmentContext> context)
-            : _complete_dependency(0), _pipeline_id(pipeline_id), _context(context) {
+            : _complete_dependency(0),
+              _pipeline_id(pipeline_id),
+              _context(context),
+              _opened(false) {
         _init_profile();
     }
 
+    void set_opened() { _opened = true; }
+    bool is_opened() { return _opened; }
     void add_dependency(std::shared_ptr<Pipeline>& pipeline) {
         pipeline->_parents.push_back(weak_from_this());
         _dependencies.push_back(pipeline);
@@ -96,6 +101,7 @@ private:
     int _previous_schedule_id = -1;
 
     std::unique_ptr<RuntimeProfile> _pipeline_profile;
+    std::atomic_bool _opened;
 };
 
 } // namespace doris::pipeline

@@ -79,6 +79,10 @@ public:
     // If overridden in subclass, must first call superclass's prepare().
     [[nodiscard]] virtual Status prepare(RuntimeState* state);
 
+    [[nodiscard]] virtual Status prepare_global(RuntimeState* state);
+    // thread safe
+    [[nodiscard]] virtual Status prepare_local(RuntimeState* state);
+
     // Performs any preparatory work prior to calling get_next().
     // Can be called repeatedly (after calls to close()).
     // Caller must not be holding any io buffers. This will cause deadlock.
@@ -88,6 +92,10 @@ public:
     // Only pipeline operator use exec node need to impl the virtual function
     // so only vectorized exec node need to impl
     [[nodiscard]] virtual Status alloc_resource(RuntimeState* state);
+
+    [[nodiscard]] virtual Status alloc_global_resource(RuntimeState* state);
+
+    [[nodiscard]] virtual Status alloc_local_resource(RuntimeState* state);
 
     // Retrieves rows and returns them via row_batch. Sets eos to true
     // if subsequent calls will not retrieve any more rows.
@@ -172,13 +180,28 @@ public:
     // each implementation should start out by calling the default implementation.
     virtual Status close(RuntimeState* state);
 
-    void increase_ref() { ++_ref; }
-    int decrease_ref() { return --_ref; }
+    void increase_ref(RuntimeState* state) {
+        DCHECK(state->instance_index() == 0) << "Not implements";
+        ++_mock_index_0_ref;
+        ++_ref;
+    }
+
+    void decrease_ref(RuntimeState* state) {
+        DCHECK(state->instance_index() == 0) << "Not implements";
+        if (0 == --_mock_index_0_ref) {
+            release_local_resource(state);
+        }
+        if (0 == --_ref) {
+            release_global_resource(state);
+        }
+    }
 
     // Release and close resource for the node
     // Only pipeline operator use exec node need to impl the virtual function
     // so only vectorized exec node need to impl
     virtual void release_resource(RuntimeState* state);
+    virtual void release_global_resource(RuntimeState* state);
+    virtual void release_local_resource(RuntimeState* state);
 
     // Creates exec node tree from list of nodes contained in plan via depth-first
     // traversal. All nodes are placed in pool.
@@ -215,17 +238,17 @@ public:
     virtual const RowDescriptor& intermediate_row_desc() const { return _row_descriptor; }
     int64_t rows_returned() const { return _num_rows_returned; }
     int64_t limit() const { return _limit; }
-    bool reached_limit() const { return _limit != -1 && _num_rows_returned >= _limit; }
+    bool reached_limit(int index = 0) const { return _limit != -1 && _num_rows_returned >= _limit; }
     /// Only use in vectorized exec engine to check whether reach limit and cut num row for block
     // and add block rows for profile
-    void reached_limit(vectorized::Block* block, bool* eos);
-    const std::vector<TupleId>& get_tuple_ids() const { return _tuple_ids; }
+    void reached_limit(vectorized::Block* block, bool* eos, int index = 0);
 
     RuntimeProfile* faker_runtime_profile() const { return _faker_runtime_profile.get(); }
-    RuntimeProfile* runtime_profile() const { return _runtime_profile.get(); }
+    // we should remove this and use local_state to get runtime profile
+    RuntimeProfile* runtime_profile(const int index = 0) const { return _runtime_profile.get(); }
     RuntimeProfile::Counter* memory_used_counter() const { return _memory_used_counter; }
 
-    MemTracker* mem_tracker() const { return _mem_tracker.get(); }
+    MemTracker* mem_tracker(int index = 0) const { return _mem_tracker.get(); }
 
     OpentelemetrySpan get_next_span() { return _span; }
 
@@ -249,40 +272,50 @@ protected:
     /// Only use in vectorized exec engine try to do projections to trans _row_desc -> _output_row_desc
     Status do_projections(vectorized::Block* origin_block, vectorized::Block* output_block);
 
+    ///////// global state START
     int _id; // unique w/in single plan tree
     TPlanNodeType::type _type;
     ObjectPool* _pool;
     std::vector<TupleId> _tuple_ids;
-
-    vectorized::VExprContextSPtrs _conjuncts;
-
     std::vector<ExecNode*> _children;
     RowDescriptor _row_descriptor;
+    std::unique_ptr<RowDescriptor> _output_row_descriptor;
+    int64_t _limit; // -1: no limit
+    vectorized::VexprSPtrs _conjunct_exprs;
+    vectorized::VexprSPtrs _projection_exprs;
+
+    ///////// global state END
+
+    ///////// local state START
+    vectorized::VExprContextSPtrs _conjuncts;
+    vectorized::VExprContextSPtrs& conjuncts(int index) { return _conjuncts; };
     vectorized::Block _origin_block;
 
-    std::unique_ptr<RowDescriptor> _output_row_descriptor;
     vectorized::VExprContextSPtrs _projections;
 
     /// Resource information sent from the frontend.
     const TBackendResourceProfile _resource_profile;
 
-    int64_t _limit; // -1: no limit
     int64_t _num_rows_returned;
-
-    std::unique_ptr<RuntimeProfile> _runtime_profile;
+    int64_t num_rows_returned(int index) { return _num_rows_returned; }
+    void add_rows_returned(int index, int64_t delta) { _num_rows_returned += delta; }
 
     // Record this node memory size. it is expected that artificial guarantees are accurate,
     // which will providea reference for operator memory.
     std::unique_ptr<MemTracker> _mem_tracker;
 
+    std::unique_ptr<RuntimeProfile> _runtime_profile;
     RuntimeProfile::Counter* _rows_returned_counter;
+    RuntimeProfile::Counter* rows_returned_counter(int i) { return _rows_returned_counter; }
     RuntimeProfile::Counter* _rows_returned_rate;
     // Account for peak memory used by this node
     RuntimeProfile::Counter* _memory_used_counter;
     RuntimeProfile::Counter* _projection_timer;
 
-    //
     OpentelemetrySpan _span;
+
+    std::atomic<bool> _can_read = false;
+    ///////// local state END
 
     //NOTICE: now add a faker profile, because sometimes the profile record is useless
     //so we want remove some counters and timers, eg: in join node, if it's broadcast_join
@@ -291,16 +324,7 @@ protected:
     std::unique_ptr<RuntimeProfile> _faker_runtime_profile =
             std::make_unique<RuntimeProfile>("faker profile");
 
-    // Execution options that are determined at runtime.  This is added to the
-    // runtime profile at close().  Examples for options logged here would be
-    // "Codegen Enabled"
-    std::mutex _exec_options_lock;
-    std::string _runtime_exec_options;
-
-    // Set to true if this is a vectorized exec node.
-    bool _is_vec = false;
-
-    bool is_closed() const { return _is_closed; }
+    bool is_closed(int index = 0) const { return _is_closed; }
 
     // TODO(zc)
     /// Pointer to the containing SubplanNode or nullptr if not inside a subplan.
@@ -320,20 +344,22 @@ protected:
                                      const DescriptorTbl& descs, ExecNode* parent, int* node_idx,
                                      ExecNode** root);
 
-    virtual bool is_scan_node() const { return false; }
-
     void init_runtime_profile(const std::string& name);
-
-    // Appends option to '_runtime_exec_options'
-    void add_runtime_exec_option(const std::string& option);
-
-    std::atomic<bool> _can_read = false;
 
 private:
     friend class pipeline::OperatorBase;
+
+    ///////// global state START
     bool _is_closed;
     bool _is_resource_released = false;
-    std::atomic_int _ref; // used by pipeline operator to release resource.
+    std::atomic_int _ref; // used by pipeline operator builder to release resource.
+    ///////// global state END
+
+    ///////// local state START
+    bool _mock_index_0_is_resource_released = false;
+    std::atomic_int _mock_index_0_ref; // used by pipeline operator to release resource.
+    ///////// local state END
+
 };
 
 } // namespace doris
