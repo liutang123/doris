@@ -31,6 +31,7 @@
 #include "common/consts.h"
 #include "common/logging.h"
 #include "common/utils.h"
+#include "exec/schema_scanner/schema_helper.h"
 #include "gen_cpp/FrontendService.h"
 #include "gen_cpp/FrontendService_types.h"
 #include "gen_cpp/HeartbeatService_types.h"
@@ -168,6 +169,8 @@ void StreamLoadAction::handle(HttpRequest* req) {
             ctx->body_sink->cancel(ctx->status.to_string());
         }
     }
+
+    _set_tablet_version_count_to_ctx(req,ctx);
 
     auto str = ctx->to_json();
     // add new line at end
@@ -637,5 +640,35 @@ void StreamLoadAction::_save_stream_load_record(StreamLoadContext* ctx, const st
         LOG(WARNING) << "put stream_load_record rocksdb failed. stream_load_recorder is null.";
     }
 }
+
+
+void StreamLoadAction::_set_tablet_version_count_to_ctx(HttpRequest* http_req,
+                                      StreamLoadContext* ctx) {
+    TNetworkAddress master_addr = _exec_env->master_info()->network_address;
+    TGetTableAllTabletInfoRequest request;
+    request.db_name = http_req->param(HTTP_DB_KEY);
+    request.table_name = http_req->param(HTTP_TABLE_KEY);
+
+    TGetTableAllTabletInfoResult result;
+    int max_tablet_count = -1;
+
+    Status status = SchemaHelper::get_table_all_tablet_info( master_addr.hostname, master_addr.port, request, &result);
+    // get the max version count of all this table's tablet
+    if (!status.ok()) {
+        ctx->table_current_max_tablet_version_num = max_tablet_count;
+    } else {
+        std::vector<TTabletReplicaInfo>::iterator it = result.tablets.begin();
+        for(;it != result.tablets.end(); ++it) {
+            if(it->version_count > max_tablet_count) {
+                max_tablet_count = it->version_count;
+            }
+        }
+        ctx->table_current_max_tablet_version_num = max_tablet_count;
+    }
+    // get the max tablet version number of cluster configuration
+    ctx->conf_max_tablet_version_num = config::max_tablet_version_num;
+    return;
+}
+
 
 } // namespace doris

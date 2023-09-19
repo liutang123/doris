@@ -50,6 +50,7 @@ private:
     Status _data_saved_path(HttpRequest* req, std::string* file_path);
     Status _process_put(HttpRequest* http_req, StreamLoadContext* ctx);
     void _save_stream_load_record(StreamLoadContext* ctx, const std::string& str);
+    void _set_tablet_version_count_to_ctx(HttpRequest* http_req, StreamLoadContext* ctx);
 
 private:
     ExecEnv* _exec_env;

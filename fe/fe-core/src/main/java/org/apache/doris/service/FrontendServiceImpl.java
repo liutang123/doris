@@ -24,8 +24,11 @@ import org.apache.doris.catalog.Column;
 import org.apache.doris.catalog.Database;
 import org.apache.doris.catalog.DatabaseIf;
 import org.apache.doris.catalog.Env;
+import org.apache.doris.catalog.MaterializedIndex;
+import org.apache.doris.catalog.MaterializedIndex.IndexExtState;
 import org.apache.doris.catalog.HMSResource;
 import org.apache.doris.catalog.OlapTable;
+import org.apache.doris.catalog.Partition;
 import org.apache.doris.catalog.S3Resource;
 import org.apache.doris.catalog.Table;
 import org.apache.doris.catalog.TableIf;
@@ -46,6 +49,7 @@ import org.apache.doris.common.ThriftServerContext;
 import org.apache.doris.common.ThriftServerEventProcessor;
 import org.apache.doris.common.UserException;
 import org.apache.doris.common.Version;
+import org.apache.doris.common.proc.TabletsProcDir;
 import org.apache.doris.common.util.TimeUtils;
 import org.apache.doris.datasource.CatalogIf;
 import org.apache.doris.datasource.ExternalCatalog;
@@ -86,6 +90,8 @@ import org.apache.doris.thrift.TGetDbsParams;
 import org.apache.doris.thrift.TGetDbsResult;
 import org.apache.doris.thrift.TGetStoragePolicy;
 import org.apache.doris.thrift.TGetStoragePolicyResult;
+import org.apache.doris.thrift.TGetTableAllTabletInfoRequest;
+import org.apache.doris.thrift.TGetTableAllTabletInfoResult;
 import org.apache.doris.thrift.TGetTablesParams;
 import org.apache.doris.thrift.TGetTablesResult;
 import org.apache.doris.thrift.TIcebergMetadataType;
@@ -120,6 +126,7 @@ import org.apache.doris.thrift.TStatusCode;
 import org.apache.doris.thrift.TStreamLoadPutRequest;
 import org.apache.doris.thrift.TStreamLoadPutResult;
 import org.apache.doris.thrift.TTableStatus;
+import org.apache.doris.thrift.TTabletReplicaInfo;
 import org.apache.doris.thrift.TUpdateExportTaskStatusRequest;
 import org.apache.doris.thrift.TWaitingTxnStatusRequest;
 import org.apache.doris.thrift.TWaitingTxnStatusResult;
@@ -148,6 +155,7 @@ import org.jetbrains.annotations.NotNull;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -1326,6 +1334,32 @@ public class FrontendServiceImpl implements FrontendService.Iface {
         } else {
             throw new TException("Catalog name is not set. Init failed.");
         }
+    }
+
+
+    public TGetTableAllTabletInfoResult getTableAllTabletInfo(TGetTableAllTabletInfoRequest request)
+            throws TException {
+        TGetTableAllTabletInfoResult result = new TGetTableAllTabletInfoResult();
+        try {
+            Env env = Env.getCurrentEnv();
+            String fullDbName = ClusterNamespace.getFullName(SystemInfoService.DEFAULT_CLUSTER, request.getDbName());
+            Database db = env.getInternalCatalog().getDbOrAnalysisException(fullDbName);
+            OlapTable olapTable = db.getOlapTableOrAnalysisException(request.getTableName());
+            List<TTabletReplicaInfo> tabletInfoList = new ArrayList<TTabletReplicaInfo>();
+            Collection<Partition> partitions = new ArrayList<Partition>();
+            partitions = olapTable.getPartitions();
+            for (Partition partition : partitions) {
+                for (MaterializedIndex index : partition.getMaterializedIndices(IndexExtState.ALL)) {
+                    TabletsProcDir procDir = new TabletsProcDir(olapTable, index);
+                    tabletInfoList.addAll(procDir.fetchStructResult());
+                }
+            }
+            result.setTablets(tabletInfoList);
+        } catch (Exception e) {
+            throw new TException("failed to get tabletinfo from "
+                    + request.getDbName() + "." + request.getTableName() + ":" + e.getMessage());
+        }
+        return result;
     }
 
     private TInitExternalCtlMetaResult initCatalog(long catalogId) throws TException {

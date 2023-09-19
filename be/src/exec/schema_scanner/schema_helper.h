@@ -57,6 +57,10 @@ public:
                                              TListPrivilegesResult* privileges_result);
 
     static std::string extract_db_name(const std::string& full_name);
+
+    static Status get_table_all_tablet_info(const std::string& ip, const int32_t port,
+                                            const TGetTableAllTabletInfoRequest& get_tablet_req,
+                                            TGetTableAllTabletInfoResult* get_tablet_result);
 };
 
 } // namespace doris

@@ -722,6 +722,35 @@ struct TFetchSchemaTableDataResult {
   2: optional list<Data.TRow> data_batch;
 }
 
+struct TGetTableAllTabletInfoRequest {
+    1: required string db_name;
+    2: required string table_name;
+}
+
+struct TTabletReplicaInfo {
+    1: optional i64 tablet_id;
+    2: optional i64 replica_id;
+    3: optional i64 backend_id;
+    4: optional i32 schema_hash;
+    5: optional i64 version;
+    6: optional i64 last_succ_version;
+    7: optional i64 last_fail_version;
+    8: optional string last_fail_time;
+    9: optional i64 local_data_size;
+    10: optional i64 remote_data_size;
+    11: optional i64 row_count;
+    12: optional string state;
+    13: optional string last_consistency_check_time;
+    14: optional i64 check_version;
+    15: optional i64 version_count;
+    16: optional i64 path_hash;
+}
+
+struct TGetTableAllTabletInfoResult {
+    1: optional list<TTabletReplicaInfo> tablets;
+}
+
+
 service FrontendService {
     TGetDbsResult getDbNames(1: TGetDbsParams params)
     TGetTablesResult getTableNames(1: TGetTablesParams params)
@@ -760,4 +789,6 @@ service FrontendService {
     TInitExternalCtlMetaResult initExternalCtlMeta(1: TInitExternalCtlMetaRequest request)
 
     TFetchSchemaTableDataResult fetchSchemaTableData(1: TFetchSchemaTableDataRequest request)
+
+    TGetTableAllTabletInfoResult getTableAllTabletInfo(1: TGetTableAllTabletInfoRequest request)
 }
