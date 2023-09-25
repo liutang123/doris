@@ -155,7 +155,7 @@ init() {
   log "[INFO] set package type to ${package_type}"
 
   # now init global variables
-  local short_version=$(git log -1 --skip=5 --pretty=format:"%h")
+  local short_version=$(git log -1 --pretty=format:"%h")
   local doris_full_version="${version_str%%(*}-${short_version:0:7}"
   doris_version_string=${version_str/(/-${short_version:0:7}(}
   doris_tar="${doris_full_version}.tar.gz"
