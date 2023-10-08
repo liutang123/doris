@@ -2065,5 +2065,12 @@ public class Config extends ConfigBase {
 
     @ConfField(mutable = false, masterOnly = false)
     public static int http_load_submitter_max_worker_threads = 2;
+
+    /**
+     * sample log rate,scope: 1-10000 , defaule 10
+     * if want to sample 1/100 , set sample_log_rate=100， if want to sample 1/1000 set sample_log_rate=10，and so on
+     */
+    @ConfField(mutable = true)
+    public static int sample_log_rate = 10;
 }
 

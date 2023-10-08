@@ -38,6 +38,7 @@ import org.apache.doris.clone.TabletSchedCtx;
 import org.apache.doris.common.Config;
 import org.apache.doris.common.MetaNotFoundException;
 import org.apache.doris.common.Pair;
+import org.apache.doris.common.SampleLogger;
 import org.apache.doris.common.util.Daemon;
 import org.apache.doris.common.util.TimeUtils;
 import org.apache.doris.metric.GaugeMetric;
@@ -742,7 +743,7 @@ public class ReportHandler extends Daemon {
         for (TStorageMedium storageMedium : tabletMetaMigrationMap.keySet()) {
             List<Long> tabletIds = tabletMetaMigrationMap.get(storageMedium);
             if (!be.hasSpecifiedStorageMedium(storageMedium)) {
-                LOG.warn("no specified storage medium {} on backend {}, skip storage migration."
+                SampleLogger.sampleWarnLog(LOG,"no specified storage medium {} on backend {}, skip storage migration."
                         + " sample tablet id: {}", storageMedium, backendId, tabletIds.isEmpty()
                         ? "-1" : tabletIds.get(0));
                 continue;
