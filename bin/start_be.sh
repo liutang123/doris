@@ -359,6 +359,17 @@ else
     export JEMALLOC_CONF="${JEMALLOC_CONF},prof_prefix:${JEMALLOC_PROF_PRFIX}"
 fi
 
+# cgroup
+if [ -z "$MT_DORIS_CGROUP_PATH" ]; then
+    MT_DORIS_CGROUP_PATH="/sys/fs/cgroup/memory/doris-cgroup/cgroup.procs"
+fi
+if [ -e $MT_DORIS_CGROUP_PATH ]; then
+    echo "Use cgroup path "$MT_DORIS_CGROUP_PATH" to start doris" >> $LOG_DIR/be.out
+    echo $$ >> $MT_DORIS_CGROUP_PATH #subprocess doris will add to cgroup.process too
+else
+    echo "Disable cgroup" >> $LOG_DIR/be.out
+fi
+
 if [[ "${RUN_DAEMON}" -eq 1 ]]; then
     exec ${LIMIT:+${LIMIT}} "${DORIS_HOME}/lib/doris_be" "$@" >>"${LOG_DIR}/be.out" 2>&1 </dev/null &
 elif [[ "${RUN_CONSOLE}" -eq 1 ]]; then
