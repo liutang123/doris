@@ -49,45 +49,77 @@ fi
 
 pidfile="${PID_DIR}/be.pid"
 
-if [[ -f "${pidfile}" ]]; then
-    pid="$(cat "${pidfile}")"
-else
-    pid=""
-fi
-
 # fix if pidfile is not correct 
 if command -v pgrep >/dev/null 2>&1; then
     g_pid="$(pgrep -u doris -x doris_be -n)"
     if [[ -z "${g_pid}" ]]; then
         echo "failed to get pid of doris_be by pgrep."
-    elif [[ "${file_pid}" != "${g_pid}" ]]; then
-        echo "file pid and pgrep pid are not equal. Using pgrep pid."
-        pid="${g_pid}"
     fi
 else
     echo "pgrep command is not available on this system."
 fi
 
+if [[ -f "${pidfile}" ]]; then
+    pid="$(cat "${pidfile}")"
+    pidfile_pid=${pid};
+else
+    echo "The pid file is not exist."
+fi
+
 # check if pid valid
 if test -z "${pid}"; then
-    echo "doris be is already stopped or invalid pid."
-    if [[ -f "${pidfile}" ]]; then rm "${pidfile}"; fi
-    exit 0
+    if [[ -z "${pgrep_pid}" ]]; then
+        echo "Both the pid of pid file and pgrep pid are invalid pid, maybe doris_be not alive."
+        exit 0
+    else
+        echo "The pid of pid file is invalid, using pgrep pid to continue..."
+        pid=${pgrep_pid};
+    fi
 fi
+
+# The function to 
+function need_use_pprep_pid() {
+    if [[ -z "${pgrep_pid}" ]]; then
+       return 1 # false 
+    fi
+    if [[ "${pid}" == "${pgrep_pid}" ]]; then
+       return 1 # false 
+    fi
+    return 0 # true
+}
 
 # check if pid process exist
 if ! kill -0 "${pid}" 2>&1; then
-    echo "ERROR: be process ${pid} does not exist or no doris_be process found. Removing pid file."
-    if [[ -f "${pidfile}" ]]; then rm "${pidfile}"; fi
-    exit 0
+    echo "The pid of pid file ${pid} is not a valid process."
+    if need_use_pprep_pid; then
+        echo "Using pgrep pid to continue..."
+        if ! kill -0 "${pgrep_pid}" 2>&1; then
+            echo "ERROR: Either be process ${pid} nor ${pgrep_pid} does exist."
+            exit 1
+        fi
+        pid=${pgrep_pid};
+    else
+        echo "ERROR: be process ${pid} does not exist."
+        exit 2
+    fi
 fi
 
 pidcomm="$(basename "$(ps -p "${pid}" -o comm=)")"
 # check if pid process is backend process
 if [[ "doris_be" != "${pidcomm}" ]]; then
-    echo "ERROR: pid process may not be be. "
-    if [[ -f "${pidfile}" ]]; then rm "${pidfile}"; fi
-    exit 0
+    echo "The pid of pid file indicated process may not be Doris BE. "
+    if need_use_pprep_pid; then
+        echo "Using pgrep pid to continue..."
+        pidcomm="$(basename "$(ps -p "${pgrep_pid}" -o comm=)")"
+        if [[ "doris_be" != "${pidcomm}" ]]; then
+            echo "ERROR: pid process may not be Doris BE. "
+            exit 3
+        fi
+	pid=${pgrep_pid};
+    else
+        echo "ERROR: pid process may not be Doris BE. "
+        exit 4
+    fi
 fi
 
 # kill pid process and check it
@@ -103,7 +135,6 @@ if kill "-${signum}" "${pid}" >/dev/null 2>&1; then
         fi
     done
 else
-    echo "ERROR: failed to stop ${pid}"
-    exit 0
+    echo "ERROR: failed to stop ${pidfile_pid} from pid file and pgrep pid $pgrep_pid"
+    exit 5
 fi
-
