@@ -459,14 +459,6 @@ Status TabletManager::_drop_tablet_unlocked(TTabletId tablet_id, TReplicaId repl
                      << "tablet_id=" << tablet_id;
         return Status::OK();
     }
-    // We should compare replica id to avoid dropping new cloned tablet.
-    // Iff request replica id is 0, FE may be an older release, then we drop this tablet as before.
-    if (to_drop_tablet->replica_id() != replica_id && replica_id != 0) {
-        LOG(WARNING) << "fail to drop tablet because replica id not match. "
-                     << "tablet_id=" << tablet_id << ", replica_id=" << to_drop_tablet->replica_id()
-                     << ", request replica_id=" << replica_id;
-        return Status::Aborted("aborted");
-    }
 
     _remove_tablet_from_partition(to_drop_tablet);
     tablet_map_t& tablet_map = _get_tablet_map(tablet_id);
