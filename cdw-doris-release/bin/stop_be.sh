@@ -51,8 +51,8 @@ pidfile="${PID_DIR}/be.pid"
 
 # fix if pidfile is not correct 
 if command -v pgrep >/dev/null 2>&1; then
-    g_pid="$(pgrep -u doris -x doris_be -n)"
-    if [[ -z "${g_pid}" ]]; then
+    pgrep_pid="$(pgrep -u doris -x doris_be -n)"
+    if [[ -z "${pgrep_pid}" ]]; then
         echo "failed to get pid of doris_be by pgrep."
     fi
 else
