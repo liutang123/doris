@@ -303,7 +303,7 @@ fi
 if [[ -z ${JAVA_OPTS} ]]; then
     # set default JAVA_OPTS
     CUR_DATE=$(date +%Y%m%d-%H%M%S)
-    JAVA_OPTS="-Xmx1024m -DlogPath=${DORIS_HOME}/log/jni.log -Xloggc:${DORIS_HOME}/log/be.gc.log.${CUR_DATE} -Dsun.java.command=DorisBE -XX:-CriticalJNINatives"
+    JAVA_OPTS="-Xmx1024m -DlogPath=${LOG_DIR}/jni.log -Xloggc:${LOG_DIR}/be.gc.log.${CUR_DATE} -Dsun.java.command=DorisBE -XX:-CriticalJNINatives"
 fi
 
 if [[ "${MACHINE_OS}" == "Darwin" ]]; then
