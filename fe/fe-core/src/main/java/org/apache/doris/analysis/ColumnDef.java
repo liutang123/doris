@@ -316,12 +316,14 @@ public class ColumnDef {
             if (defaultValue.isSet && defaultValue != DefaultValue.NULL_DEFAULT_VALUE) {
                 throw new AnalysisException("Map type column default value just support null");
             }
+            throw new AnalysisException("Map type is currently not supported in Doris 1.2.");
         }
 
         if (type.getPrimitiveType() == PrimitiveType.STRUCT) {
             if (defaultValue.isSet && defaultValue != DefaultValue.NULL_DEFAULT_VALUE) {
                 throw new AnalysisException("Struct type column default value just support null");
             }
+            throw new AnalysisException("Struct type is currently not supported in Doris 1.2");
         }
 
         // If aggregate type is REPLACE_IF_NOT_NULL, we set it nullable.
