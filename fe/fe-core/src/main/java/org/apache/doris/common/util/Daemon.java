@@ -27,17 +27,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class Daemon extends Thread {
     private static final Logger LOG = LogManager.getLogger(Daemon.class);
     private static final int DEFAULT_INTERVAL_SECONDS = 30; // 30 seconds
-
-    private long intervalMs;
-    private AtomicBoolean isStop;
+ 
+    public long intervalMs;
+    public AtomicBoolean isStop;
     private Runnable runnable;
     private AtomicBoolean isStart = new AtomicBoolean(false);
-
-    private MetaContext metaContext = null;
-
-    {
-        setDaemon(true);
-    }
+    
+    public MetaContext metaContext = null;
 
     public Daemon() {
         super();

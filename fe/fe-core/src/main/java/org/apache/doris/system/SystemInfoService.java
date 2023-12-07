@@ -506,7 +506,7 @@ public class SystemInfoService {
             for (Map.Entry<Tag, Short> entry : allocMap.entrySet()) {
                 Tag tag = entry.getKey();
                 BeSelectionPolicy.Builder builder = new BeSelectionPolicy.Builder()
-                        .needScheduleAvailable().needCheckDiskUsage().addTags(Sets.newHashSet(entry.getKey()))
+                        .needScheduleAvailable().needCheckDiskUsage().notInBlacklist().addTags(Sets.newHashSet(entry.getKey()))
                         .setStorageMedium(storageMedium);
                 if (FeConstants.runningUnitTest || Config.allow_replica_on_same_host) {
                     builder.allowOnSameHost();

@@ -84,7 +84,7 @@ public class MetricsTest {
         Assert.assertTrue(metricResult.contains("doris_fe_query_err{user=\"test_user\"} 1"));
         Assert.assertTrue(metricResult.contains("# TYPE doris_fe_query_latency_ms summary"));
         Assert.assertTrue(metricResult.contains("doris_fe_query_latency_ms{quantile=\"0.999\"} 0.0"));
-        Assert.assertTrue(metricResult.contains("doris_fe_query_latency_ms{quantile=\"0.999\",user=\"test_user\"} 10.0"));
+        Assert.assertTrue(metricResult.contains("doris_fe_query_latency_ms{quantile=\"0.999\",user=\"[test_user]\"} 10.0"));
 
     }
 

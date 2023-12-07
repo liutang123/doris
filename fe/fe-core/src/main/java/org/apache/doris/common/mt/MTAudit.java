@@ -61,7 +61,9 @@ import com.meituan.inf.xmdlog.XMDLogFormat;
 
 import java.net.InetAddress;
 import java.net.URLEncoder;
+import java.net.UnknownHostException;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
@@ -92,6 +94,37 @@ public class MTAudit {
             executor = ThreadPoolManager.newDaemonCacheThreadPool(Config.mt_audit_threads_num, "audit-pool", false);
             ThreadPoolManager.registerThreadPoolMetric("audit-pool", executor);
         }
+    }
+
+    public static void logAgentTaskExec(String beHost, String type, String taskType, String status, String message, Long num) {
+        String time = LocalDateTime.now().format(DATETIME_FORMAT);
+        String feHostName = null;
+        try {
+            feHostName = InetAddress.getLocalHost().getHostName();
+        } catch (UnknownHostException e) {
+            logger.warn("obtain fe host failed. err: {}", e);
+        }
+        String finalFeHostName = feHostName;
+
+        ExecutorHandler.executor.submit(() -> {
+            try {
+                XMDLogFormat format = XMDLogFormat.build();
+                format.putTag("domain", Config.mt_domain);
+                format.putTag("fe", finalFeHostName);
+                format.putTag("be", beHost);
+                format.putTag("time", time);
+                format.putTag("type", type);
+                format.putTag("taskType", taskType);
+                format.putTag("taskStatus", status);
+                format.putTag("message", message);
+                format.putTag("num", String.valueOf(num));
+                MTLogger.DORIS_AUDIT_AGENT_TASK.logger.info(format.toString());
+            } catch (Throwable ex) {
+                String error = "[MT] log agent task error.";
+                logger.error(error, ex);
+                MTAlertDaemon.error(error, ex);
+            }
+        });
     }
 
     public static void logConnection(ConnectContext ctx, String item) {

@@ -83,4 +83,8 @@ public class FeConstants {
     public static String TEMP_MATERIZLIZE_DVIEW_PREFIX = "internal_tmp_materialized_view_";
 
     public static String METADATA_FAILURE_RECOVERY_KEY = "metadata_failure_recovery";
+
+    // blacklist constants
+    public static final String clone_src = "CLONE_SRC";
+    public static final String clone_dest = "CLONE_DEST";
 }

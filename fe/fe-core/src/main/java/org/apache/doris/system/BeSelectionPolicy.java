@@ -17,6 +17,7 @@
 
 package org.apache.doris.system;
 
+import org.apache.doris.common.mt.MTBlackListCalDaemon;
 import org.apache.doris.resource.Tag;
 import org.apache.doris.thrift.TStorageMedium;
 
@@ -24,6 +25,7 @@ import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.Sets;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.doris.thrift.TTaskType;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -50,6 +52,7 @@ public class BeSelectionPolicy {
 
     public boolean preferComputeNode = false;
     public int expectBeNum = 0;
+    public boolean isNotInBlacklist = false;
 
     public boolean enableRoundRobin = false;
     // if enable round robin, choose next be from nextRoundRobinIndex
@@ -67,6 +70,11 @@ public class BeSelectionPolicy {
 
         public Builder() {
             policy = new BeSelectionPolicy();
+        }
+
+        public Builder notInBlacklist() {
+            policy.isNotInBlacklist = true;
+            return this;
         }
 
         public Builder needScheduleAvailable() {
@@ -168,6 +176,10 @@ public class BeSelectionPolicy {
                 }
                 return false;
             }
+        }
+
+        if (isNotInBlacklist && MTBlackListCalDaemon.beInBlackList(backend.getHost(), TTaskType.CREATE.name())) {
+            return false;
         }
         return true;
     }

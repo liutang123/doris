@@ -17,7 +17,9 @@
 
 package org.apache.doris.master;
 
+import com.google.common.collect.Lists;
 import org.apache.commons.lang.StringUtils;
+import org.apache.commons.collections.CollectionUtils;
 import org.apache.doris.alter.AlterJobV2.JobType;
 import org.apache.doris.catalog.Database;
 import org.apache.doris.catalog.Env;
@@ -30,9 +32,13 @@ import org.apache.doris.catalog.Replica;
 import org.apache.doris.catalog.Tablet;
 import org.apache.doris.catalog.TabletInvertedIndex;
 import org.apache.doris.catalog.TabletMeta;
+import org.apache.doris.common.Config;
+import org.apache.doris.common.FeConstants;
 import org.apache.doris.common.MetaNotFoundException;
+import org.apache.doris.common.mt.MTAudit;
 import org.apache.doris.load.DeleteJob;
 import org.apache.doris.load.loadv2.SparkLoadJob;
+import org.apache.doris.metric.MetricRepo;
 import org.apache.doris.system.Backend;
 import org.apache.doris.task.AgentTask;
 import org.apache.doris.task.AgentTaskQueue;
@@ -114,6 +120,51 @@ public class MasterImpl {
         long signature = request.getSignature();
 
         AgentTask task = AgentTaskQueue.getTask(backendId, taskType, signature);
+
+        List<TBackend> srcBackends = Lists.newArrayList();
+        if (task != null && taskType.name().equals(TTaskType.CLONE.name())) {
+            CloneTask cloneTask = (CloneTask) task;
+            srcBackends = cloneTask.getSrcBackends();
+            MetricRepo.MT_COUNTER_REPORT_TASKS.getOrAdd(srcBackends.get(0).getHost(),
+                    FeConstants.clone_src).increase(1L);
+            MetricRepo.MT_COUNTER_REPORT_TASKS.getOrAdd(host,
+                    FeConstants.clone_dest).increase(1L);
+        } else {
+            MetricRepo.MT_COUNTER_REPORT_TASKS.getOrAdd(host, taskType.name()).increase(1L);
+        }
+
+        String errorMsg = taskStatus.isSetErrorMsgs() ? taskStatus.getErrorMsgs().toString() : "";
+        if (taskStatus.getStatusCode() != TStatusCode.OK) {
+            if (taskType.name().equals(TTaskType.CLONE.name()) && CollectionUtils.isNotEmpty(srcBackends)) {
+                errorMsg += ", [srcBackend:" + srcBackends.get(0).getHost()+ "]";
+
+                if (errorMsg.contains("make snapshot failed")) {
+                    MetricRepo.MT_COUNTER_REPORT_TASK_FAILED.getOrAdd(srcBackends.get(0).getHost(), FeConstants.clone_src).increase(1L);
+                    MetricRepo.MT_COUNTER_TASK_FAILED_TOTAL.getOrAdd(host, FeConstants.clone_src).increase(1L);
+                } else {
+                    MetricRepo.MT_COUNTER_REPORT_TASK_FAILED.getOrAdd(host, FeConstants.clone_dest).increase(1L);
+                    MetricRepo.MT_COUNTER_TASK_FAILED_TOTAL.getOrAdd(host, FeConstants.clone_dest).increase(1L);
+                }
+            } else if (taskType.name().equals(TTaskType.DROP.name()) && taskStatus.getStatusCode() == TStatusCode.NOT_FOUND) {
+                // DROP类型的NOT_FOUND状态表示副本在此之前已经被删除，此处无需统计为failed
+            } else {
+                MetricRepo.MT_COUNTER_REPORT_TASK_FAILED.getOrAdd(host, taskType.name()).increase(1L);
+                MetricRepo.MT_COUNTER_TASK_FAILED_TOTAL.getOrAdd(host, taskType.name()).increase(1L);
+            }
+
+            if (Config.mt_agent_task_audit == 1) {
+                // audit failed agent task
+                MTAudit.logAgentTaskExec(host, "report", taskType.name(),
+                        taskStatus.getStatusCode().name(), errorMsg, 1L);
+            }
+        }
+
+        if (Config.mt_agent_task_audit == 2) {
+            // audit all agent task
+            MTAudit.logAgentTaskExec(host,"report", taskType.name(),
+                    taskStatus.getStatusCode().name(), errorMsg, 1L);
+        }
+
         if (task == null) {
             if (taskType != TTaskType.DROP && taskType != TTaskType.RELEASE_SNAPSHOT
                     && taskType != TTaskType.CLEAR_TRANSACTION_TASK) {

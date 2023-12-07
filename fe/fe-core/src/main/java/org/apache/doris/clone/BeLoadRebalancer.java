@@ -33,6 +33,7 @@ import org.apache.doris.clone.TabletScheduler.PathSlot;
 import org.apache.doris.common.Config;
 import org.apache.doris.common.FeConstants;
 import org.apache.doris.common.Pair;
+import org.apache.doris.common.mt.MTBlackListCalDaemon;
 import org.apache.doris.system.Backend;
 import org.apache.doris.system.SystemInfoService;
 import org.apache.doris.thrift.TStorageMedium;
@@ -348,6 +349,13 @@ public class BeLoadRebalancer extends Rebalancer {
             if (slot == null) {
                 continue;
             }
+            Backend backend = Env.getCurrentEnv().getCurrentSystemInfo().getBackend(replica.getBackendId());
+            if (backend != null && MTBlackListCalDaemon.beInBlackList(backend.getHost(), FeConstants.clone_src)) {
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("replica {} of backend {} in blacklist, cannot choose as src replica.", replica.getId(), backend.getHost());
+                }
+                continue;
+            }
             long pathHash = slot.takeBalanceSlot(replica.getPathHash());
             if (pathHash != -1) {
                 tabletCtx.setSrc(replica);
@@ -369,6 +377,12 @@ public class BeLoadRebalancer extends Rebalancer {
                     continue;
                 }
                 if (!Config.allow_replica_on_same_host && hosts.contains(lowBackend.getHost())) {
+                    continue;
+                }
+                if (MTBlackListCalDaemon.beInBlackList(lowBackend.getHost(), FeConstants.clone_dest)) {
+                    if (LOG.isDebugEnabled()) {
+                        LOG.debug("backend {} in blacklist, cannot choose as desc backend.", lowBackend.getHost());
+                    }
                     continue;
                 }
 

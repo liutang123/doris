@@ -35,6 +35,7 @@ import org.apache.doris.common.Config;
 import org.apache.doris.common.FeConstants;
 import org.apache.doris.common.Pair;
 import org.apache.doris.common.util.DebugUtil;
+import org.apache.doris.common.mt.MTBlackListCalDaemon;
 import org.apache.doris.common.util.TimeUtils;
 import org.apache.doris.persist.ReplicaPersistInfo;
 import org.apache.doris.resource.Tag;
@@ -624,6 +625,13 @@ public class TabletSchedCtx implements Comparable<TabletSchedCtx> {
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("replica's backend {} does not exist or is not alive, skip. tablet: {}",
                             replica.getBackendId(), tabletId);
+                }
+                continue;
+            }
+
+            if (MTBlackListCalDaemon.beInBlackList(be.getHost(), FeConstants.clone_src)) {
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("replica {} of backend {} in blacklist, cannot choose as src replica.", replica.getId(), be.getHost());
                 }
                 continue;
             }

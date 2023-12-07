@@ -52,6 +52,7 @@ import org.apache.doris.common.DdlException;
 import org.apache.doris.common.FeConstants;
 import org.apache.doris.common.MetaNotFoundException;
 import org.apache.doris.common.util.IdGeneratorUtil;
+import org.apache.doris.common.mt.MTBlackListCalDaemon;
 import org.apache.doris.common.util.ListComparator;
 import org.apache.doris.common.util.PropertyAnalyzer;
 import org.apache.doris.common.util.Util;
@@ -61,6 +62,7 @@ import org.apache.doris.persist.DropInfo;
 import org.apache.doris.persist.EditLog;
 import org.apache.doris.qe.ConnectContext;
 import org.apache.doris.qe.OriginStatement;
+import org.apache.doris.system.Backend;
 import org.apache.doris.thrift.TStorageFormat;
 import org.apache.doris.thrift.TStorageMedium;
 
@@ -70,6 +72,8 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+
+import org.apache.doris.thrift.TTaskType;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -455,8 +459,14 @@ public class MaterializedViewHandler extends AlterHandler {
                                 baseReplica.getState(), baseReplica.getLastFailedVersion());
                         continue;
                     }
+                    Backend backend = Env.getCurrentEnv().getCurrentSystemInfo().getBackend(backendId);
+                    if (MTBlackListCalDaemon.beInBlackList(backend.getHost(), TTaskType.CREATE.name())) {
+                        LOG.info("be:{} of base replica:{} of tablet {} in blacklist, skip creating rollup replica",
+                                backend.getHost(), baseReplica.getId(), baseTabletId);
+                        continue;
+                    }
                     Preconditions.checkState(baseReplica.getState() == ReplicaState.NORMAL,
-                            baseReplica.getState());
+                        baseReplica.getState());
                     // replica's init state is ALTER, so that tablet report process will ignore its report
                     Replica mvReplica = new Replica(mvReplicaId, backendId, ReplicaState.ALTER,
                             Partition.PARTITION_INIT_VERSION, mvSchemaHash);

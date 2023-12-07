@@ -57,6 +57,10 @@ public class CloneTask extends AgentTask {
         this.timeoutS = timeoutS;
     }
 
+    public List<TBackend> getSrcBackends() {
+        return srcBackends;
+    }
+
     public int getSchemaHash() {
         return schemaHash;
     }

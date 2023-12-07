@@ -73,6 +73,7 @@ import org.apache.doris.common.Pair;
 import org.apache.doris.common.ThreadPoolManager;
 import org.apache.doris.common.UserException;
 import org.apache.doris.common.util.DbUtil;
+import org.apache.doris.common.mt.MTBlackListCalDaemon;
 import org.apache.doris.common.util.DynamicPartitionUtil;
 import org.apache.doris.common.util.IdGeneratorUtil;
 import org.apache.doris.common.util.ListComparator;
@@ -87,6 +88,7 @@ import org.apache.doris.persist.TableAddOrDropInvertedIndicesInfo;
 import org.apache.doris.policy.Policy;
 import org.apache.doris.policy.PolicyTypeEnum;
 import org.apache.doris.qe.ConnectContext;
+import org.apache.doris.system.Backend;
 import org.apache.doris.task.AgentBatchTask;
 import org.apache.doris.task.AgentTaskExecutor;
 import org.apache.doris.task.AgentTaskQueue;
@@ -1555,7 +1557,6 @@ public class SchemaChangeHandler extends AlterHandler {
          * 1. For each index which has been changed, create a SHADOW index,
          *    and save the mapping of origin index to SHADOW index.
          * 2. Create all tablets and replicas of all SHADOW index, add them to tablet inverted index.
-         * 3. Change table's state as SCHEMA_CHANGE
          */
         for (Map.Entry<Long, List<Column>> entry : changedIndexIdToSchema.entrySet()) {
             long originIndexId = entry.getKey();
@@ -1611,8 +1612,13 @@ public class SchemaChangeHandler extends AlterHandler {
                                     originReplica.getLastFailedVersion());
                             continue;
                         }
-                        Preconditions.checkState(originReplica.getState() == ReplicaState.NORMAL,
-                                originReplica.getState());
+                        Backend backend = Env.getCurrentEnv().getCurrentSystemInfo().getBackend(backendId);
+                        if (MTBlackListCalDaemon.beInBlackList(backend.getHost(), TTaskType.CREATE.name())) {
+                            LOG.info("backend {} of base replica {} of tablet {} in blacklist, skip creating shadow replica",
+                                    backend.getHost(), originReplica.getId(), originTabletId);
+                            continue;
+                        }
+                        Preconditions.checkState(originReplica.getState() == ReplicaState.NORMAL, originReplica.getState());
                         // replica's init state is ALTER, so that tablet report process will ignore its report
                         Replica shadowReplica = new Replica(shadowReplicaId, backendId, ReplicaState.ALTER,
                                 Partition.PARTITION_INIT_VERSION, newSchemaHash);

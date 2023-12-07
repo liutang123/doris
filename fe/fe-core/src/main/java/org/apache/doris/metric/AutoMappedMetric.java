@@ -17,21 +17,27 @@
 
 package org.apache.doris.metric;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 public class AutoMappedMetric<M> {
 
-    private final Map<String, M> nameToMetric = new ConcurrentHashMap<>();
-    private final Function<String, M> metricSupplier;
+    private final Map<List<String>, M> nameToMetric = new ConcurrentHashMap<>();
+    private final Function<List<String>, M> metricSupplier;
 
-    public AutoMappedMetric(Function<String, M> metricSupplier) {
+    public AutoMappedMetric(Function<List<String>, M> metricSupplier) {
         this.metricSupplier = metricSupplier;
     }
 
-    public M getOrAdd(String name) {
-        return nameToMetric.computeIfAbsent(name, metricSupplier);
+    public M getOrAdd(String... names) {
+        List<String> values = Arrays.asList(names);
+        return nameToMetric.computeIfAbsent(values, metricSupplier);
     }
 
+    public Map<List<String>, M> getMetricMap() {
+        return nameToMetric;
+    }
 }

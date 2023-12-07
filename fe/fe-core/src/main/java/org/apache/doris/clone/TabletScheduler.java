@@ -47,6 +47,7 @@ import org.apache.doris.common.Config;
 import org.apache.doris.common.FeConstants;
 import org.apache.doris.common.Pair;
 import org.apache.doris.common.util.DebugPointUtil;
+import org.apache.doris.common.mt.MTBlackListCalDaemon;
 import org.apache.doris.common.util.MasterDaemon;
 import org.apache.doris.persist.ReplicaPersistInfo;
 import org.apache.doris.resource.Tag;
@@ -1448,6 +1449,14 @@ public class TabletScheduler extends MasterDaemon {
                 if (LOG.isDebugEnabled()) {
                     LOG.debug("backend {}'s tag {} is not equal to tablet's tag {}, skip. tablet: {}",
                             bes.getBeId(), bes.getTag(), tag, tabletCtx.getTabletId());
+                }
+                continue;
+            }
+
+            Backend backend = Env.getCurrentEnv().getCurrentSystemInfo().getBackend(bes.getBeId());
+            if (!forColocate && MTBlackListCalDaemon.beInBlackList(backend.getHost(), FeConstants.clone_dest)) {
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("backend {} in blacklist, cannot choose as desc backend.", backend.getHost());
                 }
                 continue;
             }

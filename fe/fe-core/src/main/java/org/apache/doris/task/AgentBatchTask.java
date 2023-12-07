@@ -20,6 +20,10 @@ package org.apache.doris.task;
 import org.apache.doris.catalog.Env;
 import org.apache.doris.common.ClientPool;
 import org.apache.doris.common.FeConstants;
+import org.apache.doris.common.Config;
+import org.apache.doris.common.FeConstants;
+import org.apache.doris.common.mt.MTAudit;
+import org.apache.doris.metric.MetricRepo;
 import org.apache.doris.system.Backend;
 import org.apache.doris.thrift.BackendService;
 import org.apache.doris.thrift.TAgentServiceVersion;
@@ -56,6 +60,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /*
  * This class group tasks by backend
@@ -155,12 +160,14 @@ public class AgentBatchTask implements Runnable {
             BackendService.Client client = null;
             TNetworkAddress address = null;
             boolean ok = false;
+            Backend backend = null;
+            List<AgentTask> tasks = Lists.newArrayList();
             try {
-                Backend backend = Env.getCurrentSystemInfo().getBackend(backendId);
+                backend = Env.getCurrentEnv().getCurrentSystemInfo().getBackend(backendId);
+                tasks = this.backendIdToTasks.getOrDefault(backendId, Lists.newArrayList());
                 if (backend == null || !backend.isAlive()) {
                     continue;
                 }
-                List<AgentTask> tasks = this.backendIdToTasks.get(backendId);
                 // create AgentClient
                 String host = FeConstants.runningUnitTest ? "127.0.0.1" : backend.getHost();
                 address = new TNetworkAddress(host, backend.getBePort());
@@ -187,9 +194,41 @@ public class AgentBatchTask implements Runnable {
             } catch (Exception e) {
                 LOG.warn("task exec error. backend[{}]", backendId, e);
             } finally {
+                Map<TTaskType, Long> taskTypeCount = tasks.stream().collect(Collectors.groupingBy(AgentTask::getTaskType, Collectors.counting()));
+
+                if (backend != null) {
+                    for (Map.Entry<TTaskType, Long> entry : taskTypeCount.entrySet()) {
+                        if (entry.getKey().name().equals(TTaskType.CLONE.name())) {
+                            MetricRepo.MT_COUNTER_SEND_TASKS.getOrAdd(backend.getHost(), FeConstants.clone_dest).increase(entry.getValue());
+                        } else {
+                            MetricRepo.MT_COUNTER_SEND_TASKS.getOrAdd(backend.getHost(), entry.getKey().name()).increase(entry.getValue());
+                        }
+                        if (Config.mt_agent_task_audit == 2) {
+                            MTAudit.logAgentTaskExec(backend.getHost(), "send",
+                                    entry.getKey().name(), String.valueOf(ok), ok ? "send success" : "send failed", entry.getValue());
+                        }
+                    }
+                }
+
                 if (ok) {
                     ClientPool.backendPool.returnObject(address, client);
                 } else {
+                    if (backend != null) {
+                        for (Map.Entry<TTaskType, Long> entry : taskTypeCount.entrySet()) {
+                            if (entry.getKey().name().equals(TTaskType.CLONE.name())) {
+                                MetricRepo.MT_COUNTER_TASK_SEND_FAILED.getOrAdd(backend.getHost(), FeConstants.clone_dest).increase(entry.getValue());
+                                MetricRepo.MT_COUNTER_TASK_FAILED_TOTAL.getOrAdd(backend.getHost(), FeConstants.clone_dest).increase(entry.getValue());
+                            } else {
+                                MetricRepo.MT_COUNTER_TASK_SEND_FAILED.getOrAdd(backend.getHost(), entry.getKey().name()).increase(entry.getValue());
+                                MetricRepo.MT_COUNTER_TASK_FAILED_TOTAL.getOrAdd(backend.getHost(), entry.getKey().name()).increase(entry.getValue());
+                            }
+                            if (Config.mt_agent_task_audit == 1) {
+                                //only audit failed agent task
+                                MTAudit.logAgentTaskExec(backend.getHost(), "send",
+                                            entry.getKey().name(),  String.valueOf(ok), "send failed", entry.getValue());
+                            }
+                        }
+                    }
                     ClientPool.backendPool.invalidateObject(address, client);
                 }
             }

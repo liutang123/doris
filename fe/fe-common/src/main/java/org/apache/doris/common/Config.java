@@ -2589,6 +2589,22 @@ public class Config extends ConfigBase {
 
     @ConfField(mutable = true)
     public static boolean enable_cloud_multi_replica = false;
+    @ConfField(mutable = true)
+    public static int mt_agent_task_audit = 0; // 0-不开启审计，1-只审计失败task，2-审计全部
+    @ConfField(mutable = true)
+    public static double mt_agent_task_err_ratio = 0.8;
+    @ConfField(mutable = true)
+    public static int mt_agent_task_err_num_min = 10;
+    @ConfField(mutable = true)
+    public static int mt_in_blacklist_time_seconds = 1800;
+    @ConfField(mutable = true)
+    public static double mt_backend_blacklist_num_limit_ratio = 0.2;
+    @ConfField(mutable = true)
+    public static int mt_cal_be_blacklist_interval_seconds = 10;
+    @ConfField(mutable = true)
+    public static int mt_backend_blacklist_num_limit_value = 1;
+    @ConfField(mutable = true)
+    public static boolean mt_enable_backend_blacklist_cal = true;
 
     @ConfField(mutable = true)
     public static int cloud_replica_num = 3;

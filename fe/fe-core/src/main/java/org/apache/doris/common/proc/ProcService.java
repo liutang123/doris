@@ -21,8 +21,8 @@ import org.apache.doris.catalog.Env;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.ErrorCode;
 import org.apache.doris.common.ErrorReport;
-
 import com.google.common.base.Strings;
+import org.apache.doris.common.mt.MTBlackListCalDaemon;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -59,6 +59,7 @@ public final class ProcService {
         root.register("bdbje", new BDBJEProcDir());
         root.register("diagnose", new DiagnoseProcDir());
         root.register("binlog", new BinlogProcDir());
+        root.register("be_blacklist", new BlackListProcDir(MTBlackListCalDaemon.getBlackListMap()));
     }
 
     // 通过指定的路径获得对应的PROC Node

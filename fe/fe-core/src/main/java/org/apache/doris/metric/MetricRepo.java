@@ -17,7 +17,7 @@
 
 package org.apache.doris.metric;
 
-
+import com.google.common.collect.Lists;
 import org.apache.doris.alter.Alter;
 import org.apache.doris.alter.AlterJobV2.JobType;
 import org.apache.doris.catalog.Env;
@@ -142,6 +142,12 @@ public final class MetricRepo {
     public static AutoMappedMetric<GaugeMetricImpl<Long>> MT_GAUGE_DB_TXN_REPLICA;
 
     public static AutoMappedMetric<LongCounterMetric> MT_COUNT_DB_QUERY_TIMEOUT_ERR;
+    public static AutoMappedMetric<LongCounterMetric> MT_COUNTER_SEND_TASKS;
+    public static AutoMappedMetric<LongCounterMetric> MT_COUNTER_TASK_SEND_FAILED;
+    public static AutoMappedMetric<LongCounterMetric> MT_COUNTER_REPORT_TASKS;
+    public static AutoMappedMetric<LongCounterMetric> MT_COUNTER_REPORT_TASK_FAILED;
+    public static AutoMappedMetric<LongCounterMetric> MT_COUNTER_TASK_FAILED_TOTAL;
+    public static AutoMappedMetric<LongCounterMetric> MT_COUNTER_BLACKLIST_BE;
 
     // init() should only be called after catalog is contructed.
     public static synchronized void init() {
@@ -309,14 +315,14 @@ public final class MetricRepo {
         USER_COUNTER_QUERY_ALL = new AutoMappedMetric<>(name -> {
             LongCounterMetric userCountQueryAll  = new LongCounterMetric("query_total", MetricUnit.REQUESTS,
                     "total query for single user");
-            userCountQueryAll.addLabel(new MetricLabel("user", name));
+            userCountQueryAll.addLabel(new MetricLabel("user", name.get(0)));
             DORIS_METRIC_REGISTER.addMetrics(userCountQueryAll);
             return userCountQueryAll;
         });
         USER_COUNTER_QUERY_ERR = new AutoMappedMetric<>(name -> {
             LongCounterMetric userCountQueryErr  = new LongCounterMetric("query_err", MetricUnit.REQUESTS,
                     "total error query for single user");
-            userCountQueryErr.addLabel(new MetricLabel("user", name));
+            userCountQueryErr.addLabel(new MetricLabel("user", name.get(0)));
             DORIS_METRIC_REGISTER.addMetrics(userCountQueryErr);
             return userCountQueryErr;
         });
@@ -554,6 +560,18 @@ public final class MetricRepo {
         });
         MT_COUNT_DB_QUERY_TIMEOUT_ERR = addLabeledMetrics("db", () ->
             new LongCounterMetric("query_timeout_err_db", MetricUnit.NOUNIT, ""));
+        MT_COUNTER_SEND_TASKS = addLabeledMetrics(Lists.newArrayList("be","type"), () ->
+                new LongCounterMetric("send_agent_tasks", MetricUnit.NOUNIT, ""));
+        MT_COUNTER_TASK_SEND_FAILED = addLabeledMetrics(Lists.newArrayList("be","type"), () ->
+                new LongCounterMetric("send_agent_task_failed", MetricUnit.NOUNIT, ""));
+        MT_COUNTER_REPORT_TASKS = addLabeledMetrics(Lists.newArrayList("be","type"), () ->
+                new LongCounterMetric("report_agent_tasks", MetricUnit.NOUNIT, ""));
+        MT_COUNTER_REPORT_TASK_FAILED = addLabeledMetrics(Lists.newArrayList("be","type"), () ->
+                new LongCounterMetric("report_agent_task_failed", MetricUnit.NOUNIT, ""));
+        MT_COUNTER_TASK_FAILED_TOTAL = addLabeledMetrics(Lists.newArrayList("be","type"), () ->
+                new LongCounterMetric("agent_task_failed_total", MetricUnit.NOUNIT, ""));
+        MT_COUNTER_BLACKLIST_BE = addLabeledMetrics("type", () ->
+                new LongCounterMetric("backend_blacklist_num", MetricUnit.NOUNIT, ""));
 
         // init system metrics
         initSystemMetrics();
@@ -745,9 +763,20 @@ public final class MetricRepo {
     }
 
     public static <M extends Metric<?>> AutoMappedMetric<M> addLabeledMetrics(String label, Supplier<M> metric) {
-        return new AutoMappedMetric<>(value -> {
+        return new AutoMappedMetric<>(values -> {
             M m = metric.get();
-            m.addLabel(new MetricLabel(label, value));
+            m.addLabel(new MetricLabel(label, values.get(0)));
+            MetricRepo.DORIS_METRIC_REGISTER.addMetrics(m);
+            return m;
+        });
+    }
+
+    public static <M extends Metric<?>> AutoMappedMetric<M> addLabeledMetrics(List<String> labels, Supplier<M> metric) {
+        return new AutoMappedMetric<>(values -> {
+            M m = metric.get();
+            for (int i = 0; i < labels.size(); i++) {
+                m.addLabel(new MetricLabel(labels.get(i), values.get(0)));
+            }
             MetricRepo.DORIS_METRIC_REGISTER.addMetrics(m);
             return m;
         });
