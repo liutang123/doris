@@ -2735,7 +2735,10 @@ visible_functions = [
             'ALWAYS_NULLABLE'],
     [['json_extract'], 'VARCHAR', ['VARCHAR', 'VARCHAR', '...'],
             '', '', '', 'vec',
-            ''],
+            'ALWAYS_NULLABLE'],
+    [['json_extract'], 'STRING', ['STRING', 'STRING', '...'],
+            '', '', '', 'vec',
+            'ALWAYS_NULLABLE'],
 
     #hll function
     [['hll_cardinality'], 'BIGINT', ['HLL'],
