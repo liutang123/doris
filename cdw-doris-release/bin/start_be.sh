@@ -300,10 +300,17 @@ if [[ -f "${DORIS_HOME}/conf/hdfs-site.xml" ]]; then
     export LIBHDFS3_CONF="${DORIS_HOME}/conf/hdfs-site.xml"
 fi
 
+JVM_FLAGS="-Xmx2g -Xms1g -Xmn256m -XX:MetaspaceSize=64m -XX:MaxMetaspaceSize=128m -XX:MaxDirectMemorySize=128m -XX:+UseG1GC  -XX:NativeMemoryTracking=detail"
+COMMON_OPTS="-Dsun.java.command=DorisBE -XX:-CriticalJNINatives"
+
+# config for kerboers if need
+AUTH_OPTS="-Djavax.security.auth.useSubjectCredsOnly=false"
+
+JDBC_OPTS="-DJDBC_MIN_POOL=1 -DJDBC_MAX_POOL=100 -DJDBC_MAX_IDEL_TIME=300000 -DJDBC_MAX_WAIT_TIME=5000"
 if [[ -z ${JAVA_OPTS} ]]; then
     # set default JAVA_OPTS
     CUR_DATE=$(date +%Y%m%d-%H%M%S)
-    JAVA_OPTS="-Xmx1024m -DlogPath=${LOG_DIR}/jni.log -Xloggc:${LOG_DIR}/be.gc.log.${CUR_DATE} -Dsun.java.command=DorisBE -XX:-CriticalJNINatives"
+    JAVA_OPTS="${JVM_FLAGS} -DlogPath=${LOG_DIR}/jni.log -Xloggc:${LOG_DIR}/be.gc.log.${CUR_DATE} ${COMMON_OPTS} ${JDBC_OPTS} -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=${LOG_DIR}/dump.${CUR_DATE}"
 fi
 
 if [[ "${MACHINE_OS}" == "Darwin" ]]; then
