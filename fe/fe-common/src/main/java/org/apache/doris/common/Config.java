@@ -584,7 +584,7 @@ public class Config extends ConfigBase {
      * Default stream load and streaming mini load timeout
      */
     @ConfField(mutable = true, masterOnly = true)
-    public static int stream_load_default_timeout_second = 86400 * 3; // 3days
+    public static int stream_load_default_timeout_second = 43200; // 12 hours
 
     /**
      * Default stream load pre-commit status timeout
