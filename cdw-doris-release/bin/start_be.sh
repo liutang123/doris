@@ -141,11 +141,6 @@ setup_java_env() {
     fi
 }
 
-# prepare jvm if needed
-JAVA_HOME=/usr/local/jdk
-export JAVA_HOME
-setup_java_env || true
-
 # set odbc conf path
 export ODBCSYSINI="${DORIS_HOME}/conf"
 
@@ -192,6 +187,11 @@ if [ `whoami` = "root" ];then
   log "[ERROR] You cannot start FE by root, please change user to doris and retry..."
   exit 3
 fi
+
+# prepare jvm if needed
+JAVA_HOME=/usr/local/jdk
+export JAVA_HOME
+setup_java_env || true
 
 # make sure there are no files of root user in working dir, if not, it perhaps cause some problem...
 cd /home/doris
