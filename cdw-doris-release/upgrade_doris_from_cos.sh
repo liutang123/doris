@@ -197,7 +197,7 @@ update_agent() {
   if [ -d ${agent_dir} ]; then
     local agent_file="${agent_dir}/bin/cdwch-agent"
     if [ -f ${agent_file} ]; then
-      local latest_md5="1d80be0c4e48adb23682a57844706288"
+      local latest_md5="54583b128dc1acdddbd22e1c4d0839bf"
       local current_md5=$(md5sum ${agent_file} | awk '{print $1}')
       if [ $? -eq 0 ] && [ "${current_md5}" == "${latest_md5}" ]; then
         log "[INFO] current ${agent_file} is the same as the latest one."
