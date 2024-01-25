@@ -29,6 +29,9 @@ if [[ ! -d "${WORK_DIR}/doris-1.2.m2" ]]; then
   tar zxf "${WORK_DIR}/maven_repo_m2_cdwdoris-1.2.tar.gz" -C "${WORK_DIR}"
 fi
 
+rm -fr fe/fe-common/src/main/java/org/apache/doris/thrift
+rm -fr fe/fe-common/src/main/java/org/apache/parquet
+
 # clean and build all
 PARALLEL=$(nproc)
 sh ${WORK_DIR}/build.sh --clean --fe --be --broker --audit --spark-dpp --hive-udf -j${PARALLEL}
