@@ -38,21 +38,12 @@ fi
 log "[INFO] success to install help-resource.zip."
 
 # install be libs
-mkdir -p "${dest_dir}/lib/be"
-ret=$(cp -a "${cur_dir}/output/be/lib/doris_be" "${dest_dir}/lib/be")
+ret=$(cp -a "${cur_dir}/output/be/lib" "${dest_dir}/lib/be")
 if [ $? -ne 0 ]; then
-  log "[ERROR] failed to install doris_be."
+  log "[ERROR] failed to install be libs."
   exit 1
 fi
-log "[INFO] success to install doris_be."
-
-# install hadoop_hdfs and java_extensions
-ret=$(cp -a "${cur_dir}/output/be/lib/"{hadoop_hdfs,java_extensions} "${dest_dir}/lib/be")
-if [ $? -ne 0 ]; then
-  log "[ERROR] failed to install hadoop_hdfs and java_extensions."
-  exit 1
-fi
-log "[INFO] success to install hadoop_hdfs and java_extensions."
+log "[INFO] success to install be libs."
 
 # install broker libs
 mkdir -p "${dest_dir}/lib/broker"
