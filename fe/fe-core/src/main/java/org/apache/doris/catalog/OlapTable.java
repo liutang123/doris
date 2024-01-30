@@ -1734,9 +1734,13 @@ public class OlapTable extends Table implements MTMVRelatedTableIf {
                                 id, tablet.getId(), tablet.getReplicas());
                         return false;
                     }
-
                     Pair<TabletStatus, TabletSchedCtx.Priority> statusPair = tablet.getHealthStatusWithPriority(
                             infoService, visibleVersion, replicaAlloc, aliveBeIds);
+                    if (statusPair.first == TabletStatus.REDUNDANT) {
+                        LOG.info("table {} contain REDUNDANT status tablet:{}, skip it.",
+                                id, tablet.getId());
+                        continue;
+                    }
                     if (statusPair.first != TabletStatus.HEALTHY) {
                         LOG.info("table {} is not stable because tablet {} status is {}. replicas: {}",
                                 id, tablet.getId(), statusPair.first, tablet.getReplicas());

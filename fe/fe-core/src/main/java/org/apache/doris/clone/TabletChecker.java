@@ -439,6 +439,13 @@ public class TabletChecker extends MasterDaemon {
                 tabletCtx.setTabletStatus(statusWithPrio.first);
                 tabletCtx.setPriority(statusWithPrio.second);
 
+                // If the tablet state is REDUNDANT and the table is in alter, needn't scheduled.
+                if (statusWithPrio.first == TabletStatus.REDUNDANT &&
+                        (tbl.getState() != OlapTable.OlapTableState.NORMAL || partition.getState() != PartitionState.NORMAL)){
+                    LOG.info("tablet {} state is REDUNDANT and table {} state is {}, needn't scheduled.", tablet.getId(), tbl.getId(), tbl.getState());
+                    continue;
+                }
+
                 AddResult res = tabletScheduler.addTablet(tabletCtx, false /* not force */);
                 if (res == AddResult.LIMIT_EXCEED || res == AddResult.DISABLED) {
                     LOG.info("tablet scheduler return: {}. stop tablet checker", res.name());

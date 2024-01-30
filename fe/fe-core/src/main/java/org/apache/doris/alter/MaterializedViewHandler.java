@@ -207,16 +207,21 @@ public class MaterializedViewHandler extends AlterHandler {
             // Step1.3: mv clause validation
             List<Column> mvColumns = checkAndPrepareMaterializedView(addMVClause, olapTable);
 
+            olapTable.setState(OlapTableState.ROLLUP);
+
             // Step2: create mv job
-            RollupJobV2 rollupJobV2 =
-                    createMaterializedViewJob(addMVClause.toSql(), mvIndexName, baseIndexName, mvColumns,
-                            addMVClause.getWhereClauseItemExpr(olapTable),
-                            addMVClause.getProperties(), olapTable, db, baseIndexId,
-                            addMVClause.getMVKeysType(), addMVClause.getOrigStmt());
+            RollupJobV2 rollupJobV2 = null;
+            try {
+                rollupJobV2 = createMaterializedViewJob(addMVClause.toSql(), mvIndexName, baseIndexName, mvColumns,
+                    addMVClause.getWhereClauseItemExpr(olapTable),
+                    addMVClause.getProperties(), olapTable, db, baseIndexId,
+                    addMVClause.getMVKeysType(), addMVClause.getOrigStmt());
+            } catch (Exception e) {
+                olapTable.setState(OlapTableState.NORMAL);
+                throw e;
+            }
 
             addAlterJobV2(rollupJobV2);
-
-            olapTable.setState(OlapTableState.ROLLUP);
 
             // wait wal delete
             Env.getCurrentEnv().getGroupCommitManager().blockTable(olapTable.getId());
@@ -254,56 +259,22 @@ public class MaterializedViewHandler extends AlterHandler {
                 throw new DdlException("Can not alter table when there are temp partitions in table");
             }
 
-            // 1 check and make rollup job
-            for (AlterClause alterClause : alterClauses) {
-                AddRollupClause addRollupClause = (AddRollupClause) alterClause;
-
-                // step 1 check whether current alter is change storage format
-                String rollupIndexName = addRollupClause.getRollupName();
-                boolean changeStorageFormat = false;
-                if (rollupIndexName.equalsIgnoreCase(olapTable.getName())) {
-                    // for upgrade test to create segment v2 rollup index by using the sql:
-                    // alter table table_name add rollup table_name (columns) properties ("storage_format" = "v2");
-                    Map<String, String> properties = addRollupClause.getProperties();
-                    if (properties == null || !properties.containsKey(PropertyAnalyzer.PROPERTIES_STORAGE_FORMAT)
-                            || !properties.get(PropertyAnalyzer.PROPERTIES_STORAGE_FORMAT).equalsIgnoreCase("v2")) {
-                        throw new DdlException("Table[" + olapTable.getName() + "] can not "
-                                + "add segment v2 rollup index without setting storage format to v2.");
-                    }
-                    rollupIndexName = NEW_STORAGE_FORMAT_INDEX_NAME_PREFIX + olapTable.getName();
-                    changeStorageFormat = true;
-                }
-
-                // get base index schema
-                String baseIndexName = addRollupClause.getBaseRollupName();
-                if (baseIndexName == null) {
-                    // use table name as base table name
-                    baseIndexName = olapTable.getName();
-                }
-
-                // step 2 alter clause validation
-                // step 2.1 check whether base index already exists in catalog
-                long baseIndexId = checkAndGetBaseIndex(baseIndexName, olapTable);
-
-                // step 2.2  check rollup schema
-                List<Column> rollupSchema = checkAndPrepareMaterializedView(
-                        addRollupClause, olapTable, baseIndexId, changeStorageFormat);
-
-                // step 3 create rollup job
-                RollupJobV2 alterJobV2 =
-                        createMaterializedViewJob(rawSql, rollupIndexName, baseIndexName, rollupSchema, null,
-                                addRollupClause.getProperties(), olapTable, db, baseIndexId, olapTable.getKeysType(),
-                                null);
-
-                rollupNameJobMap.put(addRollupClause.getRollupName(), alterJobV2);
-                logJobIdSet.add(alterJobV2.getJobId());
-            }
+            // for now table's state can only be NORMAL
+            Preconditions.checkState(olapTable.getState() == OlapTableState.NORMAL, olapTable.getState().name());
 
             // set table' state to ROLLUP before adding rollup jobs.
             // so that when the AlterHandler thread run the jobs, it will see the expected table's state.
             // ATTN: This order is not mandatory, because database lock will protect us,
             // but this order is more reasonable
             olapTable.setState(OlapTableState.ROLLUP);
+
+            // 1 check and make rollup job
+            try {
+                checkAndMakeRollUpJob(rawSql, alterClauses, db, olapTable, rollupNameJobMap, logJobIdSet);
+            } catch (Exception e) {
+                olapTable.setState(OlapTableState.NORMAL);
+                throw e;
+            }
 
             // wait wal delete
             Env.getCurrentEnv().getGroupCommitManager().blockTable(olapTable.getId());
@@ -330,6 +301,64 @@ public class MaterializedViewHandler extends AlterHandler {
             throw e;
         } finally {
             olapTable.writeUnlock();
+        }
+    }
+
+    private void checkAndMakeRollUpJob(String rawSql, List<AlterClause> alterClauses, Database db, OlapTable olapTable, Map<String,
+        RollupJobV2> rollupNameJobMap, Set<Long> logJobIdSet) throws DdlException, AnalysisException {
+        // 1 check and make rollup job
+        for (AlterClause alterClause : alterClauses) {
+            AddRollupClause addRollupClause = (AddRollupClause) alterClause;
+
+            // step 1 check whether current alter is change storage format
+            String rollupIndexName = addRollupClause.getRollupName();
+            boolean changeStorageFormat = false;
+            if (rollupIndexName.equalsIgnoreCase(olapTable.getName())) {
+                // for upgrade test to create segment v2 rollup index by using the sql:
+                // alter table table_name add rollup table_name (columns) properties ("storage_format" = "v2");
+                Map<String, String> properties = addRollupClause.getProperties();
+                if (properties == null || !properties.containsKey(PropertyAnalyzer.PROPERTIES_STORAGE_FORMAT)
+                    || !properties.get(PropertyAnalyzer.PROPERTIES_STORAGE_FORMAT).equalsIgnoreCase("v2")) {
+                    throw new DdlException("Table[" + olapTable.getName() + "] can not "
+                        + "add segment v2 rollup index without setting storage format to v2.");
+                }
+                rollupIndexName = NEW_STORAGE_FORMAT_INDEX_NAME_PREFIX + olapTable.getName();
+                changeStorageFormat = true;
+            }
+
+            // get base index schema
+            String baseIndexName = addRollupClause.getBaseRollupName();
+            if (baseIndexName == null) {
+                // use table name as base table name
+                baseIndexName = olapTable.getName();
+            }
+
+            // step 2 alter clause validation
+            // step 2.1 check whether base index already exists in catalog
+            Long baseIndexId = olapTable.getIndexIdByName(baseIndexName);
+            if (baseIndexId == null) {
+                throw new DdlException("Base index[" + baseIndexName + "] does not exist");
+            }
+            // check state
+            for (Partition partition : olapTable.getPartitions()) {
+                MaterializedIndex baseIndex = partition.getIndex(baseIndexId);
+                if (baseIndex == null) {
+                    throw new DdlException("Base index[" + baseIndex.getId() + "] does not exist");
+                }
+            }
+
+            // step 2.2  check rollup schema
+            List<Column> rollupSchema = checkAndPrepareMaterializedView(
+                addRollupClause, olapTable, baseIndexId, changeStorageFormat);
+
+            // step 3 create rollup job
+            RollupJobV2 alterJobV2 =
+                createMaterializedViewJob(rawSql, rollupIndexName, baseIndexName, rollupSchema, null,
+                    addRollupClause.getProperties(), olapTable, db, baseIndexId, olapTable.getKeysType(),
+                    null);
+
+            rollupNameJobMap.put(addRollupClause.getRollupName(), alterJobV2);
+            logJobIdSet.add(alterJobV2.getJobId());
         }
     }
 

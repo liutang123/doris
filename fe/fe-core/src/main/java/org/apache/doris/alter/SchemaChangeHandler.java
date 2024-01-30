@@ -1528,6 +1528,28 @@ public class SchemaChangeHandler extends AlterHandler {
         // the following operations are done outside the 'for indices' loop
         // to avoid partial check success
 
+        // set table state
+        olapTable.setState(OlapTableState.SCHEMA_CHANGE);
+
+        // create shadow index
+        try {
+            createShadowIndex(dbId, olapTable, schemaChangeJob, tableId, indexIdToShortKeyColumnCount,
+                changedIndexIdToSchema, idGeneratorBuffer);
+        } catch (Exception e) {
+            olapTable.setState(OlapTableState.NORMAL);
+            throw e;
+        }
+
+        // 2. add schemaChangeJob
+        addAlterJobV2(schemaChangeJob);
+
+        // 3. write edit log
+        Env.getCurrentEnv().getEditLog().logAlterJob(schemaChangeJob);
+        LOG.info("finished to create schema change job: {}", schemaChangeJob.getJobId());
+    }
+
+    private void createShadowIndex(long dbId, OlapTable olapTable, SchemaChangeJobV2 schemaChangeJob, long tableId, Map<Long, Short> indexIdToShortKeyColumnCount,
+                                   Map<Long, List<Column>> changedIndexIdToSchema, IdGeneratorBuffer idGeneratorBuffer) throws DdlException {
         /*
          * Create schema change job
          * 1. For each index which has been changed, create a SHADOW index,
@@ -1621,16 +1643,6 @@ public class SchemaChangeHandler extends AlterHandler {
             schemaChangeJob.addIndexSchema(shadowIndexId, originIndexId, newIndexName, newSchemaVersion, newSchemaHash,
                     newShortKeyColumnCount, entry.getValue());
         } // end for index
-
-        // set table state
-        olapTable.setState(OlapTableState.SCHEMA_CHANGE);
-
-        // 2. add schemaChangeJob
-        addAlterJobV2(schemaChangeJob);
-
-        // 3. write edit log
-        Env.getCurrentEnv().getEditLog().logAlterJob(schemaChangeJob);
-        LOG.info("finished to create schema change job: {}", schemaChangeJob.getJobId());
     }
 
     @Override

@@ -588,6 +588,14 @@ public class TabletScheduler extends MasterDaemon {
                         "table is in alter process, but tablet status is " + statusPair.first.name());
             }
 
+            // if table under ALTER process, do not allow to delete replica(include table state is WAITING_STABLE).
+            if (statusPair.first == TabletStatus.REDUNDANT &&
+                    (partition.getState() != PartitionState.NORMAL || tableState != OlapTableState.NORMAL) &&
+                    tabletCtx.getType() == Type.REPAIR) {
+                throw new SchedException(Status.UNRECOVERABLE,
+                        "table in alter process, but tablet status is REDUNDANT, reprocess after alter operation.");
+            }
+
             tabletCtx.setTabletStatus(statusPair.first);
             if (statusPair.first == TabletStatus.HEALTHY && tabletCtx.getType() == TabletSchedCtx.Type.REPAIR) {
                 throw new SchedException(Status.UNRECOVERABLE, SubCode.DIAGNOSE_IGNORE, "tablet is healthy");
