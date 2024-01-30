@@ -276,6 +276,7 @@ public class TabletChecker extends MasterDaemon {
 
         // 2. Traverse other partitions not in "prios"
         List<Long> dbIds = env.getInternalCatalog().getDbIds();
+        // 2.1 First traverse the WAITING_STABLE tables.
         OUT:
         for (Long dbId : dbIds) {
             Database db = env.getInternalCatalog().getDbNullable(dbId);
@@ -298,6 +299,56 @@ public class TabletChecker extends MasterDaemon {
                     }
 
                     OlapTable tbl = (OlapTable) table;
+                    if (OlapTable.OlapTableState.WAITING_STABLE != tbl.getState()) {
+                        continue;
+                    }
+                    LOG.info("tableId: {} is WAITING_STABLE state, start auto repair it to normal.", tbl.getId());
+                    for (Partition partition : tbl.getAllPartitions()) {
+                        // skip partitions in prios, because it has been checked before.
+                        if (isInPrios(db.getId(), tbl.getId(), partition.getId())) {
+                            continue;
+                        }
+
+                        LoopControlStatus st = handlePartitionTablet(db, tbl, partition, false,
+                            aliveBeIds, start, counter);
+                        if (st == LoopControlStatus.BREAK_OUT) {
+                            break OUT;
+                        } else {
+                            continue;
+                        }
+                    } // partitions
+                } finally {
+                    table.readUnlock();
+                }
+            } // tables
+        } // end for dbs
+
+        // 2.2 Then traverse the other tables.
+        OUT:
+        for (Long dbId : dbIds) {
+            Database db = env.getInternalCatalog().getDbNullable(dbId);
+            if (db == null) {
+                continue;
+            }
+
+            if (db instanceof MysqlCompatibleDatabase) {
+                continue;
+            }
+
+            List<Table> tableList = db.getTables();
+            List<Long> aliveBeIds = infoService.getAllBackendIds(true);
+
+            for (Table table : tableList) {
+                table.readLock();
+                try {
+                    if (!table.needSchedule()) {
+                        continue;
+                    }
+
+                    OlapTable tbl = (OlapTable) table;
+                    if (OlapTable.OlapTableState.WAITING_STABLE == tbl.getState()) {
+                        continue;
+                    }
                     for (Partition partition : tbl.getAllPartitions()) {
                         // skip partitions in prios, because it has been checked before.
                         if (isInPrios(db.getId(), tbl.getId(), partition.getId())) {

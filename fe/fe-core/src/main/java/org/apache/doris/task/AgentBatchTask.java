@@ -128,6 +128,8 @@ public class AgentBatchTask implements Runnable {
                 if (!agentTask.isFinished()) {
                     if (res.size() < limit) {
                         res.add(agentTask);
+                    } else {
+                        break;
                     }
                 }
             }

@@ -17,6 +17,7 @@
 
 package org.apache.doris.master;
 
+import org.apache.commons.lang.StringUtils;
 import org.apache.doris.alter.AlterJobV2.JobType;
 import org.apache.doris.catalog.Database;
 import org.apache.doris.catalog.Env;
@@ -237,8 +238,8 @@ public class MasterImpl {
         try {
             CreateReplicaTask createReplicaTask = (CreateReplicaTask) task;
             if (request.getTaskStatus().getStatusCode() != TStatusCode.OK) {
-                createReplicaTask.countDownToZero(task.getBackendId() + ": "
-                        + request.getTaskStatus().getErrorMsgs().toString());
+                String errMsg = "BackendId: " + task.getBackendId() + (StringUtils.isNotEmpty(task.getErrorMsg()) ? (", status_message: " + task.getErrorMsg()) : "");
+                createReplicaTask.countDownToZero(errMsg);
             } else {
                 long tabletId = createReplicaTask.getTabletId();
 
