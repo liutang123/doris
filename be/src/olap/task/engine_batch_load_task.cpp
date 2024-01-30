@@ -319,6 +319,7 @@ Status EngineBatchLoadTask::_push(const TPushReq& request,
             auditlog.status = "Fail";
             auditlog.message = "error code: " + std::to_string(res);
         }
+        auditlog.load_cost_ms = duration_ns / NANOS_PER_MILLIS;
         string ETL_OUTPUT_FILE_NAME_DESC_V1 = "version.label.tableId.partitionId.indexId.bucket.schemaHash.parquet";
         string hdfs_file_path = request.broker_scan_range.ranges[0].path;
         vector<string> elements;
