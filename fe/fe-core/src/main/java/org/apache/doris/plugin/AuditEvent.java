@@ -58,6 +58,8 @@ public class AuditEvent {
     public String user = "";
     @AuditField(value = "Ctl")
     public String ctl = "";
+    @AuditField(value = "Catalog")
+    public String catalog = "";
     @AuditField(value = "Db")
     public String db = "";
     @AuditField(value = "CommandType")
@@ -145,6 +147,11 @@ public class AuditEvent {
 
         public AuditEventBuilder setCtl(String ctl) {
             auditEvent.ctl = ctl;
+            return this;
+        }
+
+        public AuditEventBuilder setCatalog(String catalog) {
+            auditEvent.catalog = catalog;
             return this;
         }
 

@@ -201,6 +201,11 @@ public class AuditLogHelper {
                 .setFuzzyVariables(!printFuzzyVariables ? "" : ctx.getSessionVariable().printFuzzyVariables())
                 .setCommandType(ctx.getCommand().toString());
 
+        // when doris fe is booting, current catalog may not be set
+        if (ctx.getCurrentCatalog() != null) {
+            ctx.getAuditEventBuilder().setCatalog(ctx.getCurrentCatalog().getName());
+        }
+
         if (ctx.getState().isQuery()) {
             if (!ctx.getSessionVariable().internalSession && MetricRepo.isInit) {
                 MetricRepo.COUNTER_QUERY_ALL.increase(1L);
