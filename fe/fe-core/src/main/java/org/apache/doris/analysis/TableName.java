@@ -148,6 +148,13 @@ public class TableName implements Writable {
         }
     }
 
+    public String getFullTableName() {
+        if (isFullyQualified()) {
+            return db + "." + tbl;
+        }
+        return tbl;
+    }
+
     @Override
     public String toString() {
         StringBuilder stringBuilder = new StringBuilder();

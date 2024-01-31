@@ -73,6 +73,7 @@ import java.util.concurrent.TimeUnit;
 public class SessionVariable implements Serializable, Writable {
     public static final Logger LOG = LogManager.getLogger(SessionVariable.class);
 
+    public static final String EXEC_PRIORITY = "exec_priority";
     public static final String EXEC_MEM_LIMIT = "exec_mem_limit";
     public static final String SCAN_QUEUE_MEM_LIMIT = "scan_queue_mem_limit";
     public static final String NUM_SCANNER_THREADS = "num_scanner_threads";
@@ -568,6 +569,9 @@ public class SessionVariable implements Serializable, Writable {
 
     @VariableMgr.VarAttr(name = INSERT_VISIBLE_TIMEOUT_MS, needForward = true)
     public long insertVisibleTimeoutMs = DEFAULT_INSERT_VISIBLE_TIMEOUT_MS;
+
+    @VariableMgr.VarAttr(name = EXEC_PRIORITY)
+    public int execPriority = 5;
 
     // max memory used on every backend.
     @VariableMgr.VarAttr(name = EXEC_MEM_LIMIT)
@@ -1912,6 +1916,14 @@ public class SessionVariable implements Serializable, Writable {
 
     public int getRewriteOrToInPredicateThreshold() {
         return rewriteOrToInPredicateThreshold;
+    }
+
+    public int getExecPriority() {
+        return execPriority;
+    }
+
+    public void setExecPriority(int execPriority) {
+        this.execPriority = Math.min(Math.max(execPriority, 1), 10);
     }
 
     public long getMaxExecMemByte() {

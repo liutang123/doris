@@ -287,6 +287,7 @@ public class Coordinator implements CoordInterface {
     // True if all scan node are ExternalScanNode.
     private boolean isAllExternalScan = true;
     private String databaseName; // Used for audit a query.
+    private String limitContext = "{}";
 
     // Used for query/insert
     public Coordinator(ConnectContext context, Analyzer analyzer, Planner planner,
@@ -399,6 +400,14 @@ public class Coordinator implements CoordInterface {
 
     public ConnectContext getConnectContext() {
         return context;
+    }
+
+    public void setLimitContext(String limitContextStr) {
+        this.limitContext = limitContextStr;
+    }
+
+    public String getLimitContext() {
+        return limitContext;
     }
 
     public Planner getPlanner() {

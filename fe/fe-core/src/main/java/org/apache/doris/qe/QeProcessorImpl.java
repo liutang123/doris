@@ -22,10 +22,14 @@ import org.apache.doris.common.Config;
 import org.apache.doris.common.ThreadPoolManager;
 import org.apache.doris.common.UserException;
 import org.apache.doris.common.profile.ExecutionProfile;
+import org.apache.doris.common.mt.MTAlertDaemon;
 import org.apache.doris.common.mt.MTAudit;
 import org.apache.doris.common.util.DebugUtil;
 import org.apache.doris.metric.MetricRepo;
 import org.apache.doris.resource.workloadgroup.QueueToken.TokenState;
+import org.apache.doris.persist.gson.GsonUtils;
+import org.apache.doris.planner.OlapScanNode;
+import org.apache.doris.planner.ScanNode;
 import org.apache.doris.thrift.TNetworkAddress;
 import org.apache.doris.thrift.TQueryType;
 import org.apache.doris.thrift.TReportExecStatusParams;
@@ -36,16 +40,27 @@ import org.apache.doris.thrift.TUniqueId;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
+import com.google.gson.annotations.SerializedName;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.springframework.expression.Expression;
+import org.springframework.expression.ExpressionParser;
+import org.springframework.expression.spel.SpelCompilerMode;
+import org.springframework.expression.spel.SpelParserConfiguration;
+import org.springframework.expression.spel.standard.SpelExpressionParser;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 public final class QeProcessorImpl implements QeProcessor {
 
@@ -54,6 +69,8 @@ public final class QeProcessorImpl implements QeProcessor {
 
     private Map<TUniqueId, Integer> queryToInstancesNum;
     private Map<String, AtomicInteger> userToInstancesCount;
+    private Map<String, AtomicInteger> userToQueryCount;
+    private List<Expression> trafficLimitRules;
 
     public static final QeProcessor INSTANCE;
 
@@ -70,6 +87,15 @@ public final class QeProcessorImpl implements QeProcessor {
                 "profile-write-pool", true);
         queryToInstancesNum = new ConcurrentHashMap<>();
         userToInstancesCount = new ConcurrentHashMap<>();
+        trafficLimitRules = Collections.emptyList();
+        userToQueryCount = Maps.newConcurrentMap();
+    }
+
+    public void setTrafficLimitRules(String trafficLimitRules) {
+        ExpressionParser parser = new SpelExpressionParser(
+                new SpelParserConfiguration(SpelCompilerMode.IMMEDIATE, this.getClass().getClassLoader()));
+        this.trafficLimitRules = Arrays.stream(trafficLimitRules.split(";"))
+                .map(String::trim).map(parser::parseExpression).collect(Collectors.toList());
     }
 
     @Override
@@ -109,32 +135,68 @@ public final class QeProcessorImpl implements QeProcessor {
 
     @Override
     public void registerInstances(TUniqueId queryId, Integer instancesNum) throws UserException {
-        if (!coordinatorMap.containsKey(queryId)) {
-            throw new UserException("query not exists in coordinatorMap:" + DebugUtil.printId(queryId));
-        }
         QueryInfo queryInfo = coordinatorMap.get(queryId);
-        if (queryInfo.getConnectContext() != null
-                && !Strings.isNullOrEmpty(queryInfo.getConnectContext().getQualifiedUser())
-        ) {
-            String user = queryInfo.getConnectContext().getQualifiedUser();
-            long maxQueryInstances = queryInfo.getConnectContext().getEnv().getAuth().getMaxQueryInstances(user);
-            if (maxQueryInstances <= 0) {
-                maxQueryInstances = Config.default_max_query_instances;
-            }
-            if (maxQueryInstances > 0) {
-                AtomicInteger currentCount = userToInstancesCount
-                        .computeIfAbsent(user, ignored -> new AtomicInteger(0));
-                // Many query can reach here.
-                if (instancesNum + currentCount.get() > maxQueryInstances) {
-                    throw new UserException("reach max_query_instances " + maxQueryInstances);
-                }
-            }
-            queryToInstancesNum.put(queryId, instancesNum);
-            userToInstancesCount.computeIfAbsent(user, __ -> new AtomicInteger(0)).addAndGet(instancesNum);
-            MetricRepo.USER_COUNTER_QUERY_INSTANCE_BEGIN.getOrAdd(user).increase(instancesNum.longValue());
-            MTAudit.logQueryPlan(queryInfo.getCoord());
-            MTAudit.logProfileBeforeExec(queryInfo.getCoord());
+        if (queryInfo == null) {
+            LOG.warn("[MT] register query, QueryInfo not found, queryId={}", DebugUtil.printId(queryId));
+            return;
         }
+        ConnectContext context = queryInfo.getConnectContext();
+        if (context == null) {
+            LOG.warn("[MT] register query, ConnectContext not found, queryId={}", DebugUtil.printId(queryId));
+            return;
+        }
+        String user = context.getQualifiedUser();
+        if (Strings.isNullOrEmpty(user)) {
+            LOG.warn("[MT] register query,  user not found, queryId={}", DebugUtil.printId(queryId));
+            return;
+        }
+
+        int queryNum = context.getState().isQuery() ? 1 : 0;
+        AtomicInteger userQueryCounter = userToQueryCount.computeIfAbsent(user, __ -> new AtomicInteger(0));
+        int userQueryNum = userQueryCounter.addAndGet(queryNum);
+        AtomicInteger userInstanceCounter = userToInstancesCount.computeIfAbsent(user, __ -> new AtomicInteger(0));
+        int userInstanceNum = userInstanceCounter.addAndGet(instancesNum);
+
+        // instance limit
+        long maxQueryInstances = queryInfo.getConnectContext().getEnv().getAuth().getMaxQueryInstances(user);
+        if (maxQueryInstances <= 0) {
+            maxQueryInstances = Config.default_max_query_instances;
+        }
+        if (maxQueryInstances > 0 && userInstanceNum > maxQueryInstances) {
+            // Many query can reach here.
+            userQueryCounter.addAndGet(-queryNum);
+            userInstanceCounter.addAndGet(-instancesNum);
+            throw new UserException("reach max_query_instances " + maxQueryInstances);
+        }
+
+        // expression limit
+        QueryLimitContext ctx = new QueryLimitContext(queryInfo, userInstanceNum, userQueryNum);
+        queryInfo.coord.setLimitContext(GsonUtils.GSON.toJson(ctx));
+        for (Expression exp : trafficLimitRules) {
+            try {
+                Boolean limit = exp.getValue(ctx, Boolean.class);
+                if (limit == null) {
+                    String message = String.format("[MT] parse traffic limit rule error (%s) null result", exp.getExpressionString());
+                    LOG.warn(message);
+                    MTAlertDaemon.warn(message);
+                } else if (limit) {
+                    userQueryCounter.addAndGet(-queryNum);
+                    userInstanceCounter.addAndGet(-instancesNum);
+                    throw new UserException(String.format("reach traffic limit, rule (%s)", exp.getExpressionString()));
+                }
+            } catch (UserException e) {
+                throw e;
+            } catch (Exception e) {
+                String message = String.format("[MT] parse traffic limit rule error (%s)", exp.getExpressionString());
+                LOG.error(message, e);
+                MTAlertDaemon.error(message, e);
+            }
+        }
+        queryToInstancesNum.put(queryId, instancesNum);
+        userToInstancesCount.computeIfAbsent(user, __ -> new AtomicInteger(0)).addAndGet(instancesNum);
+        MetricRepo.USER_COUNTER_QUERY_INSTANCE_BEGIN.getOrAdd(user).increase(instancesNum.longValue());
+        MTAudit.logQueryPlan(queryInfo.getCoord());
+        MTAudit.logProfileBeforeExec(queryInfo.getCoord());
     }
 
     public Map<String, Integer> getInstancesNumPerUser() {
@@ -144,30 +206,47 @@ public final class QeProcessorImpl implements QeProcessor {
     @Override
     public void unregisterQuery(TUniqueId queryId) {
         QueryInfo queryInfo = coordinatorMap.remove(queryId);
-        if (queryInfo != null) {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("Deregister query id {}", DebugUtil.printId(queryId));
-            }
+        Integer instanceNum = queryToInstancesNum.remove(queryId);
+        if (queryInfo == null) {
+            LOG.warn("[MT] unregister query, id not found, queryId={}", DebugUtil.printId(queryId));
+            return;
+        }
+        ConnectContext context = queryInfo.getConnectContext();
+        if (context == null) {
+            LOG.warn("[MT] unregister query, ConnectContext not found, queryId={}", DebugUtil.printId(queryId));
+            return;
+        }
+        String user = context.getQualifiedUser();
+        if (Strings.isNullOrEmpty(user)) {
+            LOG.warn("[MT] unregister query, user not found, queryId={}", DebugUtil.printId(queryId));
+            return;
+        }
 
-            if (queryInfo.getConnectContext() != null
-                    && !Strings.isNullOrEmpty(queryInfo.getConnectContext().getQualifiedUser())
-            ) {
-                Integer num = queryToInstancesNum.remove(queryId);
-                if (num != null) {
-                    String user = queryInfo.getConnectContext().getQualifiedUser();
-                    AtomicInteger instancesNum = userToInstancesCount.get(user);
-                    if (instancesNum == null) {
-                        LOG.warn("WTF?? query {} in queryToInstancesNum but not in userToInstancesCount",
-                                DebugUtil.printId(queryId)
-                        );
-                    } else {
-                        instancesNum.addAndGet(-num);
+        if (instanceNum == null) {
+            // 表示被限流（并发及实例数统计已回滚）或未注册
+            LOG.warn("[MT] unregister query, instance num not found, queryId={}", DebugUtil.printId(queryId));
+        } else {
+            // 回滚实例数
+            AtomicInteger instanceCounter = userToInstancesCount.get(user);
+            if (instanceCounter == null) {
+                LOG.warn("[MT] unregister query, instance counter not found, queryId={}, instance num={}",
+                        DebugUtil.printId(queryId), instanceNum);
+            } else {
+                instanceCounter.addAndGet(-instanceNum);
+            }
+            // 回滚并发数
+            AtomicInteger queryCounter = userToQueryCount.get(user);
+            if (queryCounter == null) {
+                LOG.warn("[MT] unregister query, query counter not found, queryId={}",
+                        DebugUtil.printId(queryId));
+            } else {
+                if (context.getState().isQuery()) {
+                    int value = queryCounter.addAndGet(-1);
+                    if (value < 0) {
+                        LOG.warn("[MT] After unregister {}, queryCounter become negative: {}",
+                                DebugUtil.printId(queryId), value);
                     }
                 }
-            }
-        } else {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("not found query {} when unregisterQuery", DebugUtil.printId(queryId));
             }
         }
 
@@ -320,6 +399,148 @@ public final class QeProcessorImpl implements QeProcessor {
                 return coord.getQueueToken().getTokenState();
             }
             return null;
+        }
+    }
+
+    public static final class QueryLimitContext {
+        private final transient QueryInfo info;
+        @SerializedName("instanceNum")
+        private final int instanceNum;
+        @SerializedName("userInstanceNum")
+        private final int userInstanceNum;
+        @SerializedName("userQueryNum")
+        private final int userQueryNum;
+        @SerializedName("scanSize")
+        private long scanSize;
+        @SerializedName("maxScanSize")
+        private long maxScanSize;
+        @SerializedName("maxUnprunedScanSize")
+        private long maxUnprunedScanSize;
+        @SerializedName("scanRows")
+        private long scanRows;
+        @SerializedName("maxScanRows")
+        private long maxScanRows;
+        @SerializedName("maxScanPartitionNum")
+        private int maxScanPartitionNum;
+        @SerializedName("scanInstanceNum")
+        private int scanInstanceNum;
+        @SerializedName("maxScanInstanceNum")
+        private int maxScanInstanceNum;
+        @SerializedName("dbs")
+        private Set<String> dbs;
+        @SerializedName("tables")
+        private Set<String> tables;
+        @SerializedName("tableScanPartitionNum")
+        private Map<String, Integer> tableScanPartitionNum;
+        @SerializedName("priority")
+        private Integer priority;
+
+        public QueryLimitContext(QueryInfo info, int userInstanceNum, int userQueryNum) {
+            this.info = info;
+            this.instanceNum = info.getCoord().getInstanceNum();
+            this.userQueryNum = userQueryNum;
+            this.userInstanceNum = userInstanceNum;
+            // user 直接用 info.connectContext.qualifiedUser，参考 https://km.sankuai.com/page/727356486#id-表达式灵活限流
+            this.computeScanNode();
+            this.priority = info.getConnectContext().getSessionVariable().getExecPriority();
+        }
+
+        private void computeScanNode() {
+            scanSize = 0L;
+            maxScanSize = 0L;
+            maxUnprunedScanSize = 0L;
+            scanRows = 0L;
+            maxScanRows = 0L;
+            maxScanPartitionNum = 0;
+            scanInstanceNum = 0;
+            maxScanInstanceNum = 0;
+            tables = Sets.newHashSet();
+            dbs = Sets.newHashSet();
+            tableScanPartitionNum = Maps.newHashMap();
+            for (ScanNode scanNode : info.getCoord().getPlanner().getScanNodes()) {
+                long r = scanNode.getCardinality();
+                long s = (long) (r * scanNode.getAvgRowSize());
+                scanSize += s;
+                maxScanSize = Math.max(maxScanSize, s);
+                scanRows += r;
+                maxScanRows = Math.max(maxScanRows, r);
+                if (scanNode instanceof OlapScanNode) {
+                    OlapScanNode olapScanNode = (OlapScanNode) scanNode;
+                    dbs.add(olapScanNode.getTupleDesc().getRef().getName().getDb());
+                    String tableName = olapScanNode.getTupleDesc().getRef().getName().getFullTableName();
+                    tables.add(tableName);
+                    int scanPartitionNum = olapScanNode.getSelectedPartitionIds().size();
+                    tableScanPartitionNum.compute(tableName, (t, n) -> scanPartitionNum + (n == null ? 0 : n));
+                    maxUnprunedScanSize = Math.max(maxUnprunedScanSize, olapScanNode.isPartitionPruned() ? 0L : s);
+                    maxScanPartitionNum = Math.max(maxScanPartitionNum, scanPartitionNum);
+                    scanInstanceNum += olapScanNode.getNumInstances();
+                    maxScanInstanceNum = Math.max(maxScanInstanceNum, olapScanNode.getNumInstances());
+                }
+            }
+        }
+
+        public int getPriority () {
+            return priority;
+        }
+
+        public QueryInfo getInfo () {
+            return info;
+        }
+
+        public int getInstanceNum () {
+            return instanceNum;
+        }
+
+        public int getUserInstanceNum () {
+            return userInstanceNum;
+        }
+
+        public int getUserQueryNum () {
+            return userQueryNum;
+        }
+
+        public long getScanSize () {
+            return scanSize;
+        }
+
+        public long getMaxScanSize () {
+            return maxScanSize;
+        }
+
+        public long getMaxUnprunedScanSize () {
+            return maxUnprunedScanSize;
+        }
+
+        public long getScanRows () {
+            return scanRows;
+        }
+
+        public long getMaxScanRows () {
+            return maxScanRows;
+        }
+
+        public int getMaxScanPartitionNum () {
+            return maxScanPartitionNum;
+        }
+
+        public int getScanInstanceNum () {
+            return scanInstanceNum;
+        }
+
+        public int getMaxScanInstanceNum () {
+            return maxScanInstanceNum;
+        }
+
+        public Set<String> getDbs () {
+            return dbs;
+        }
+
+        public Set<String> getTables () {
+            return tables;
+        }
+
+        public Map<String, Integer> getTableScanPartitionNum () {
+            return tableScanPartitionNum;
         }
     }
 

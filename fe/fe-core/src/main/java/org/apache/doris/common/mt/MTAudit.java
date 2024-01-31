@@ -568,6 +568,8 @@ public class MTAudit {
             Data.PQueryStatistics statistics = executor == null ? null : executor.getQueryStatisticsForAuditLog();
             Planner planner = executor == null ? null : executor.planner();
             Coordinator coordinator = executor == null ? null : executor.coordinator();
+            String limitCtx = coordinator == null ? "{}" : coordinator.getLimitContext();
+            String encodedLimitCtx = URLEncoder.encode(limitCtx, "UTF-8").replaceAll("\\+", "%20");
             int instanceNum = coordinator == null ? 0 : coordinator.getInstanceNum();
             List<ScanNode> scanNodes = planner == null ? Collections.emptyList() : planner.getScanNodes();
             int scanPartitionNum = 0, nonPartitionPruned = 0, nonPreAgg = 0;
@@ -625,6 +627,7 @@ public class MTAudit {
             format.putTag("non_parition_prune", String.valueOf(nonPartitionPruned));
             format.putTag("non_preagg_scan", String.valueOf(nonPreAgg));
             format.putTag("instances_num", String.valueOf(instanceNum));
+            format.putTag("limit_context", encodedLimitCtx);
             format.putTag("sql", encodedSql);
 
             // TODO remove deprecated fields

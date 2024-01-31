@@ -2498,13 +2498,16 @@ public class Config extends ConfigBase {
     public static int http_load_submitter_max_worker_threads = 2;
     @ConfField
     public static String mt_domain = "UNKNOWN";
+
     @ConfField(mutable = true)
     public static String[] mt_alert_receivers = {
             "wangshuo33", "liulijia", "wangbo36", "yangzheng13", "lanhuajian", "weixiang06", "shizhiqiang03",
             "jianghaochen", "fuyu29"
     };
+
     @ConfField(mutable = true)
     public static boolean mt_audit_query_plan = true;
+
     @ConfField
     public static int mt_audit_threads_num = 100;
 

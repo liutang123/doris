@@ -222,11 +222,11 @@ public class ConfigBase {
                 continue;
             }
 
-            setConfigField(f, confVal);
+            anno.callback().newInstance().handle(f, confVal);
         }
     }
 
-    private static void setConfigField(Field f, String confVal) throws Exception {
+    protected static void setConfigField(Field f, String confVal) throws Exception {
         confVal = confVal.trim();
 
         String[] sa = confVal.split(",");
