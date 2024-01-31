@@ -271,6 +271,9 @@ DECLARE_String(metric_log_dir);
 // staging is /var/sankuai/logs/data_doris_staging_loads
 DECLARE_String(loads_log_dir);
 
+// directory for new profile collection
+DECLARE_String(new_profile_log_dir);
+
 // number of threads available to serve backend execution requests
 DECLARE_Int32(be_service_threads);
 

@@ -46,15 +46,25 @@ Status init_metric_log() {
                                config::profile_log_dir + "/profile.log",
                                config::spdlog_file_size,
                                config::spdlog_max_files);
+    std::shared_ptr<spdlog::logger> new_profile_logger = spdlog::rotating_logger_mt("new_profile_logger",
+                               config::new_profile_log_dir + "/profile.log",
+                               config::spdlog_file_size,
+                               config::spdlog_max_files);
 
     // XMD log format: https://km.sankuai.com/page/28116726
     // yyyy-MM-dd HH::mm::ss.SSS host appkey [level] thread logger_name #XMDT#{k1=v1 k2=v2 }#XMDT#
-    std::stringstream pattern;
-    pattern << "%Y-%m-%d %H:%M:%S.%e " << hostname
+    std::stringstream tag_pattern;
+    tag_pattern << "%Y-%m-%d %H:%M:%S.%e " << hostname
             << " null [INFO] %t %n #XMDT#{domain=" << config::mt_domain
             << "%v}#XMDT#"; /// WARN: input one space at the beginning of a log
-    spdlog::set_pattern(pattern.str());
+    spdlog::set_pattern(tag_pattern.str());
     spdlog::flush_every(std::chrono::seconds(3));
+
+    // yyyy-MM-dd HH::mm::ss.SSS host appkey [level] thread logger_name #XMDJ#{"k1": "v1"}#XMDJ#
+    std::stringstream json_pattern;
+    json_pattern << "%Y-%m-%d %H:%M:%S.%e " << hostname
+                 << " null [INFO] %t %n #XMDJ#%v#XMDJ#";
+    new_profile_logger->set_pattern(json_pattern.str());
     return Status::OK();
 }
 
@@ -161,6 +171,11 @@ XMDLog& XMDLog::tag_format_kv(const std::string& key, const std::string& value) 
     put_format_k(_buf, key);
     _buf.put('=');
     put_format_v(_buf, value);
+    return *this;
+}
+
+XMDLog& XMDLog::json(const std::string& json_str) {
+    _buf << json_str;
     return *this;
 }
 

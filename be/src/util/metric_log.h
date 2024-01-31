@@ -77,6 +77,9 @@ public:
     XMDLog& tag_format_k(const std::string& key, const std::string& value);
     XMDLog& tag_format_v(const std::string& key, const std::string& value);
     XMDLog& tag_format_kv(const std::string& key, const std::string& value);
+
+    XMDLog& json(const std::string& json_str);
+
     void log();
 
 private:

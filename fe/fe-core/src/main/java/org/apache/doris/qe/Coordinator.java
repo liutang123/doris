@@ -28,6 +28,7 @@ import org.apache.doris.common.Reference;
 import org.apache.doris.common.Status;
 import org.apache.doris.common.UserException;
 import org.apache.doris.common.profile.ExecutionProfile;
+import org.apache.doris.common.mt.MTAudit;
 import org.apache.doris.common.util.DebugUtil;
 import org.apache.doris.common.util.ListUtil;
 import org.apache.doris.common.util.RuntimeProfile;
@@ -1182,6 +1183,9 @@ public class Coordinator implements CoordInterface {
                     errMsg = operation + " failed. " + exception.getMessage();
                 }
                 queryStatus.setStatus(errMsg);
+                LOG.warn("rpc failed: dest be addr is {}:{}, code is {}",
+                    triple.getLeft().brpcAddr.hostname, triple.getLeft().brpcAddr.port, code);
+                MTAudit.logProfileWhenRpcError(this, code, triple.getLeft().brpcAddr.hostname);
                 cancelInternal(Types.PPlanFragmentCancelReason.INTERNAL_ERROR);
                 switch (code) {
                     case TIMEOUT:
@@ -2727,7 +2731,13 @@ public class Coordinator implements CoordInterface {
         this.databaseName = databaseName;
     }
 
-        // map from a BE host address to the per-node assigned scan ranges;
+    public Backend findBackendByInstance(PlanFragmentId fragmentId, int instanceIdx) {
+        FInstanceExecParam fi = fragmentExecParamsMap.get(fragmentId).instanceExecParams.get(instanceIdx);
+        TNetworkAddress host = fi.host;
+        return idToBackend.get(addressToBackendID.get(host));
+    }
+
+    // map from a BE host address to the per-node assigned scan ranges;
     // records scan range assignment for a single fragment
     static class FragmentScanRangeAssignment
             extends HashMap<TNetworkAddress, Map<Integer, List<TScanRangeParams>>> {

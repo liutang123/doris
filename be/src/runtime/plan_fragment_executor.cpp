@@ -38,6 +38,11 @@
 #include "common/logging.h"
 #include "common/status.h"
 #include "common/version_internal.h"
+
+#include <rapidjson/prettywriter.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
+
 #include "exec/data_sink.h"
 #include "exec/exec_node.h"
 #include "exec/scan_node.h"
@@ -487,6 +492,7 @@ void PlanFragmentExecutor::send_report(bool done) {
 
     if (done) {
         log_report();
+        new_log_report();
     }
 
     if (!_report_status_cb) {
@@ -566,6 +572,85 @@ void PlanFragmentExecutor::log_report() {
         }
         log.log();
     }
+}
+
+void PlanFragmentExecutor::new_log_report() {
+    rapidjson::Document document;
+    document.Parse("{}");
+    rapidjson::Document::AllocatorType& allocator = document.GetAllocator();
+
+    // base node
+    rapidjson::Value main_node(rapidjson::kObjectType);
+
+    // execution profile
+    // query id
+    rapidjson::Value query_id_value(rapidjson::kStringType);
+    std::string query_id_str = print_id(_query_ctx->query_id());
+    query_id_value.SetString(query_id_str.c_str(), query_id_str.length());
+    main_node.AddMember("QueryId", query_id_value, allocator);
+
+    // instance id
+    rapidjson::Value instance_id_value(rapidjson::kStringType);
+    std::string instance_id_str = print_id(runtime_state()->fragment_instance_id());
+    instance_id_value.SetString(instance_id_str.c_str(), instance_id_str.length());
+    main_node.AddMember("InstanceId", instance_id_value, allocator);
+
+    // domain
+    rapidjson::Value domain_value(rapidjson::kStringType);
+    domain_value.SetString(config::mt_domain.c_str(), config::mt_domain.length());
+    main_node.AddMember("Domain", domain_value, allocator);
+
+    new_log_report(*profile(), main_node, allocator);
+    document.AddMember("Query", main_node, allocator);
+
+    // output to log
+    rapidjson::StringBuffer buffer;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+    document.Accept(writer);
+    XMDLog log("new_profile_logger");
+
+    std::string infos = buffer.GetString();
+    log.json(infos);
+    log.log();
+}
+
+void PlanFragmentExecutor::new_log_report(RuntimeProfile& current_profile, rapidjson::Value& parent_node,
+                                          rapidjson::Document::AllocatorType& allocator) {
+    current_profile.compute_time_in_profile();
+    rapidjson::Value current_node(rapidjson::kObjectType);
+
+    // current infos
+    for (const auto& info : current_profile.get_info_strings()) {
+        rapidjson::Value info_key(rapidjson::kStringType);
+        info_key.SetString(info.first.c_str(), info.first.length(), allocator);
+
+        rapidjson::Value info_value(rapidjson::kStringType);
+        info_value.SetString(info.second.c_str(), info.second.length(), allocator);
+
+        current_node.AddMember(info_key, info_value, allocator);
+    }
+
+    // current counters
+    for (const auto& counter : current_profile.get_counters()) {
+        rapidjson::Value counter_key(rapidjson::kStringType);
+        counter_key.SetString(counter.first.c_str(), counter.first.length(), allocator);
+
+        auto value = PrettyPrinter::print(counter.second->value(), counter.second->type());
+        rapidjson::Value counter_value(rapidjson::kStringType);
+        counter_value.SetString(value.c_str(), value.length(), allocator);
+
+        current_node.AddMember(counter_key, counter_value, allocator);
+    }
+
+    // child nodes
+    std::vector<RuntimeProfile*> current_children;
+    current_profile.get_children(&current_children);
+    for (int i = 0; i < current_children.size(); i++) {
+        RuntimeProfile* child_profile = current_children[i];
+        new_log_report(*child_profile, current_node, allocator);
+    }
+
+    parent_node.AddMember(rapidjson::StringRef(current_profile.name().c_str()), current_node, allocator);
 }
 
 void PlanFragmentExecutor::stop_report_thread() {

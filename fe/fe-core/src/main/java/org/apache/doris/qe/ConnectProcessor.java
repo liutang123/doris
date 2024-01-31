@@ -285,6 +285,7 @@ public abstract class ConnectProcessor {
                         if (ctx.getState().getStateType() != MysqlStateType.ERR) {
                             finalizeCommand();
                             MTAudit.logQueryAfterExec(ctx, originStmt, start);
+                            MTAudit.logProfileAfterExec(ctx, originStmt);
                         }
                     }
                 } else if (connectType.equals(ConnectType.ARROW_FLIGHT_SQL)) {
@@ -372,6 +373,7 @@ public abstract class ConnectProcessor {
         auditAfterExec(origStmt, parsedStmt, statistics, true);
         if (start > 0) {
             MTAudit.logQueryAfterExec(ctx, origStmt, start);
+            MTAudit.logProfileAfterExec(ctx, origStmt);
         }
     }
 

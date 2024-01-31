@@ -33,6 +33,8 @@
 #include <string>
 #include <vector>
 
+#include <rapidjson/document.h>
+
 #include "common/status.h"
 #include "runtime/query_context.h"
 #include "runtime/runtime_state.h"
@@ -245,6 +247,11 @@ private:
     void send_report(bool done);
 
     void log_report();
+
+    void new_log_report();
+
+    void new_log_report(RuntimeProfile& runtimeProfile, rapidjson::Value& parent_node,
+                        rapidjson::Document::AllocatorType& allocator);
 
     // Executes open() logic and returns resulting status. Does not set _status.
     // If this plan fragment has no sink, open_internal() does nothing.

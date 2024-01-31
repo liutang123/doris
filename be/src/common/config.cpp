@@ -224,6 +224,9 @@ DEFINE_String(metric_log_dir, "/var/sankuai/logs/data_doris_prod_events");
 // staging is /var/sankuai/logs/data_doris_staging_loads
 DEFINE_String(loads_log_dir, "/var/sankuai/logs/data_doris_prod_loads");
 
+// directory for new profile collection
+DEFINE_String(new_profile_log_dir, "/var/sankuai/logs/data_doris_new_be_profile");
+
 // number of threads available to serve backend execution requests
 DEFINE_Int32(be_service_threads, "64");
 

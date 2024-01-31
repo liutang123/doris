@@ -24,6 +24,7 @@ public enum MTLogger {
 
     DORIS_AUDIT("doris_audit", true),
     DORIS_AUDIT_EVENT("doris_audit_event"),
+    DORIS_PROFILE("doris_new_fe_profile")
     ;
 
     public final String name;

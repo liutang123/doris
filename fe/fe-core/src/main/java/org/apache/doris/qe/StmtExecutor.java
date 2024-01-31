@@ -107,6 +107,7 @@ import org.apache.doris.common.mt.MTAudit;
 import org.apache.doris.common.util.DebugUtil;
 import org.apache.doris.common.util.MetaLockUtils;
 import org.apache.doris.common.util.ProfileManager.ProfileType;
+import org.apache.doris.common.util.QueryPlannerProfile;
 import org.apache.doris.common.util.SqlParserUtils;
 import org.apache.doris.common.util.TimeUtils;
 import org.apache.doris.common.util.Util;
@@ -252,6 +253,8 @@ public class StmtExecutor {
     private static final CommonResultSetMetaData DRY_RUN_QUERY_METADATA = new CommonResultSetMetaData(
             Lists.newArrayList(new Column("ReturnedRows", PrimitiveType.STRING)));
 
+    private QueryPlannerProfile plannerProfile = new QueryPlannerProfile();
+
     // this constructor is mainly for proxy
     public StmtExecutor(ConnectContext context, OriginStatement originStmt, boolean isProxy) {
         Preconditions.checkState(context.getConnectType().equals(ConnectType.MYSQL));
@@ -319,6 +322,10 @@ public class StmtExecutor {
             }
         }
         return row.build();
+    }
+
+    public QueryPlannerProfile getPlannerProfile() {
+        return plannerProfile;
     }
 
     private Map<String, String> getSummaryInfo(boolean isFinished) {
