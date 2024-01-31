@@ -73,6 +73,7 @@ import org.apache.doris.thrift.TPaloNodesInfo;
 import org.apache.doris.thrift.TStorageFormat;
 import org.apache.doris.thrift.TTabletLocation;
 import org.apache.doris.thrift.TUniqueId;
+import org.apache.doris.transaction.DatabaseTransactionMgr;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.HashMultimap;
@@ -498,6 +499,7 @@ public class OlapTableSink extends DataSink {
         TOlapTableLocationParam slaveLocationParam = new TOlapTableLocationParam();
         // BE id -> path hash
         Multimap<Long, Long> allBePathsMap = HashMultimap.create();
+        int replicaNum = 0;
         for (Long partitionId : partitionIds) {
             Partition partition = table.getPartition(partitionId);
             int loadRequiredReplicaNum = table.getLoadRequiredReplicaNum(partition.getId());
@@ -506,7 +508,8 @@ public class OlapTableSink extends DataSink {
                 // otherwise, there will be a 'unknown node id, id=xxx' error for stream load
                 for (Tablet tablet : index.getTablets()) {
                     Multimap<Long, Long> bePathsMap = tablet.getNormalReplicaBackendPathMap();
-                    if (bePathsMap.keySet().size() < loadRequiredReplicaNum) {
+                    List<Long> beIds = Lists.newArrayList(bePathsMap.keySet());
+                    if (beIds.size() < loadRequiredReplicaNum) {
                         throw new UserException(InternalErrorCode.REPLICA_FEW_ERR,
                                 "tablet " + tablet.getId() + " alive replica num " + bePathsMap.keySet().size()
                                         + " < load required replica num " + loadRequiredReplicaNum
@@ -534,6 +537,7 @@ public class OlapTableSink extends DataSink {
                                 Lists.newArrayList(bePathsMap.keySet())));
                     }
                     allBePathsMap.putAll(bePathsMap);
+                    replicaNum += beIds.size();
                 }
             }
         }
@@ -548,6 +552,17 @@ public class OlapTableSink extends DataSink {
         Status st = Env.getCurrentSystemInfo().checkExceedDiskCapacityLimit(allBePathsMap, true);
         if (!st.ok()) {
             throw new DdlException(st.getErrorMsg());
+        }
+
+        long dbId = tDataSink.getOlapTableSink().getDbId();
+        long txnId = tDataSink.getOlapTableSink().getTxnId();
+        try {
+            DatabaseTransactionMgr mgr = Env.getCurrentEnv().getGlobalTransactionMgr().getDatabaseTransactionMgr(dbId);
+            mgr.registerTxnReplicas(txnId, replicaNum);
+        } catch (UserException e) {
+            throw e;
+        } catch (Exception e) {
+            LOG.error("register txn replica failed, txnId={}, dbId={}", txnId, dbId);
         }
         return Arrays.asList(locationParam, slaveLocationParam);
     }

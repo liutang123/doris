@@ -40,6 +40,7 @@ import org.apache.doris.system.Backend;
 import org.apache.doris.system.SystemInfoService;
 import org.apache.doris.transaction.TransactionStatus;
 
+import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.Sets;
@@ -52,6 +53,7 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BinaryOperator;
 import java.util.function.Supplier;
 
 public final class MetricRepo {
@@ -66,6 +68,7 @@ public final class MetricRepo {
 
     public static final String TABLET_NUM = "tablet_num";
     public static final String TABLET_MAX_COMPACTION_SCORE = "tablet_max_compaction_score";
+    public static final String TXN_REPLICA_NUM = "txn_replica_num";
 
     public static LongCounterMetric COUNTER_REQUEST_ALL;
     public static LongCounterMetric COUNTER_QUERY_ALL;
@@ -132,6 +135,12 @@ public final class MetricRepo {
     private static ScheduledThreadPoolExecutor metricTimer = ThreadPoolManager.newDaemonScheduledThreadPool(1,
             "metric-timer-pool", true);
     private static MetricCalculator metricCalculator = new MetricCalculator();
+
+    // MT metrics
+    public static AutoMappedMetric<Histogram> MT_HISTO_DB_QUERY_LATENCY;
+    public static AutoMappedMetric<GaugeMetricImpl<Long>> MT_GAUGE_DB_TXN_REPLICA;
+
+    public static AutoMappedMetric<LongCounterMetric> MT_COUNT_DB_QUERY_TIMEOUT_ERR;
 
     // init() should only be called after catalog is contructed.
     public static synchronized void init() {
@@ -486,6 +495,60 @@ public final class MetricRepo {
                 new LongCounterMetric("thrift_rpc_total", MetricUnit.NOUNIT, ""));
         THRIFT_COUNTER_RPC_LATENCY = addLabeledMetrics("method", () ->
                 new LongCounterMetric("thrift_rpc_latency_ms", MetricUnit.MILLISECONDS, ""));
+
+        // MT metrics
+        GaugeMetric<Long> mtGaugeQueryInstanceMax = new GaugeMetric<Long>("query_instance_max",
+                MetricUnit.NOUNIT, "") {
+            @Override
+            public Long getValue() {
+                try {
+                    return ((QeProcessorImpl) QeProcessorImpl.INSTANCE).getInstancesNumPerUser().values().stream()
+                            .reduce(-1, BinaryOperator.maxBy(Integer::compareTo)).longValue();
+                } catch (Throwable t) {
+                    LOG.warn("[MT] get gauge query_instance_max error", t);
+                    return -2L;
+                }
+            }
+        };
+        GaugeMetric<Long> mtGaugeQueryInstanceTotal = new GaugeMetric<Long>("query_instance_total",
+                MetricUnit.NOUNIT, "") {
+            @Override
+            public Long getValue() {
+                try {
+                    return ((QeProcessorImpl) QeProcessorImpl.INSTANCE).getInstancesNumPerUser().values().stream()
+                            .reduce(0, Integer::sum).longValue();
+                } catch (Throwable t) {
+                    LOG.warn("[MT] get gauge query_instance_max error", t);
+                    return -2L;
+                }
+            }
+        };
+        DORIS_METRIC_REGISTER.addMetrics(mtGaugeQueryInstanceMax);
+        DORIS_METRIC_REGISTER.addMetrics(mtGaugeQueryInstanceTotal);
+
+        GaugeMetric<Long> mtGaugeTxnNum = new GaugeMetric<Long>("txn_num", MetricUnit.NOUNIT, "") {
+            @Override
+            public Long getValue() {
+                return Env.getCurrentEnv().getGlobalTransactionMgr().getAllRunningTxnNum();
+            }
+        };
+        GaugeMetric<Long> mtGaugeTxnReplicaNum = new GaugeMetric<Long>(TXN_REPLICA_NUM, MetricUnit.NOUNIT, "") {
+            @Override
+            public Long getValue() {
+                return Env.getCurrentEnv().getGlobalTransactionMgr().getAllRunningTxnReplicaNum();
+            }
+        };
+        DORIS_METRIC_REGISTER.addMetrics(mtGaugeTxnNum);
+        DORIS_METRIC_REGISTER.addMetrics(mtGaugeTxnReplicaNum);
+        MT_GAUGE_DB_TXN_REPLICA = addLabeledMetrics("db", () ->
+                new GaugeMetricImpl<>(TXN_REPLICA_NUM, MetricUnit.NOUNIT, ""));
+
+        MT_HISTO_DB_QUERY_LATENCY = new AutoMappedMetric<>(name -> {
+            String metricName = MetricRegistry.name("query", "latency", "ms", "db=" + name);
+            return METRIC_REGISTER.histogram(metricName);
+        });
+        MT_COUNT_DB_QUERY_TIMEOUT_ERR = addLabeledMetrics("db", () ->
+            new LongCounterMetric("query_timeout_err_db", MetricUnit.NOUNIT, ""));
 
         // init system metrics
         initSystemMetrics();

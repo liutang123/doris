@@ -740,7 +740,7 @@ public class GlobalTransactionMgr implements Writable {
 
     public long getAllRunningTxnNum() {
         return updateTxnMetric(databaseTransactionMgr -> (long) databaseTransactionMgr.getRunningTxnNum(),
-                MetricRepo.DB_GAUGE_TXN_NUM);
+            MetricRepo.DB_GAUGE_TXN_NUM);
     }
 
     public long getAllPublishTxnNum() {
@@ -783,5 +783,11 @@ public class GlobalTransactionMgr implements Writable {
     public void updateMultiTableRunningTransactionTableIds(Long dbId, Long transactionId, List<Long> tableIds)
             throws AnalysisException {
         getDatabaseTransactionMgr(dbId).updateMultiTableRunningTransactionTableIds(transactionId, tableIds);
+    }
+
+    public long getAllRunningTxnReplicaNum() {
+        return updateTxnMetric(
+            databaseTransactionMgr -> (long) databaseTransactionMgr.getRunningTxnReplicaNum(),
+            MetricRepo.MT_GAUGE_DB_TXN_REPLICA);
     }
 }

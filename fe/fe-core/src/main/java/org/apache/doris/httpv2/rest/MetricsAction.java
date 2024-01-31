@@ -19,6 +19,7 @@ package org.apache.doris.httpv2.rest;
 
 import org.apache.doris.common.Config;
 import org.apache.doris.metric.JsonMetricVisitor;
+import org.apache.doris.metric.MTJsonMetricVisitor;
 import org.apache.doris.metric.MetricRepo;
 import org.apache.doris.metric.MetricVisitor;
 import org.apache.doris.metric.PrometheusMetricVisitor;
@@ -53,6 +54,8 @@ public class MetricsAction extends RestBaseController {
             visitor = new SimpleCoreMetricVisitor();
         } else if (!Strings.isNullOrEmpty(type) && type.equalsIgnoreCase("json")) {
             visitor = new JsonMetricVisitor();
+        } else if (!Strings.isNullOrEmpty(type) && type.equalsIgnoreCase("mt_json")) {
+            visitor = new MTJsonMetricVisitor();
         } else {
             visitor = new PrometheusMetricVisitor();
         }
