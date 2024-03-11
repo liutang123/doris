@@ -31,10 +31,6 @@ build_version_prefix="tencent-cdw-doris"
 build_version_major="1"
 build_version_minor="2"
 build_version_patch="8"
-<<<<<<< HEAD
-build_version_rc_version="rc03"
-=======
->>>>>>> c42afa21f3 ([Tencent] update version to 1.2.8 in gen_build_version.sh.)
 
 # The patch nums for tencent
 user=doris
