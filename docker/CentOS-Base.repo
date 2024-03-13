@@ -1,0 +1,31 @@
+[cuda]
+name=CentOS-$releasever - cuda - mirrors.aliyun.com
+baseurl=http://data-source-yum.sankuai.com/$releasever/release/cuda/$basearch/
+enabled=1
+gpgcheck=0
+metadata_expire=120
+priority=1
+
+[base]
+name=CentOS-$releasever - Base - mirrors.aliyun.com
+baseurl=http://data-source-yum.sankuai.com/$releasever/release/centos/os/$basearch/
+enabled=1
+gpgcheck=0
+metadata_expire=120
+priority=1
+
+[epel]
+name=CentOS-$releasever - Epel - mirrors.aliyun.com
+baseurl=http://data-source-yum.sankuai.com/$releasever/release/epel/$basearch/
+enabled=1
+gpgcheck=0
+metadata_expire=120
+priority=1
+
+[updates]
+name=CentOS-$releasever - Updates - mirrors.aliyun.com
+baseurl=http://data-source-yum.sankuai.com/$releasever/release/centos/updates/$basearch/
+enabled=1
+gpgcheck=0
+metadata_expire=120
+priority=1
