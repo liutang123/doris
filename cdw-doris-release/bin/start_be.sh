@@ -61,6 +61,12 @@ DORIS_HOME="$(
 )"
 export DORIS_HOME
 
+MAX_FILE_COUNT="$(ulimit -n)"
+if [[ "${MAX_FILE_COUNT}" -lt 60000 ]]; then
+    echo "The maximum number of open file descriptors less than 60000, now set to 90000."
+    ulimit -n 90000
+fi
+
 # add java libs
 for f in "${DORIS_HOME}/lib/be"/*.jar; do
     if [[ -z "${DORIS_CLASSPATH}" ]]; then
@@ -243,7 +249,6 @@ else
     LIMIT="/bin/limit3 -c 0 -n 65536"
 fi
 
-ulimit -n 90000
 # limit in 100g
 ulimit -c 107374182400
 
