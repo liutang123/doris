@@ -197,7 +197,10 @@ VExpr::VExpr(TypeDescriptor type, bool is_slotref, bool is_nullable)
 
 Status VExpr::prepare(RuntimeState* state, const RowDescriptor& row_desc, VExprContext* context) {
     ++context->_depth_num;
-    if (context->_depth_num > config::max_depth_of_expr_tree) {
+    if (context->_depth_num > context->_max_depth_num) {
+        context->_max_depth_num = context->_depth_num;
+    }
+    if (config::enable_expr_depth_limit && context->_depth_num > config::max_depth_of_expr_tree) {
         return Status::Error<ErrorCode::EXCEEDED_LIMIT>(
                 "The depth of the expression tree is too big, make it less than {}",
                 config::max_depth_of_expr_tree);

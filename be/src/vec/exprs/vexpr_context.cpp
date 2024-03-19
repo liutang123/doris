@@ -62,6 +62,11 @@ Status VExprContext::prepare(RuntimeState* state, const RowDescriptor& row_desc)
     _prepared = true;
     Status st;
     RETURN_IF_CATCH_EXCEPTION({ st = _root->prepare(state, row_desc, this); });
+    if (_max_depth_num > config::max_depth_of_expr_tree) {
+        LOG(INFO) << "query_id: " << print_id(state->query_id())
+        << ", fragment_id: " << print_id(state->fragment_instance_id())
+        << ", expr_tree_max_depth: " << _max_depth_num;
+    }
     return st;
 }
 

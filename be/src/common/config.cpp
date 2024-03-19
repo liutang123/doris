@@ -1009,6 +1009,9 @@ DEFINE_Int32(num_broadcast_buffer, "32");
 // max depth of expression tree allowed.
 DEFINE_Int32(max_depth_of_expr_tree, "600");
 
+// enable limit on expr depth.
+DEFINE_Bool(enable_expr_depth_limit, "false");
+
 // Report a tablet as bad when io errors occurs more than this value.
 DEFINE_mInt64(max_tablet_io_errors, "-1");
 

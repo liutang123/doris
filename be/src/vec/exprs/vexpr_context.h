@@ -172,6 +172,8 @@ private:
     /// The depth of expression-tree.
     int _depth_num = 0;
 
+    int _max_depth_num = 0;
+
     // This flag only works on VSlotRef.
     // Force to materialize even if the slot need_materialize is false, we just ignore need_materialize flag
     bool _force_materialize_slot = false;

@@ -1048,6 +1048,9 @@ DECLARE_Int32(num_broadcast_buffer);
 // max depth of expression tree allowed.
 DECLARE_Int32(max_depth_of_expr_tree);
 
+// enable limit on expr depth.
+DECLARE_mBool(enable_expr_depth_limit);
+
 // Report a tablet as bad when io errors occurs more than this value.
 DECLARE_mInt64(max_tablet_io_errors);
 
