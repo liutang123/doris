@@ -34,7 +34,7 @@ under the License.
         <fe_ut_parallel>1</fe_ut_parallel>
         <antlr4.version>4.9.3</antlr4.version>
         <awssdk.version>2.20.131</awssdk.version>
-        <huaweiobs.version>3.1.1-hw-46</huaweiobs.version>
+<!--        <huaweiobs.version>3.1.1-hw-46</huaweiobs.version>-->
         <tencentcos.version>3.3.5</tencentcos.version>
     </properties>
     <profiles>
@@ -402,17 +402,17 @@ under the License.
             <groupId>com.amazonaws</groupId>
             <artifactId>aws-java-sdk-logs</artifactId>
         </dependency>
-        <dependency>
-            <groupId>com.huaweicloud</groupId>
-            <artifactId>hadoop-huaweicloud</artifactId>
-            <version>${huaweiobs.version}</version>
-            <exclusions>
-                <exclusion>
-                    <artifactId>jackson-databind</artifactId>
-                    <groupId>com.fasterxml.jackson.core</groupId>
-                </exclusion>
-            </exclusions>
-        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>com.huaweicloud</groupId>-->
+<!--            <artifactId>hadoop-huaweicloud</artifactId>-->
+<!--            <version>${huaweiobs.version}</version>-->
+<!--            <exclusions>-->
+<!--                <exclusion>-->
+<!--                    <artifactId>jackson-databind</artifactId>-->
+<!--                    <groupId>com.fasterxml.jackson.core</groupId>-->
+<!--                </exclusion>-->
+<!--            </exclusions>-->
+<!--        </dependency>-->
         <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-aliyun</artifactId>

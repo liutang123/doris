@@ -42,8 +42,6 @@ import com.google.common.collect.Maps;
 import org.apache.hadoop.fs.aliyun.oss.AliyunOSSFileSystem;
 import org.apache.hadoop.fs.cosn.CosNConfigKeys;
 import org.apache.hadoop.fs.cosn.CosNFileSystem;
-import org.apache.hadoop.fs.obs.OBSConstants;
-import org.apache.hadoop.fs.obs.OBSFileSystem;
 import org.apache.hadoop.fs.s3a.Constants;
 import org.apache.hadoop.fs.s3a.S3AFileSystem;
 import org.apache.hadoop.fs.s3a.TemporaryAWSCredentialsProvider;
@@ -113,7 +111,7 @@ public class PropertyConverter {
      */
     public static Map<String, String> convertToHadoopFSProperties(Map<String, String> props) {
         if (props.containsKey(ObsProperties.ENDPOINT)) {
-            return convertToOBSProperties(props, ObsProperties.getCredential(props));
+            return props; //convertToOBSProperties(props, ObsProperties.getCredential(props));
         } else if (props.containsKey(GCSProperties.ENDPOINT)) {
             return convertToGCSProperties(props, GCSProperties.getCredential(props));
         } else if (props.containsKey(OssProperties.ENDPOINT)) {
@@ -150,7 +148,7 @@ public class PropertyConverter {
             heteroProps.putAll(convertToCOSProperties(copiedProps, credential));
         } else if (s3CliEndpoint.contains(ObsProperties.OBS_PREFIX)) {
             copiedProps.putIfAbsent(ObsProperties.ENDPOINT, s3CliEndpoint);
-            heteroProps.putAll(convertToOBSProperties(copiedProps, credential));
+            // heteroProps.putAll(convertToOBSProperties(copiedProps, credential));
         } else if (s3CliEndpoint.contains(OssProperties.OSS_REGION_PREFIX)) {
             copiedProps.putIfAbsent(OssProperties.ENDPOINT, s3CliEndpoint);
             heteroProps.putAll(convertToOSSProperties(copiedProps, credential));
@@ -159,30 +157,30 @@ public class PropertyConverter {
     }
 
 
-    private static Map<String, String> convertToOBSProperties(Map<String, String> props,
-                                                              CloudCredential credential) {
-        Map<String, String> obsProperties = Maps.newHashMap();
-        obsProperties.put(OBSConstants.ENDPOINT, props.get(ObsProperties.ENDPOINT));
-        obsProperties.put(ObsProperties.FS.IMPL_DISABLE_CACHE, "true");
-        obsProperties.put("fs.obs.impl", getHadoopFSImplByScheme("obs"));
-        if (credential.isWhole()) {
-            obsProperties.put(OBSConstants.ACCESS_KEY, credential.getAccessKey());
-            obsProperties.put(OBSConstants.SECRET_KEY, credential.getSecretKey());
-        }
-        if (credential.isTemporary()) {
-            obsProperties.put(ObsProperties.FS.SESSION_TOKEN, credential.getSessionToken());
-        }
-        for (Map.Entry<String, String> entry : props.entrySet()) {
-            if (entry.getKey().startsWith(ObsProperties.OBS_FS_PREFIX)) {
-                obsProperties.put(entry.getKey(), entry.getValue());
-            }
-        }
-        return obsProperties;
-    }
+//    private static Map<String, String> convertToOBSProperties(Map<String, String> props,
+//                                                              CloudCredential credential) {
+//        Map<String, String> obsProperties = Maps.newHashMap();
+//        obsProperties.put(OBSConstants.ENDPOINT, props.get(ObsProperties.ENDPOINT));
+//        obsProperties.put(ObsProperties.FS.IMPL_DISABLE_CACHE, "true");
+//        obsProperties.put("fs.obs.impl", getHadoopFSImplByScheme("obs"));
+//        if (credential.isWhole()) {
+//            obsProperties.put(OBSConstants.ACCESS_KEY, credential.getAccessKey());
+//            obsProperties.put(OBSConstants.SECRET_KEY, credential.getSecretKey());
+//        }
+//        if (credential.isTemporary()) {
+//            obsProperties.put(ObsProperties.FS.SESSION_TOKEN, credential.getSessionToken());
+//        }
+//        for (Map.Entry<String, String> entry : props.entrySet()) {
+//            if (entry.getKey().startsWith(ObsProperties.OBS_FS_PREFIX)) {
+//                obsProperties.put(entry.getKey(), entry.getValue());
+//            }
+//        }
+//        return obsProperties;
+//    }
 
     public static String getHadoopFSImplByScheme(String fsScheme) {
         if (fsScheme.equalsIgnoreCase("obs")) {
-            return OBSFileSystem.class.getName();
+            return ""; //OBSFileSystem.class.getName();
         } else if (fsScheme.equalsIgnoreCase("oss")) {
             return AliyunOSSFileSystem.class.getName();
         } else if (fsScheme.equalsIgnoreCase("cosn")) {
