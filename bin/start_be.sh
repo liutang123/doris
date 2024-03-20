@@ -20,6 +20,10 @@ set -eo pipefail
 
 curdir="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 
+
+# Only Java8 is supported in BE.
+export JAVA_HOME=/usr/local/java8
+
 MACHINE_OS=$(uname -s)
 if [[ "$(uname -s)" == 'Darwin' ]] && command -v brew &>/dev/null; then
     PATH="$(brew --prefix)/opt/gnu-getopt/bin:${PATH}"
