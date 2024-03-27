@@ -12,7 +12,7 @@ sh_cos_bucket_url="https://cdwch-cos-apps-sh-1305504398.cos.ap-shanghai.myqcloud
 nj_cos_bucket_url="https://cdwch-cos-apps-nj-1305504398.cos.ap-nanjing.myqcloud.com"
 hk_cos_bucket_url="https://cdwch-cos-apps-hk-1305504398.cos.ap-hongkong.myqcloud.com"
 cq_cos_bucket_url="https://cdwch-cos-apps-cq-1305504398.cos.ap-chongqing.myqcloud.com"
-sg_cos_bucket_url="https://cdwch-cos-apps-sp-1305504398.cos.ap-singapore.myqcloud.com"
+sg_cos_bucket_url="https://cdwch-cos-apps-sg-1305504398.cos.ap-singapore.myqcloud.com"
 cd_cos_bucket_url="https://cdwch-cos-apps-cd-1305504398.cos.ap-chengdu.myqcloud.com"
 #
 ################################################################################################################################
