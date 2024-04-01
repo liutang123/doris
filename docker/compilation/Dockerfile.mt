@@ -19,7 +19,7 @@
 # ├── palo
 # │   ├── docker
 # |   |   ├── Dockerfile.mt
-# docker build -t registryonline-hulk.sankuai.com/custom_prod/com.sankuai.dataqa.log.scribesdk/doris_package:build-mt-2.1.0 -f palo/docker/Dockerfile.mt .
+# docker build -t registryonline-hulk.sankuai.com/custom_prod/com.sankuai.dataqa.log.scribesdk/doris_package:build-mt-2.1.0 -f palo/docker/compilation/Dockerfile.mt .
 # 运行
 # docker run -e DISABLE_JAVA_CHECK_STYLE=ON -e JAVA_HOME=/usr/local/java12 -e TZ=Asia/Shanghai -u sankuai -w /home/sankuai/doris --name 210-build --rm -it -v [doris code path]:/home/sankuai/doris \
 # -v ~/.m2:/home/sankuai/.m2 registryonline-hulk.sankuai.com/custom_prod/com.sankuai.dataqa.log.scribesdk/doris_package:build-mt-2.1.0 \
@@ -30,8 +30,10 @@ ENV REPOSITORY_URL=https://s3plus.sankuai.com/v1/mss_aee445ae7aa0438c82eacce6e3f
 ENV DEFAULT_DIR=/var/local
 ENV TP_INSTALL_DIR=${DEFAULT_DIR}/thirdparty/installed
 # clone lastest source code, download and build third party
-COPY palo ${DEFAULT_DIR}/palo
-RUN cp ${DEFAULT_DIR}/palo/docker/CentOS-Base.repo /etc/yum.repos.d
+COPY palo/thirdparty ${DEFAULT_DIR}/palo/thirdparty
+COPY palo/env.sh ${DEFAULT_DIR}/palo/env.sh
+COPY palo/docker/CentOS-Base.repo /etc/yum.repos.d/CentOS-Base.repo
+# RUN cp ${DEFAULT_DIR}/palo/docker/CentOS-Base.repo /etc/yum.repos.d
 RUN cd ${DEFAULT_DIR}/palo && /bin/bash thirdparty/build-thirdparty.mt.sh \
     && rm -rf ${DEFAULT_DIR}/palo
 COPY jdk-12 /usr/local/java12
