@@ -84,6 +84,9 @@ export default async function request(url, options = {}, tipSuccess = false, tip
     }
     const basePath = getBasePath();
     const newOptions = {credentials: 'include', ...options};
+    if(url.includes('login') === false && localStorage.getItem('auth')) {
+        newOptions.headers = {'Authorization': 'Basic ' + localStorage.getItem('auth'), 'ReqTag': 'web', ...newOptions.headers};
+    }
     if (newOptions.method === 'POST' || newOptions.method === 'PUT') {
         newOptions.headers = newOptions.isUpload
             ? {

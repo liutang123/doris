@@ -68,6 +68,7 @@ function Layouts(props: any) {
     function onLogout() {
         logOut().then((res) => {
             localStorage.removeItem('username');
+            localStorage.removeItem('auth');
             clearAllCookie();
             notification.success({ message: t('exitSuccessfully') });
             history.push('/login');

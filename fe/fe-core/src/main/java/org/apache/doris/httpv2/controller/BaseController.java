@@ -62,6 +62,7 @@ public class BaseController {
             HttpServletResponse response, boolean checkAuth) {
         // First we check if the request has Authorization header.
         String encodedAuthString = request.getHeader("Authorization");
+        String tag = request.getHeader("ReqTag");
         if (encodedAuthString != null) {
             // If has Authorization header, check auth info
             ActionAuthorizationInfo authInfo = getAuthorizationInfo(request);
@@ -70,12 +71,12 @@ public class BaseController {
             if (checkAuth) {
                 checkGlobalAuth(currentUser, PrivPredicate.ADMIN_OR_NODE);
             }
-
-            SessionValue value = new SessionValue();
-            value.currentUser = currentUser;
-            value.password = authInfo.password;
-            addSession(request, response, value);
-
+            if (!"web".equals(tag)) {
+                SessionValue value = new SessionValue();
+                value.currentUser = currentUser;
+                value.password = authInfo.password;
+                addSession(request, response, value);
+            }
             ConnectContext ctx = new ConnectContext();
             ctx.setQualifiedUser(authInfo.fullUserName);
             ctx.setRemoteIP(authInfo.remoteIp);

@@ -50,7 +50,9 @@ function Login(){
             if(res.code===200){
                 history.push('/home');
                 localStorage.setItem('username', username)
-            } 
+                const auth = btoa(values.username + ':' + values.password)
+                localStorage.setItem('auth', auth)
+            }
         });
     };
 
