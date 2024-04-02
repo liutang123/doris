@@ -37,6 +37,7 @@ import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.List;
 
 // MySQL protocol util
@@ -81,6 +82,11 @@ public class MysqlProto {
         String[] strList = tmpUser.split("#", 2);
         if (strList.length > 1) {
             tmpUser = strList[0];
+        }
+        String[] strings = tmpUser.split("@");
+        if (strings.length > 1) {
+            LOG.info("parseUser strings={}", Arrays.asList(strings).toString());
+            tmpUser = strings[0];
         }
 
         context.setQualifiedUser(tmpUser);
