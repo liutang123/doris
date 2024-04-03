@@ -302,6 +302,7 @@ public abstract class ConnectProcessor {
                         break;
                     }
                 }
+                MTAudit.logQueryAfterExec(ctx, originStmt, start);
                 auditAfterExec(auditStmt, executor.getParsedStmt(), executor.getQueryStatisticsForAuditLog(),
                         true);
                 // execute failed, skip remaining stmts
