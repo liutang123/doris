@@ -22,7 +22,7 @@ import org.slf4j.LoggerFactory;
 
 public enum MTLogger {
 
-    DORIS_AUDIT("doris_audit", true),
+    DORIS_AUDIT("doris_audit"),
     DORIS_AUDIT_EVENT("doris_audit_event"),
     DORIS_PROFILE("doris_new_fe_profile"),
     DORIS_AUDIT_AGENT_TASK("doris_audit_agent_task"),
