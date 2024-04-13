@@ -296,6 +296,9 @@ upgrade_doris() {
     2.0)
         cos_subdir="2.0"
         ;;
+    2.1)
+        cos_subdir="2.1"
+        ;;
     *)
         error_on_rollback "Cannot figure out the cos subdir for unknown ${new_version}!"
         exit 1
