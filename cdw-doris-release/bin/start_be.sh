@@ -189,11 +189,6 @@ setup_java_env() {
     fi
 }
 
-# prepare jvm if needed
-JAVA_HOME=/usr/local/jdk
-export JAVA_HOME
-setup_java_env || true
-
 # set odbc conf path
 export ODBCSYSINI="${DORIS_HOME}/conf"
 
@@ -227,6 +222,11 @@ log() {
   echo "$@" >> $LOG_DIR/be.out
   echo "$@"
 }
+
+# prepare jvm if needed
+JAVA_HOME=/usr/local/jdk
+export JAVA_HOME
+setup_java_env || true
 
 if [[ "$(uname -s)" != 'Darwin' ]]; then
     MAX_MAP_COUNT="$(cat /proc/sys/vm/max_map_count)"
