@@ -243,9 +243,9 @@ for var in http_proxy HTTP_PROXY https_proxy HTTPS_PROXY; do
     fi
 done
 
-# From 1.2, it must be start FE by non-root.
+# From 1.2, it must be start BE by non-root.
 if [ `whoami` = "root" ];then
-  log "[ERROR] You cannot start FE by root, please change user to doris and retry..."
+  log "[ERROR] You cannot start BE by root, please change user to doris and retry..."
   exit 3
 fi
 

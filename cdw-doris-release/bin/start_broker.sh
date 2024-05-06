@@ -78,9 +78,9 @@ log() {
   echo "$@"
 }
 
-# From 1.2, it must be start by non-root.
+# From 1.2, it must be start BROKER by non-root.
 if [ `whoami` = "root" ];then
-  log "[ERROR] You cannot start FE by root, please change user to doris and retry..." 
+  log "[ERROR] You cannot start BROKER by root, please change user to doris and retry..." 
   exit 2
 fi
 
