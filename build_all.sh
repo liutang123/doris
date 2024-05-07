@@ -16,3 +16,11 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
+# build and install audit loader plugin
+# avoid cannnot find symbal issue
+cd  ${WORK_DIR}/fe
+mvn install -DskipTests=true
+
+cd ${WORK_DIR}/fe_plugins/auditloader
+sh build.sh
+cd -
