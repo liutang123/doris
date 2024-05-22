@@ -156,7 +156,7 @@ show_release_info() {
   echo ""
   echo "****************** release infomation ******************"
   echo "Version:"
-  echo "${doris_version_string}"
+  echo $(${workDir}/doris/lib/be/doris_be --version)
   echo "MD5 info:"
   cd ${workDir}
   md5sum "${doris_tar}"
