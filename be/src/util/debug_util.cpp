@@ -66,6 +66,11 @@ std::string get_build_version(bool compact) {
 #endif
 #ifdef NDEBUG
        << " RELEASE"
+#if defined(USE_JEMALLOC)
+       << " with JEMALLOC"
+#else
+       << " with TCMALLOC"
+#endif
 #else
        << " DEBUG"
 #if defined(ADDRESS_SANITIZER)
