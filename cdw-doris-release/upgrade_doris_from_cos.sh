@@ -14,6 +14,21 @@ hk_cos_bucket_url="https://cdwch-cos-apps-hk-1305504398.cos.ap-hongkong.myqcloud
 cq_cos_bucket_url="https://cdwch-cos-apps-cq-1305504398.cos.ap-chongqing.myqcloud.com"
 sg_cos_bucket_url="https://cdwch-cos-apps-sg-1305504398.cos.ap-singapore.myqcloud.com"
 cd_cos_bucket_url="https://cdwch-cos-apps-cd-1305504398.cos.ap-chengdu.myqcloud.com"
+bjjr_cos_bucket_url="https://cdwch-cos-apps-bjjr-1305504398.cos.ap-beijing-fsi.myqcloud.com"
+jkt_cos_bucket_url="https://cdwch-cos-apps-jkt-1305504398.cos.ap-jakarta.myqcloud.com"
+szjr_cos_bucket_url="https://cdwch-cos-apps-szjr-1305504398.cos.ap-shenzhen-fsi.myqcloud.com"
+us_cos_bucket_url="https://cdwch-cos-apps-us-1305504398.cos.na-siliconvalley.myqcloud.com"
+use_cos_bucket_url="https://cdwch-cos-apps-use-1305504398.cos.na-ashburn.myqcloud.com"
+shjr_cos_bucket_url="https://cdwch-cos-apps-shjr-1305504398.cos.ap-shanghai-fsi.myqcloud.com"
+eu_cos_bucket_url="https://cdwch-cos-apps-eu-1305504398.cos.eu-frankfurt.myqcloud.com"
+jp_cos_bucket_url="https://cdwch-cos-apps-jp-1305504398.cos.ap-tokyo.myqcloud.com"
+kr_cos_bucket_url="https://cdwch-cos-apps-kr-1305504398.cos.ap-seoul.myqcloud.com"
+mu_cos_bucket_url="https://cdwch-cos-apps-mu-1305504398.cos.ap-mumbai.myqcloud.com"
+sao_cos_bucket_url="https://cdwch-cos-apps-sao-1305504398.cos.sa-saopaulo.myqcloud.com"
+th_cos_bucket_url="https://cdwch-cos-apps-th-1305504398.cos.ap-bangkok.myqcloud.com"
+ca_cos_bucket_url="https://cdwch-cos-apps-ca-1305504398.cos.na-toronto.myqcloud.com"
+tb_cos_bucket_url="https://cdwch-cos-apps-tb-1305504398.cos.ap-taipei.myqcloud.com"
+tpe_cos_bucket_url="https://cdwch-cos-apps-tpe-1305504398.cos.ap-taipei.myqcloud.com"
 #
 ################################################################################################################################
 
@@ -374,11 +389,11 @@ upgrade_doris() {
   log "[INFO] copy ${untar_work_dir}/doris to ${dest_dir} ok."
 
   # restore conf files
-  log "[INFO] restore old conf and plugins."
+  log "[INFO] restore old conf of be, fe."
   rm -fr ${dest_dir}/conf
   cp -a ${backupDir}/doris/conf ${dest_dir}
-  rm -fr ${dest_dir}/plugins
-  cp -fr ${backupDir}/doris/plugins ${dest_dir}
+  log "[INFO] restore old conf of audit loader plugin."
+  cp -f "${backupDir}/doris/plugins/AuditLoader/plugin.conf" "${dest_dir}/plugins/AuditLoader"
 
   # restore keytab file if exists
   if ls ${backupDir}/doris/*.keytab &> /dev/null; then
@@ -721,6 +736,51 @@ init() {
     ;;
     cd|chengdu)
     cos_bucket_url=${cd_cos_bucket_url}
+    ;;
+    bjjr|beijingjr)
+    cos_bucket_url=${bjjr_cos_bucket_url}
+    ;;
+    jkt|jakarta)
+    cos_bucket_url=${jkt_cos_bucket_url}
+    ;;
+    szjr|shenzhenjr)
+    cos_bucket_url=${szjr_cos_bucket_url}
+    ;;
+    us|siliconvalley)
+    cos_bucket_url=${us_cos_bucket_url}
+    ;;
+    use|ashburn)
+    cos_bucket_url=${use_cos_bucket_url}
+    ;;
+    shjr|shanghaijr)
+    cos_bucket_url=${shjr_cos_bucket_url}
+    ;;
+    eu|frankfurt)
+    cos_bucket_url=${eu_cos_bucket_url}
+    ;;
+    jp|tokyo)
+    cos_bucket_url=${jp_cos_bucket_url}
+    ;;
+    kr|seoul)
+    cos_bucket_url=${kr_cos_bucket_url}
+    ;;
+    mu|mumbai)
+    cos_bucket_url=${mu_cos_bucket_url}
+    ;;
+    sao|saopaulo)
+    cos_bucket_url=${sao_cos_bucket_url}
+    ;;
+    th|bangkok)
+    cos_bucket_url=${th_cos_bucket_url}
+    ;;
+    ca|toronto)
+    cos_bucket_url=${ca_cos_bucket_url}
+    ;;
+    tb|tp|taipei)
+    cos_bucket_url=${tb_cos_bucket_url}
+    ;;
+    tpe|tbe|taipeie)
+    cos_bucket_url=${tpe_cos_bucket_url}
     ;;
     -r|rollback)
     execute_mode="ROLLBACK"
