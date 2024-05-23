@@ -189,13 +189,21 @@ show_release_info() {
 
 show_git_log_message() {
   SKIP_LINE_NUM=0
-  git log -5 --skip=$SKIP_LINE_NUM --date=format:'[%Y-%m-%d %H:%M:%S]' --pretty=format:"%ad [%an] %s"
+  git log -10 --skip=$SKIP_LINE_NUM --date=format:'[%Y-%m-%d %H:%M:%S]' --pretty=format:"%ad [%an] %s"
   echo "..."
   SKIP_LINE_NUM=$(git log --oneline | egrep -c -w "^[^[:space:]]+\s+\[Tencent\]")
-  git log -5 --skip=$SKIP_LINE_NUM --date=format:'[%Y-%m-%d %H:%M:%S]' --pretty=format:"%ad [%an] %s"
+  git log -10 --skip=$SKIP_LINE_NUM --date=format:'[%Y-%m-%d %H:%M:%S]' --pretty=format:"%ad [%an] %s"
+}
+
+create_and_push_new_branch() {
+  local current_version=$(git branch --show-current)
+  git checkout -b ${doris_version_string}
+  git push tencent_origin ${doris_version_string}
+  git checkout ${current_version}
 }
 
 init $@
 package_and_deploy_to_cos
 show_release_info || true
 show_git_log_message || true
+create_and_push_new_branch || true
