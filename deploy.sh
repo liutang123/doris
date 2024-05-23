@@ -105,7 +105,7 @@ if [[ ! -f ${version_file} ]]; then
   log "[ERROR] failed to find version.txt in ${cur_dir}"
   exit 1
 fi
-version_str=$(cat ${version_file})
+read -r dump1 dump2 version_str < $version_file
 cp -f "${version_file}" "${dest_dir}"
 log "[INFO] success to get version string is ${version_str}."
 

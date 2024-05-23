@@ -49,7 +49,7 @@ init() {
   fi
 
   # now init global variables
-  doris_version_string=$(cat ${version_file})
+  read -r dump1 dump2 doris_version_string < $version_file
   doris_tar="${doris_version_string}.tar.gz"
   doris_tar_sha="${doris_tar}.sha512"
   doris_be_without_strip_tar="${doris_version_string}-doris_be.tar.gz"

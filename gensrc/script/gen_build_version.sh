@@ -62,17 +62,28 @@ fi
 
 cd "${DORIS_HOME}"
 
-if [[ -d '.git' ]]; then
-    revision="$(git log -1 --pretty=format:"%H")"
-    short_revision="$(git log -1 --pretty=format:"%h")"
-    url="git://${hostname}"
-else
-    revision="Unknown"
-    short_revision="${revision}"
-    url="file://${hostname}"
-fi
+function generate_short_version() {
+    date_str=$(date +"%y%m%d")
+    version_file_path="${DORIS_HOME}/cdw-doris-release/doris/version.txt"
+    if [ -f $version_file_path ]; then
+      read -r file_date counter dump < $version_file_path
+      if [ "$file_date" != "$date_str" ]; then
+          counter=0
+      fi
+    fi
 
-echo "${build_version}-${short_revision}" > "${DORIS_HOME}/version.txt"
+    counter=$((counter + 1))
+    if [ $counter -eq 10 ]; then
+        counter=0
+    fi
+
+    revision="$date_str$counter"
+    short_revision="${revision}"
+    echo "$date_str $counter ${build_version}-${short_revision}" > "${DORIS_HOME}/version.txt"
+}
+
+generate_short_version
+url="file://${hostname}"
 
 cd "${cwd}"
 
