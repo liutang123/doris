@@ -30,7 +30,7 @@ set -eo pipefail
 build_version_prefix="tencent-cdw-doris"
 build_version_major="1"
 build_version_minor="2"
-build_version_patch="8"
+build_version_patch="9"
 
 # The patch nums for tencent
 user=doris
