@@ -35,7 +35,7 @@ build_version_patch="7"
 # The patch nums for tencent
 user=doris
 SKIP_LINE_NUM=$(git log --oneline | egrep -c -w "^[^[:space:]]+\s+\[Tencent\]")
-build_version_rc_version="$(git log -1 --skip=$SKIP_LINE_NUM --pretty=format:"%h")"
+build_version_rc_version="$(git log -1 --abbrev=7 --skip=$SKIP_LINE_NUM --pretty=format:"%h")"
 build_version="${build_version_prefix}-${build_version_major}.${build_version_minor}.${build_version_patch}-${build_version_rc_version}"
 
 # This version is used to check FeMetaVersion is not changed during release
