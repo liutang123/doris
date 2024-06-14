@@ -641,7 +641,7 @@ DEFINE_Int32(num_cores, "0");
 
 // When BE start, If there is a broken disk, BE process will exit by default.
 // Otherwise, we will ignore the broken disk,
-DEFINE_Bool(ignore_broken_disk, "false");
+DEFINE_Bool(ignore_broken_disk, "true");
 
 // Sleep time in milliseconds between memory maintenance iterations
 DEFINE_mInt32(memory_maintenance_sleep_time_ms, "100");
@@ -1272,7 +1272,7 @@ DEFINE_mDouble(high_disk_avail_level_diff_usages, "0.15");
 // create tablet in partition random robin idx lru size, default 10000
 DEFINE_Int32(partition_disk_index_lru_size, "10000");
 // limit the storage space that query spill files can use
-DEFINE_String(spill_storage_root_path, "");
+DEFINE_String(spill_storage_root_path, "${DORIS_HOME}/storage");
 DEFINE_String(spill_storage_limit, "20%");    // 20%
 DEFINE_mInt32(spill_gc_interval_ms, "2000");  // 2s
 DEFINE_mInt32(spill_gc_work_time_ms, "2000"); // 2s
