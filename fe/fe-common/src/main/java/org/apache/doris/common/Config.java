@@ -2932,4 +2932,7 @@ public class Config extends ConfigBase {
             "For testing purposes, all queries are forcibly forwarded to the master to verify"
                     + "the behavior of forwarding queries."})
     public static boolean force_forward_all_queries = false;
+    
+    @ConfField(mutable = true, masterOnly = true, description = {})
+    public static boolean ignore_cool_down_time_check = true;
 }
