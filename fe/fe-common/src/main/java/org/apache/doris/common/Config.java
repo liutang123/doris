@@ -3396,4 +3396,7 @@ public class Config extends ConfigBase {
     @ConfField(mutable = true, description = {"Prometheus 输出表维度指标的个数限制",
             "Prometheus output table dimension metric count limit"})
     public static int prom_output_table_metrics_limit = 10000;
+
+    @ConfField(mutable = true, masterOnly = true, description = {})
+    public static boolean ignore_cool_down_time_check = true;
 }
