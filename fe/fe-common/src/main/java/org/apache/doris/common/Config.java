@@ -2072,5 +2072,8 @@ public class Config extends ConfigBase {
      */
     @ConfField(mutable = true)
     public static int sample_log_rate = 10;
+
+    @ConfField(mutable = true)
+    public static boolean enable_merge_on_write_table = false;
 }
 

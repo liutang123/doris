@@ -314,6 +314,9 @@ public class CreateTableStmt extends DdlStmt {
         if (properties != null) {
             enableUniqueKeyMergeOnWrite = PropertyAnalyzer.analyzeUniqueKeyMergeOnWrite(new HashMap<>(properties));
         }
+        if (enableUniqueKeyMergeOnWrite && !Config.enable_merge_on_write_table) {
+            throw new AnalysisException("Merge-on-Write table is an experimental feature, does not supported now");
+        }
         //pre-block creation with column type ALL
         for (ColumnDef columnDef : columnDefs) {
             if (Objects.equals(columnDef.getType(), Type.ALL)) {
