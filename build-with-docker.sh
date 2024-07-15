@@ -7,7 +7,11 @@ systemctl start docker
 docker pull apache/doris:build-env-ldb-toolchain-latest
 
 # clean running docker avoid conflict
-docker rm -f $(docker ps -a -q)
+#docker rm -f $(docker ps -a -q)
+CONTAINER_IDS=$(docker ps -a -q)
+if [ -n "$CONTAINER_IDS" ]; then
+  docker rm -f $CONTAINER_IDS
+fi
 
 # build
 docker run -v ${WORK_DIR}/.m2:/root/.m2 -v ${WORK_DIR}/:/root  --name doris-2.x apache/doris:build-env-ldb-toolchain-latest /bin/bash -c /root/build_all.sh
