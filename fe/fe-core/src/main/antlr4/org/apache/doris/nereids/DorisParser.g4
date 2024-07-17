@@ -96,6 +96,7 @@ materializedViewStatement
         | (SET  LEFT_PAREN fileProperties=propertyItemList RIGHT_PAREN))                        #alterMTMV
     | DROP MATERIALIZED VIEW (IF EXISTS)? mvName=multipartIdentifier
         (ON tableName=multipartIdentifier)?                                                     #dropMTMV
+    | DROP DATA MASK POLICY (IF EXISTS)? name=identifier                  #dropDataMaskPolicy
     | PAUSE MATERIALIZED VIEW JOB ON mvName=multipartIdentifier                                 #pauseMTMV
     | RESUME MATERIALIZED VIEW JOB ON mvName=multipartIdentifier                                #resumeMTMV
     | CANCEL MATERIALIZED VIEW TASK taskId=INTEGER_VALUE ON mvName=multipartIdentifier          #cancelMTMVTask
@@ -119,6 +120,7 @@ constraintStatement
     | ALTER TABLE table=multipartIdentifier
         DROP CONSTRAINT constraintName=errorCapturingIdentifier           #dropConstraint
     | SHOW CONSTRAINTS FROM table=multipartIdentifier                     #showConstraint
+    | SHOW DATA MASK POLICY (FOR (user=userIdentify | ROLE roleName=identifier))? #showDataMaskPolicy
     ;
 
 supportedDmlStatement
@@ -174,6 +176,10 @@ supportedCreateStatement
         AS type=(RESTRICTIVE | PERMISSIVE)
         TO (user=userIdentify | ROLE roleName=identifier)
         USING LEFT_PAREN booleanExpression RIGHT_PAREN                 #createRowPolicy
+    | CREATE DATA MASK POLICY (IF NOT EXISTS)? name=identifier
+        ON column=multipartIdentifier
+        TO (user=userIdentify | ROLE roleName=identifier) 
+        USING dataMaskType=identifier                                  #createDataMaskPolicy
     ;
 
 supportedAlterStatement
@@ -1901,6 +1907,7 @@ nonReserved
     | LOGICAL
     | MANUAL
     | MAP
+    | MASK
     | MATCH_ALL
     | MATCH_ANY
     | MATCH_PHRASE
