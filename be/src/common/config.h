@@ -419,6 +419,17 @@ DECLARE_Int32(min_file_descriptor_number);
 DECLARE_mBool(disable_segment_cache);
 DECLARE_String(row_cache_mem_limit);
 
+// detail: https://tapd.woa.com/70113988/prong/stories/view/1070113988118017848
+// memory limit for write column data page or index data page size.
+// Default value is 64K, recommended value is 512K or 1M, values above 1M are not recommended.
+DECLARE_mInt32(column_data_page_size);
+// memory limit for write dict coding page size.
+// Default value is 1M, maybe can set 2M or 4M for some case. values above 4M are not recommended.
+DECLARE_mInt32(dict_page_size);
+// memory limit for ordinal index page size.
+// Default value is 64K.if need, can set 128K or 256K, values above 1M are not recommended.
+DECLARE_mInt32(index_page_size);
+
 // Cache for storage page size
 DECLARE_String(storage_page_cache_limit);
 // Shard size for page cache, the value must be power of two.

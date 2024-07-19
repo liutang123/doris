@@ -22,14 +22,14 @@
 namespace doris {
 namespace segment_v2 {
 
-static constexpr size_t DEFAULT_PAGE_SIZE = 1024 * 1024; // default size: 1M
+//static constexpr size_t DEFAULT_PAGE_SIZE = 1024 * 1024; // default size: 1M
 
 constexpr long ROW_STORE_PAGE_SIZE_DEFAULT_VALUE = 16384; // default row column page size: 16KB
 
 struct PageBuilderOptions {
-    size_t data_page_size = DEFAULT_PAGE_SIZE;
+    size_t data_page_size = config::column_data_page_size;
 
-    size_t dict_page_size = DEFAULT_PAGE_SIZE;
+    size_t dict_page_size = config::dict_page_size;
 
     bool need_check_bitmap = true;
 

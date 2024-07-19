@@ -375,6 +375,16 @@ DEFINE_Int32(min_file_descriptor_number, "60000");
 DEFINE_mBool(disable_segment_cache, "false");
 DEFINE_String(row_cache_mem_limit, "20%");
 
+DEFINE_mInt32(column_data_page_size, "65536");
+DEFINE_Validator(column_data_page_size,
+                [](const int config) -> bool { return config >= 4096 && config <= 1073741824; });
+DEFINE_mInt32(dict_page_size, "1048576");
+DEFINE_Validator(dict_page_size,
+                [](const int config) -> bool { return config >= 4096 && config <= 1073741824; });
+DEFINE_mInt32(index_page_size, "65536");
+DEFINE_Validator(index_page_size,
+                [](const int config) -> bool { return config >= 4096 && config <= 1073741824; });
+
 // Cache for storage page size
 DEFINE_String(storage_page_cache_limit, "20%");
 // Shard size for page cache, the value must be power of two.
