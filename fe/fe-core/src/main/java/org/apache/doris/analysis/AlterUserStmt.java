@@ -20,6 +20,7 @@ package org.apache.doris.analysis;
 import org.apache.doris.catalog.Env;
 import org.apache.doris.cluster.ClusterNamespace;
 import org.apache.doris.common.AnalysisException;
+import org.apache.doris.common.Config;
 import org.apache.doris.common.ErrorCode;
 import org.apache.doris.common.ErrorReport;
 import org.apache.doris.common.UserException;
@@ -104,6 +105,12 @@ public class AlterUserStmt extends DdlStmt {
     @Override
     public void analyze(Analyzer analyzer) throws UserException {
         super.analyze(analyzer);
+
+        if (ConnectContext.get() != null && !ConnectContext.get().getUserIdentity().isRootUser()
+                && Config.disable_manage_user) {
+            throw new AnalysisException("Reject alter user. contact the administrator if you have any questions");
+        }
+
         userDesc.getUserIdent().analyze();
         userDesc.getPassVar().analyze();
 

@@ -35,6 +35,9 @@ public class FeNameFormat {
     private static final String UNDERSCORE_COMMON_NAME_REGEX = "^[_a-zA-Z][a-zA-Z0-9-_]{0,63}$";
     private static final String TABLE_NAME_REGEX = "^[a-zA-Z][a-zA-Z0-9-_]*$";
     private static final String USER_NAME_REGEX = "^[a-zA-Z][a-zA-Z0-9.-_]*$";
+
+    private static final String CAM_USER_NAME_REGEX = "^[0-9a-zA-Z\\+\\=,\\.\\@\\-\\_]{1,64}$";
+
     private static final String COLUMN_NAME_REGEX = "^[_a-zA-Z@0-9\\s/][.a-zA-Z0-9_+-/?@#$%^&*\"\\s,:]{0,255}$";
     private static final String REPOSITORY_NAME_REGEX = "^[a-zA-Z][a-zA-Z0-9-_]{0,255}$";
 
@@ -190,6 +193,8 @@ public class FeNameFormat {
     public static String getUserNameRegex() {
         if (FeNameFormat.isEnableUnicodeNameSupport()) {
             return UNICODE_USER_NAME_REGEX;
+        } else if (Config.enable_cam_system) {
+            return CAM_USER_NAME_REGEX;
         } else {
             return USER_NAME_REGEX;
         }

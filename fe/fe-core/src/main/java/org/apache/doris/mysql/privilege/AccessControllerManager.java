@@ -145,7 +145,8 @@ public class AccessControllerManager {
         boolean hasGlobal = checkGlobalPriv(currentUser, wanted);
         // for checking catalog priv, always use InternalAccessController.
         // because catalog priv is only saved in InternalAccessController.
-        return defaultAccessController.checkCtlPriv(hasGlobal, currentUser, ctl, wanted);
+        CatalogAccessController accessController = getAccessControllerOrDefault(ctl);
+        return accessController.checkCtlPriv(hasGlobal, currentUser, ctl, wanted);
     }
 
     // ==== Database ====

@@ -1149,6 +1149,15 @@ public class Auth implements Writable {
         }
     }
 
+    public String getCamGroups(String qualifiedUser) {
+        readLock();
+        try {
+            return propertyMgr.getCamGroups(qualifiedUser);
+        } finally {
+            readUnlock();
+        }
+    }
+
     public Pair<Boolean, String> isWorkloadGroupInUse(String groupName) {
         readLock();
         try {

@@ -110,7 +110,6 @@ public class RangerHiveAccessController extends RangerAccessController {
             RangerHiveResource resource) {
         RangerAccessRequestImpl request = createRequest(currentUser, accessType);
         request.setResource(resource);
-
         RangerAccessResult result = hivePlugin.isAccessAllowed(request, auditHandler);
         return checkRequestResult(request, result, accessType.name());
     }

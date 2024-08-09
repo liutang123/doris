@@ -56,6 +56,11 @@ public class DropUserStmt extends DdlStmt {
     public void analyze(Analyzer analyzer) throws AnalysisException, UserException {
         super.analyze(analyzer);
 
+        if (ConnectContext.get() != null && !ConnectContext.get().getUserIdentity().isRootUser()
+                && Config.disable_manage_user) {
+            throw new AnalysisException("Reject drop user. contact the administrator if you have any questions");
+        }
+
         if (Config.access_controller_type.equalsIgnoreCase("ranger-doris")
                 && AuthenticateType.getAuthTypeConfig() == AuthenticateType.LDAP) {
             throw new AnalysisException("Drop user is prohibited when Ranger and LDAP are enabled at same time.");

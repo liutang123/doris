@@ -203,6 +203,16 @@ public class UserPropertyMgr implements Writable {
         return existProperty.getWorkloadGroup();
     }
 
+    public String getCamGroups(String qualifiedUser) {
+        UserProperty existProperty = propertyMap.get(qualifiedUser);
+        existProperty = getLdapPropertyIfNull(qualifiedUser, existProperty);
+        if (existProperty == null) {
+            return null;
+        }
+        return existProperty.getCamGroups();
+    }
+
+
     public Pair<Boolean, String> isWorkloadGroupInUse(String groupName) {
         for (Entry<String, UserProperty> entry : propertyMap.entrySet()) {
             if (entry.getValue().getWorkloadGroup().equals(groupName)) {

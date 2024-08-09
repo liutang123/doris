@@ -21,6 +21,8 @@ import org.apache.doris.analysis.UserIdentity;
 import org.apache.doris.nereids.parser.NereidsParser;
 import org.apache.doris.nereids.trees.expressions.Expression;
 import org.apache.doris.nereids.trees.expressions.Slot;
+import org.apache.doris.nereids.trees.expressions.literal.StringLiteral;
+import org.apache.doris.policy.DataMaskType;
 
 public class RangerDataMaskPolicy implements DataMaskPolicy {
     private UserIdentity userIdentity;
@@ -30,12 +32,12 @@ public class RangerDataMaskPolicy implements DataMaskPolicy {
     private String col;
     private long policyId;
     private long policyVersion;
-    private String maskType;
+    private DataMaskType maskType;
     private String maskTypeDef;
 
     public RangerDataMaskPolicy(UserIdentity userIdentity, String ctl, String db, String tbl, String col,
             long policyId,
-            long policyVersion, String maskType, String maskTypeDef) {
+            long policyVersion, DataMaskType maskType, String maskTypeDef) {
         this.userIdentity = userIdentity;
         this.ctl = ctl;
         this.db = db;
@@ -75,7 +77,7 @@ public class RangerDataMaskPolicy implements DataMaskPolicy {
         return policyVersion;
     }
 
-    public String getMaskType() {
+    public DataMaskType getMaskType() {
         return maskType;
     }
 
@@ -91,6 +93,9 @@ public class RangerDataMaskPolicy implements DataMaskPolicy {
 
     @Override
     public Expression parseMaskTypeDef(NereidsParser parser, Slot slot) {
+        if (maskType == DataMaskType.MASK_DEFAULT) {
+            return StringLiteral.of(getDataTypeDefaultValue(slot));
+        }
         return parser.parseExpression(getMaskTypeDef());
     }
 

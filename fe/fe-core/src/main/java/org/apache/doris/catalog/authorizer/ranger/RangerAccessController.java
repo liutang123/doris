@@ -25,6 +25,7 @@ import org.apache.doris.mysql.privilege.DataMaskPolicy;
 import org.apache.doris.mysql.privilege.RangerDataMaskPolicy;
 import org.apache.doris.mysql.privilege.RangerRowFilterPolicy;
 import org.apache.doris.mysql.privilege.RowFilterPolicy;
+import org.apache.doris.policy.DataMaskType;
 
 import com.google.common.collect.Lists;
 import org.apache.commons.lang3.StringUtils;
@@ -142,26 +143,27 @@ public abstract class RangerAccessController implements CatalogAccessController 
         if (StringUtils.isEmpty(maskType)) {
             return Optional.empty();
         }
-        switch (maskType) {
-            case "MASK_NULL":
+        DataMaskType type = DataMaskType.valueOf(maskType);
+        switch (type) {
+            case MASK_NULL:
                 return Optional.of(new RangerDataMaskPolicy(currentUser, ctl, db, tbl, col, policy.getPolicyId(),
-                        policy.getPolicyVersion(), maskType, "NULL"));
-            case "MASK_NONE":
+                    policy.getPolicyVersion(), DataMaskType.MASK_NULL, "NULL"));
+            case MASK:
                 return Optional.empty();
-            case "CUSTOM":
+            case CUSTOM:
                 String maskedValue = policy.getMaskedValue();
                 if (StringUtils.isEmpty(maskedValue)) {
                     return Optional.empty();
                 }
                 return Optional.of(new RangerDataMaskPolicy(currentUser, ctl, db, tbl, col, policy.getPolicyId(),
-                        policy.getPolicyVersion(), maskType, maskedValue.replace("{col}", col)));
+                    policy.getPolicyVersion(), DataMaskType.CUSTOM, maskedValue.replace("{col}", col)));
             default:
                 String transformer = policy.getMaskTypeDef().getTransformer();
                 if (StringUtils.isEmpty(transformer)) {
                     return Optional.empty();
                 }
                 return Optional.of(new RangerDataMaskPolicy(currentUser, ctl, db, tbl, col, policy.getPolicyId(),
-                        policy.getPolicyVersion(), maskType, transformer.replace("{col}", col)));
+                    policy.getPolicyVersion(), type, transformer.replace("{col}", col)));
         }
     }
 

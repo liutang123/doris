@@ -2935,4 +2935,12 @@ public class Config extends ConfigBase {
     
     @ConfField(mutable = true, masterOnly = true, description = {})
     public static boolean ignore_cool_down_time_check = true;
+
+    @ConfField(mutable = true, masterOnly = true, description = {},
+            callbackClassString = "org.apache.doris.common.CustomConfHandler$RootConfHandler")
+    public static boolean enable_cam_system = false;
+
+    @ConfField(mutable = true, masterOnly = true, description = {},
+            callbackClassString = "org.apache.doris.common.CustomConfHandler$RootConfHandler")
+    public static boolean disable_manage_user = false;
 }

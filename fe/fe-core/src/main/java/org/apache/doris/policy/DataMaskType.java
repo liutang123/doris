@@ -21,20 +21,23 @@ import lombok.Getter;
 
 @Getter
 public enum DataMaskType {
+    // compatible with dlc
+    MASK("Replace lowercase with 'x', uppercase with 'X', digits with '0'",
+        "regexp_replace(regexp_replace(regexp_replace({col},'([A-Z])', 'X'),'([a-z])','x'),'([0-9])','0')"),
     MASK_REDACT("Replace lowercase with 'x', uppercase with 'X', digits with '0'",
         "regexp_replace(regexp_replace(regexp_replace({col},'([A-Z])', 'X'),'([a-z])','x'),'([0-9])','0')"),
     MASK_SHOW_LAST_4("Show last 4 characters; replace rest with 'X'",
-        "LPAD(RIGHT({col}, 4), CHAR_LENGTH({col}), 'X')"),
+        "if(CHAR_LENGTH({col}) > 4, LPAD(RIGHT({col}, 4), CHAR_LENGTH({col}), 'X'), sha2({col}, 256))"),
     MASK_SHOW_FIRST_4("Show first 4 characters; replace rest with 'x'",
-        "RPAD(LEFT({col}, 4), CHAR_LENGTH({col}), 'X')"),
-    MASK_HASH("Hash the value of a varchar with sha256",
-        "hex(sha2({col}, 256))"),
+        "if(CHAR_LENGTH({col}) > 4, RPAD(LEFT({col}, 4), CHAR_LENGTH({col}), 'X'), sha2({col}, 256))"),
+    MASK_HASH("Hash the value of a varchar with sha256", "sha2({col}, 256)"),
     MASK_NULL("Replace with NULL", "NULL"),
     MASK_DATE_SHOW_YEAR("Date: show only year",
         "date_trunc({col}, 'year')"),
     MASK_DEFAULT("Replace with data type default",
-        "");
-
+        ""),
+    CUSTOM("Custom", ""),
+    MASK_NONE("No masking", "");
     private final String desc;
     private final String transformer;
 

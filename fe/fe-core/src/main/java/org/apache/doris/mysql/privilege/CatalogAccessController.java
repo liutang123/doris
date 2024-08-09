@@ -18,6 +18,7 @@
 package org.apache.doris.mysql.privilege;
 
 import org.apache.doris.analysis.UserIdentity;
+import org.apache.doris.catalog.authorizer.ranger.dlc.RangerDlcAccessController;
 import org.apache.doris.common.AuthorizationException;
 
 import java.util.List;
@@ -40,6 +41,9 @@ public interface CatalogAccessController {
     // ==== Database ====
     default boolean checkDbPriv(boolean hasGlobal, UserIdentity currentUser, String ctl, String db,
             PrivPredicate wanted) {
+        if (this instanceof RangerDlcAccessController) {
+            hasGlobal = false;
+        }
         boolean res = checkDbPriv(currentUser, ctl, db, wanted);
         return hasGlobal || res;
     }
@@ -49,6 +53,9 @@ public interface CatalogAccessController {
     // ==== Table ====
     default boolean checkTblPriv(boolean hasGlobal, UserIdentity currentUser, String ctl, String db, String tbl,
             PrivPredicate wanted) {
+        if (this instanceof RangerDlcAccessController) {
+            hasGlobal = false;
+        }
         boolean res = checkTblPriv(currentUser, ctl, db, tbl, wanted);
         return hasGlobal || res;
     }
@@ -58,6 +65,9 @@ public interface CatalogAccessController {
     // ==== Column ====
     default void checkColsPriv(boolean hasGlobal, UserIdentity currentUser, String ctl, String db, String tbl,
             Set<String> cols, PrivPredicate wanted) throws AuthorizationException {
+        if (this instanceof RangerDlcAccessController) {
+            hasGlobal = false;
+        }
         try {
             checkColsPriv(currentUser, ctl, db, tbl, cols, wanted);
         } catch (AuthorizationException e) {
@@ -80,4 +90,6 @@ public interface CatalogAccessController {
             String col);
 
     List<? extends RowFilterPolicy> evalRowFilterPolicies(UserIdentity currentUser, String ctl, String db, String tbl);
+
+    default void cleanup() {}
 }
