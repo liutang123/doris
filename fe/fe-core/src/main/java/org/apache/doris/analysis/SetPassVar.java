@@ -20,6 +20,7 @@ package org.apache.doris.analysis;
 import org.apache.doris.catalog.Env;
 import org.apache.doris.cluster.ClusterNamespace;
 import org.apache.doris.common.AnalysisException;
+import org.apache.doris.common.Config;
 import org.apache.doris.common.ErrorCode;
 import org.apache.doris.common.ErrorReport;
 import org.apache.doris.mysql.privilege.Auth;
@@ -58,6 +59,11 @@ public class SetPassVar extends SetVar {
             if (userIdent.equals(ctx.getCurrentUserIdentity())) {
                 isSelf = true;
             }
+        }
+
+        if (ConnectContext.get() != null && !ConnectContext.get().getUserIdentity().isRootUser()
+                && Config.disable_manage_user) {
+            throw new AnalysisException("Reject set password. contact the administrator if you have any questions");
         }
 
         // Check password

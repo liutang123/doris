@@ -34,6 +34,7 @@ import org.apache.doris.common.io.Text;
 import org.apache.doris.common.io.Writable;
 import org.apache.doris.load.DppConfig;
 import org.apache.doris.persist.gson.GsonUtils;
+import org.apache.doris.qe.ConnectContext;
 import org.apache.doris.resource.Tag;
 
 import com.google.common.base.Joiner;
@@ -89,6 +90,8 @@ public class UserProperty implements Writable {
     public static final String DEFAULT_CLOUD_CLUSTER = "default_cloud_cluster";
     public static final String DEFAULT_COMPUTE_GROUP = "default_compute_group";
 
+    private static final String PROP_CAM_GROUP_LIST = "cam_group_list";
+
     // for system user
     public static final Set<Pattern> ADVANCED_PROPERTIES = Sets.newHashSet();
     // for normal user
@@ -139,6 +142,9 @@ public class UserProperty implements Writable {
         ADVANCED_PROPERTIES.add(Pattern.compile("^" + PROP_EXEC_MEM_LIMIT + "$", Pattern.CASE_INSENSITIVE));
         ADVANCED_PROPERTIES.add(Pattern.compile("^" + PROP_USER_QUERY_TIMEOUT + "$", Pattern.CASE_INSENSITIVE));
         ADVANCED_PROPERTIES.add(Pattern.compile("^" + PROP_USER_INSERT_TIMEOUT + "$", Pattern.CASE_INSENSITIVE));
+        ADVANCED_PROPERTIES.add(
+                Pattern.compile("^" + PROP_ALLOW_RESOURCE_TAG_DOWNGRADE + "$", Pattern.CASE_INSENSITIVE));
+        ADVANCED_PROPERTIES.add(Pattern.compile("^" + PROP_CAM_GROUP_LIST + "$", Pattern.CASE_INSENSITIVE));
 
         COMMON_PROPERTIES.add(Pattern.compile("^" + PROP_QUOTA + ".", Pattern.CASE_INSENSITIVE));
         COMMON_PROPERTIES.add(Pattern.compile("^" + PROP_DEFAULT_LOAD_CLUSTER + "$", Pattern.CASE_INSENSITIVE));
@@ -192,6 +198,10 @@ public class UserProperty implements Writable {
         return commonProperties.getWorkloadGroup();
     }
 
+    public String getCamGroups() {
+        return commonProperties.getCamGroups();
+    }
+
     @Deprecated
     public WhiteList getWhiteList() {
         return whiteList;
@@ -221,6 +231,8 @@ public class UserProperty implements Writable {
         int queryTimeout = this.commonProperties.getQueryTimeout();
         int insertTimeout = this.commonProperties.getInsertTimeout();
         String workloadGroup = this.commonProperties.getWorkloadGroup();
+        boolean allowResourceTagDowngrade = this.commonProperties.isAllowResourceTagDowngrade();
+        String camGroups = this.commonProperties.getCamGroups();
 
         String newDefaultLoadCluster = defaultLoadCluster;
         String newDefaultCloudCluster = defaultCloudCluster;
@@ -358,6 +370,33 @@ public class UserProperty implements Writable {
                     throw new DdlException("workload group " + value + " not exists");
                 }
                 workloadGroup = value;
+            } else if (keyArr[0].equalsIgnoreCase(PROP_ALLOW_RESOURCE_TAG_DOWNGRADE)) {
+                if (keyArr.length != 1) {
+                    throw new DdlException(PROP_ALLOW_RESOURCE_TAG_DOWNGRADE + " format error");
+                }
+                if (!"true".equalsIgnoreCase(value) && !"false".equalsIgnoreCase(value)) {
+                    throw new DdlException(
+                            "allow_resource_tag_downgrade's value must be true or false");
+                }
+                allowResourceTagDowngrade = Boolean.parseBoolean(value);
+            } else if (keyArr[0].equalsIgnoreCase(PROP_CAM_GROUP_LIST)) {
+                if (keyArr.length != 1) {
+                    throw new DdlException(PROP_CAM_GROUP_LIST + " format error");
+                }
+                if (ConnectContext.get() != null && !ConnectContext.get().getUserIdentity().isRootUser()) {
+                    throw new DdlException(PROP_CAM_GROUP_LIST + " only root can update");
+                }
+                if (Strings.isNullOrEmpty(value)) {
+                    throw new DdlException(PROP_CAM_GROUP_LIST + " must not be empty");
+                }
+                for (String id : value.split(",")) {
+                    try {
+                        Long.parseLong(id);
+                    } catch (NumberFormatException e) {
+                        throw new DdlException("group id is not number");
+                    }
+                }
+                camGroups = value;
             } else {
                 if (isReplay) {
                     // After using SET PROPERTY to modify the user property, if FE rolls back to a version without
@@ -381,6 +420,8 @@ public class UserProperty implements Writable {
         this.commonProperties.setQueryTimeout(queryTimeout);
         this.commonProperties.setInsertTimeout(insertTimeout);
         this.commonProperties.setWorkloadGroup(workloadGroup);
+        this.commonProperties.setAllowResourceTagDowngrade(allowResourceTagDowngrade);
+        this.commonProperties.setCamGroups(camGroups);
         if (newDppConfigs.containsKey(newDefaultLoadCluster)) {
             defaultLoadCluster = newDefaultLoadCluster;
         } else {
@@ -545,6 +586,10 @@ public class UserProperty implements Writable {
         result.add(Lists.newArrayList(PROP_RESOURCE_TAGS, Joiner.on(", ").join(commonProperties.getResourceTags())));
 
         result.add(Lists.newArrayList(PROP_WORKLOAD_GROUP, String.valueOf(commonProperties.getWorkloadGroup())));
+
+        result.add(Lists.newArrayList(PROP_ALLOW_RESOURCE_TAG_DOWNGRADE,
+                String.valueOf(commonProperties.isAllowResourceTagDowngrade())));
+        result.add(Lists.newArrayList(PROP_CAM_GROUP_LIST, String.valueOf(commonProperties.getCamGroups())));
 
         // load cluster
         if (defaultLoadCluster != null) {
