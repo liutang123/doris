@@ -93,7 +93,7 @@ public class RangerDataMaskPolicy implements DataMaskPolicy {
 
     @Override
     public Expression parseMaskTypeDef(NereidsParser parser, Slot slot) {
-        if (maskType == DataMaskType.MASK_DEFAULT) {
+        if (maskType == DataMaskType.MASK_DEFAULT || maskType == DataMaskType.MASK) {
             return StringLiteral.of(getDataTypeDefaultValue(slot));
         }
         return parser.parseExpression(getMaskTypeDef());

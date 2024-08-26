@@ -397,6 +397,7 @@ import org.apache.doris.nereids.trees.plans.commands.ShowCreateProcedureCommand;
 import org.apache.doris.nereids.trees.plans.commands.ShowPolicyCommand;
 import org.apache.doris.nereids.trees.plans.commands.ShowProcedureStatusCommand;
 import org.apache.doris.nereids.trees.plans.commands.ShowViewCommand;
+import org.apache.doris.nereids.trees.plans.commands.SwitchCatalogCommand;
 import org.apache.doris.nereids.trees.plans.commands.UnsupportedCommand;
 import org.apache.doris.nereids.trees.plans.commands.UpdateCommand;
 import org.apache.doris.nereids.trees.plans.commands.UseDatabaseCommand;
@@ -3710,6 +3711,12 @@ public class LogicalPlanBuilder extends DorisParserBaseVisitor<Object> {
         String database = ctx.database == null ? null : ctx.database.getText();
 
         return ParserUtils.withOrigin(ctx, () -> new UseDatabaseCommand(catalog, database));
+    }
+
+    @Override
+    public LogicalPlan visitSwitchCatalog(DorisParser.SwitchCatalogContext ctx) {
+        String catalogName = ctx.catalog.getText();
+        return ParserUtils.withOrigin(ctx, () -> new SwitchCatalogCommand(catalogName));
     }
 
     @Override

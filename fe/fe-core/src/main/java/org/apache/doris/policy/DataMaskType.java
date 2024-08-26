@@ -22,8 +22,7 @@ import lombok.Getter;
 @Getter
 public enum DataMaskType {
     // compatible with dlc
-    MASK("Replace lowercase with 'x', uppercase with 'X', digits with '0'",
-        "regexp_replace(regexp_replace(regexp_replace({col},'([A-Z])', 'X'),'([a-z])','x'),'([0-9])','0')"),
+    MASK("Replace with data type default", ""),
     MASK_REDACT("Replace lowercase with 'x', uppercase with 'X', digits with '0'",
         "regexp_replace(regexp_replace(regexp_replace({col},'([A-Z])', 'X'),'([a-z])','x'),'([0-9])','0')"),
     MASK_SHOW_LAST_4("Show last 4 characters; replace rest with 'X'",

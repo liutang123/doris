@@ -35,24 +35,25 @@ public interface DataMaskPolicy {
         if (dataType instanceof ScalarType) {
             switch (dataType.getPrimitiveType()) {
                 case BOOLEAN:
-                    return "FALSE";
+                    return "false";
                 case TINYINT:
                 case SMALLINT:
                 case INT:
                 case BIGINT:
                 case LARGEINT:
-                    return "0";
-                case CHAR:
-                case VARCHAR:
-                case STRING:
-                    return "";
-                case FLOAT:
-                case DOUBLE:
                 case DECIMALV2:
                 case DECIMAL32:
                 case DECIMAL64:
                 case DECIMAL128:
                 case DECIMAL256:
+                    return "0";
+                case CHAR:
+                case VARCHAR:
+                case STRING:
+                case BINARY:
+                    return "";
+                case FLOAT:
+                case DOUBLE:
                     return "0.0";
                 case DATEV2:
                 case DATE:

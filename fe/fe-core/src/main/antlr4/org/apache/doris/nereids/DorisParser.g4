@@ -122,6 +122,7 @@ constraintStatement
     | SHOW CONSTRAINTS FROM table=multipartIdentifier                     #showConstraint
     | SHOW DATA MASK POLICY (FOR (user=userIdentify | ROLE roleName=identifier))? #showDataMaskPolicy
     | USE (catalog=identifier DOT)? database=identifier                   #useDatabase
+    | SWITCH catalog=identifier                                           #switchCatalog
     ;
 
 supportedDmlStatement
@@ -836,8 +837,6 @@ unsupoortedUnsetStatement
     ;
 
 unsupportedUseStatement
-    : USE (catalog=identifier DOT)? database=identifier                              #useDatabase
-    | SWITCH catalog=identifier                                                      #switchCatalog
     ;
 
 unsupportedDmlStatement
