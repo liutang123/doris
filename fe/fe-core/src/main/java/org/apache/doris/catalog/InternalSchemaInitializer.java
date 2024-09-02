@@ -314,7 +314,7 @@ public class InternalSchemaInitializer extends Thread {
         Map<String, String> properties = new HashMap<String, String>() {
             {
                 put("dynamic_partition.time_unit", "DAY");
-                put("dynamic_partition.start", "-30");
+                put("dynamic_partition.start", "-180");
                 put("dynamic_partition.end", "3");
                 put("dynamic_partition.prefix", "p");
                 put("dynamic_partition.buckets", String.valueOf(bucketNum));
