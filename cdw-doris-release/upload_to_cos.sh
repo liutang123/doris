@@ -197,7 +197,7 @@ show_git_log_message() {
 
 create_and_push_new_branch() {
   local current_version=$(git branch --show-current)
-  git checkout -b ${doris_version_string}
+  git tag -a ${doris_version_string} -m "${doris_version_string}"
   git push tencent_origin ${doris_version_string}
   git checkout ${current_version}
 }
