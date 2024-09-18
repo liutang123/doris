@@ -36,6 +36,8 @@ public interface DataMaskPolicy {
             switch (dataType.getPrimitiveType()) {
                 case BOOLEAN:
                     return "false";
+                case FLOAT:
+                case DOUBLE:
                 case TINYINT:
                 case SMALLINT:
                 case INT:
@@ -52,9 +54,6 @@ public interface DataMaskPolicy {
                 case STRING:
                 case BINARY:
                     return "";
-                case FLOAT:
-                case DOUBLE:
-                    return "0.0";
                 case DATEV2:
                 case DATE:
                     return "1970-01-01";
@@ -63,7 +62,7 @@ public interface DataMaskPolicy {
                     return "00:00:00";
                 case DATETIME:
                 case DATETIMEV2:
-                    return "1970-01-01 00:00:00";
+                    return "1970-01-01 08:00:00";
                 case IPV4:
                     return "0.0.0.0";
                 case ARRAY:
