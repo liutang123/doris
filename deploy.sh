@@ -94,7 +94,7 @@ ret=$(
   cp -a "${cur_dir}/output/fe/webroot" "${dest_dir}" &&
   cp -a "${cur_dir}/output/be/www" "${dest_dir}" &&
   cp -a "${cur_dir}/output/be/dict" "${dest_dir}" &&
-  cp -a "${cur_dir}/output/be/zoneinfo" "${dest_dir}"
+  cp -a "${work_dir}/zoneinfo" "${dest_dir}"
 )
 if [ $? -ne 0 ]; then
   log "[ERROR] failed to install udf, spark-dpp, webroot, dict, zoneinfo and www."
