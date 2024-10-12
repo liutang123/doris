@@ -43,7 +43,7 @@ while true; do
         ;;
     *)
 	echo "Error params for this script!"
-        exit 3
+        exit 1
         ;;
     esac
 done
@@ -78,28 +78,11 @@ log() {
   echo "$@"
 }
 
-# From 1.2, it must be start by non-root.
+# From 1.2, it must be start BROKER by non-root.
 if [ `whoami` = "root" ];then
-  log "[ERROR] You cannot start FE by root, please change user to doris and retry..." 
+  log "[ERROR] You cannot start BROKER by root, please change user to doris and retry..." 
   exit 2
 fi
-
-# make sure there are no files of root user in working dir, if not, it perhaps cause some problem...
-cd /home/doris
-for mydir in {$PID_DIR}
-do
-  if [ ! -d ${mydir} ]; then
-    log "[WARN] ${mydir} is not exist" 
-    continue
-  fi
-  result=$(find ${mydir} -user root)
-  if [ $? -ne 0 -o "$result" != "" ]; then
-    log "[ERROR] Found some files ownerd by root in ${mydir} ($result)" 
-    log "Please run command with root user: chown -R doris:doris ${mydir}" 
-    exit 4
-  fi
-done
-cd -
 
 pidfile=$PID_DIR/apache_hdfs_broker.pid
 
@@ -116,7 +99,7 @@ log "the doris broker java home is $doris_broker_java_home"
 
 if [ "$doris_broker_java_home" = "" ]; then
   log "Error: doris_broker_java_home is not set." 
-  exit 4
+  exit 3
 fi
 
 JAVA=$doris_broker_java_home/bin/java
