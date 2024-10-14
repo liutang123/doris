@@ -215,6 +215,7 @@ public class ConnectProcessor {
                 if (elapseMs > Config.qe_slow_log_ms) {
                     String sqlDigest = DigestUtils.md5Hex(((Queriable) parsedStmt).toDigest());
                     ctx.getAuditEventBuilder().setSqlDigest(sqlDigest);
+                    MetricRepo.COUNTER_QUERY_SLOW.increase(1L);
                 }
             }
             ctx.getAuditEventBuilder().setIsQuery(true);
