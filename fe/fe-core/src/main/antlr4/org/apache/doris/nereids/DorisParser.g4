@@ -50,6 +50,7 @@ statementBase
     | materializedViewStatement         #materializedViewStatementAlias
     | supportedJobStatement             #supportedJobStatementAlias
     | constraintStatement               #constraintStatementAlias
+    | supportedUseStatement             #supportedUseStatementAlias
     | supportedShowStatement            #supportedShowStatementAlias
     | unsupportedStatement              #unsupported
     ;
@@ -120,9 +121,6 @@ constraintStatement
     | ALTER TABLE table=multipartIdentifier
         DROP CONSTRAINT constraintName=errorCapturingIdentifier           #dropConstraint
     | SHOW CONSTRAINTS FROM table=multipartIdentifier                     #showConstraint
-    | SHOW DATA MASK POLICY (FOR (user=userIdentify | ROLE roleName=identifier))? #showDataMaskPolicy
-    | USE (catalog=identifier DOT)? database=identifier                   #useDatabase
-    | SWITCH catalog=identifier                                           #switchCatalog
     ;
 
 supportedDmlStatement
@@ -189,10 +187,16 @@ supportedAlterStatement
         AS query                                                          #alterView
     ;
 
+supportedUseStatement
+    : USE (catalog=identifier DOT)? database=identifier                   #useDatabase
+    | SWITCH catalog=identifier                                           #switchCatalog
+    ;
+
 supportedShowStatement
     : SHOW VIEW
         (FROM |IN) tableName=multipartIdentifier
         ((FROM | IN) database=identifier)?                                          #showView
+    | SHOW DATA MASK POLICY (FOR (user=userIdentify | ROLE roleName=identifier))? #showDataMaskPolicy
     ;
 
 unsupportedOtherStatement
