@@ -52,7 +52,7 @@ public class BeSelectionPolicy {
     public boolean allowOnSameHost = false;
 
     public boolean preferComputeNode = false;
-    public int expectBeNum = 0;
+    public int expectBeNum = -1;
 
     public boolean enableRoundRobin = false;
     // if enable round robin, choose next be from nextRoundRobinIndex

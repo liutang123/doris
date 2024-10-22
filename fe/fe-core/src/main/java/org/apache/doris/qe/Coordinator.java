@@ -82,6 +82,7 @@ import org.apache.doris.rpc.RpcException;
 import org.apache.doris.service.ExecuteEnv;
 import org.apache.doris.service.FrontendOptions;
 import org.apache.doris.system.Backend;
+import org.apache.doris.system.BeSelectionPolicy;
 import org.apache.doris.system.SystemInfoService;
 import org.apache.doris.task.LoadEtlTask;
 import org.apache.doris.thrift.PaloInternalServiceVersion;
@@ -124,6 +125,7 @@ import org.apache.doris.thrift.TUniqueId;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.HashMultiset;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -154,6 +156,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
@@ -187,6 +190,7 @@ public class Coordinator implements CoordInterface {
     Map<TNetworkAddress, Long> addressToBackendID = Maps.newHashMap();
 
     protected ImmutableMap<Long, Backend> idToBackend = ImmutableMap.of();
+    protected ImmutableList<Backend> cNBackends = ImmutableList.of();
 
     // copied from TQueryExecRequest; constant across all fragments
     private final TDescriptorTable descTable;
@@ -568,6 +572,13 @@ public class Coordinator implements CoordInterface {
         }
 
         this.idToBackend = Env.getCurrentSystemInfo().getBackendsByCurrentCluster();
+        ImmutableList.Builder<Backend> builder = ImmutableList.builder();
+        idToBackend.values().forEach(be -> {
+            if (be.isComputeNode()) {
+                builder.add(be);
+            }
+        });
+        this.cNBackends = builder.build();
 
         if (LOG.isDebugEnabled()) {
             int backendNum = idToBackend.size();
@@ -1750,6 +1761,115 @@ public class Coordinator implements CoordInterface {
         return false;
     }
 
+    private void computeInstancePreferInput(PlanFragment fragment, int exchangeInstances,
+            FragmentExecParams params) {
+        int maxParallelFragmentIndex = findMaxParallelFragmentIndex(fragment);
+        PlanFragmentId inputFragmentId = fragment.getChild(maxParallelFragmentIndex).getFragmentId();
+        if (exchangeInstances > 0 && fragmentExecParamsMap.get(inputFragmentId)
+                .instanceExecParams.size() > exchangeInstances) {
+            // random select some instance
+            // get distinct host, when parallel_fragment_exec_instance_num > 1,
+            // single host may execute several instances
+            Set<TNetworkAddress> hostSet = Sets.newHashSet();
+            for (FInstanceExecParam execParams :
+                    fragmentExecParamsMap.get(inputFragmentId).instanceExecParams) {
+                hostSet.add(execParams.host);
+            }
+            List<TNetworkAddress> hosts = Lists.newArrayList(hostSet);
+            Collections.shuffle(hosts, instanceRandom);
+            for (int index = 0; index < exchangeInstances; index++) {
+                FInstanceExecParam instanceParam = new FInstanceExecParam(hosts.get(index % hosts.size()), 0,
+                        params);
+                params.instanceExecParams.add(instanceParam);
+            }
+        } else {
+            for (FInstanceExecParam execParams
+                    : fragmentExecParamsMap.get(inputFragmentId).instanceExecParams) {
+                FInstanceExecParam instanceParam = new FInstanceExecParam(execParams.host, 0, params);
+                params.instanceExecParams.add(instanceParam);
+            }
+        }
+    }
+
+    private void computeInstancePreferCN(PlanFragment fragment, int exchangeInstances,
+            FragmentExecParams params) {
+        int maxParallelFragmentIndex = findMaxParallelFragmentIndex(fragment);
+        PlanFragmentId inputFragmentId = fragment.getChild(maxParallelFragmentIndex).getFragmentId();
+        FragmentExecParams inputFragmentParams = fragmentExecParamsMap.get(inputFragmentId);
+        List<FInstanceExecParam> inputInstanceExecParams = inputFragmentParams.instanceExecParams;
+
+        List<Backend> childCN = getChildFragmentCNBackends(fragment);
+        if (childCN.isEmpty()) {
+            BeSelectionPolicy.Builder builder = new BeSelectionPolicy.Builder()
+                    .needQueryAvailable()
+                    .preferComputeNode(true);
+            if (ConnectContext.get() != null && ConnectContext.get().isResourceTagsSet()) {
+                builder.addTags(ConnectContext.get().getResourceTags());
+            }
+            BeSelectionPolicy policy = builder.build();
+            if (exchangeInstances > 0 && inputInstanceExecParams.size() > exchangeInstances) {
+                policy.expectBeNum = exchangeInstances;
+                List<Backend> candidates = policy.getCandidateBackends(idToBackend.values());
+                for (int i = 0; i < exchangeInstances; i++) {
+                    Backend backend = candidates.get(i % candidates.size());
+                    TNetworkAddress host = new TNetworkAddress(backend.getHost(), backend.getBePort());
+                    this.addressToBackendID.putIfAbsent(host, backend.getId());
+                    FInstanceExecParam instanceParam = new FInstanceExecParam(host, 0, params);
+                    params.instanceExecParams.add(instanceParam);
+                }
+            } else {
+                policy.expectBeNum = inputInstanceExecParams.size();
+                List<Backend> candidates = policy.getCandidateBackends(idToBackend.values());
+                for (int i = 0; i < inputInstanceExecParams.size(); i++) {
+                    FInstanceExecParam execParams = inputInstanceExecParams.get(i);
+                    Backend backend = candidates.get(i % candidates.size());
+                    TNetworkAddress host = new TNetworkAddress(backend.getHost(), backend.getBePort());
+                    this.addressToBackendID.putIfAbsent(host, backend.getId());
+                    FInstanceExecParam instanceParam = new FInstanceExecParam(execParams.host, 0, params);
+                    params.instanceExecParams.add(instanceParam);
+                }
+            }
+        } else {
+            int parallis = inputInstanceExecParams.size();
+            if (exchangeInstances > 0 && inputInstanceExecParams.size() > exchangeInstances) {
+                parallis = exchangeInstances;
+            }
+            Set<TNetworkAddress> hostSet = getNetworkAddresses(parallis, childCN, inputInstanceExecParams);
+            List<TNetworkAddress> hosts = Lists.newArrayList(hostSet);
+            Collections.shuffle(hosts, instanceRandom);
+            for (int index = 0; index < parallis; index++) {
+                FInstanceExecParam instanceParam = new FInstanceExecParam(hosts.get(index % hosts.size()),
+                        0, params);
+                params.instanceExecParams.add(instanceParam);
+            }
+        }
+    }
+
+    @NotNull
+    private static Set<TNetworkAddress> getNetworkAddresses(int parallel, List<Backend> childCN,
+            List<FInstanceExecParam> inputInstanceExecParams) {
+        Set<TNetworkAddress> hostSet = Sets.newHashSet();
+        int requireNum = parallel;
+        int cnIndex = 0;
+        while (requireNum >= 0 && cnIndex < childCN.size()) {
+            Backend backend = childCN.get(cnIndex);
+            TNetworkAddress host = new TNetworkAddress(backend.getHost(), backend.getBePort());
+            if (hostSet.add(host)) {
+                requireNum--;
+            }
+            cnIndex++;
+        }
+        int inputIndex = 0;
+        while (requireNum >= 0 && inputIndex < inputInstanceExecParams.size()) {
+            FInstanceExecParam execParams = inputInstanceExecParams.get(inputIndex);
+            if (hostSet.add(execParams.host)) {
+                requireNum--;
+            }
+            inputIndex++;
+        }
+        return hostSet;
+    }
+
     // For each fragment in fragments, computes hosts on which to run the instances
     // and stores result in fragmentExecParams.hosts.
     protected void computeFragmentHosts() throws Exception {
@@ -1779,6 +1899,7 @@ public class Coordinator implements CoordInterface {
                     //      SELECT  @@session.auto_increment_increment AS auto_increment_increment;
                     execHostport = SimpleScheduler.getHostByCurrentBackend(addressToBackendID);
                 } else {
+                    // TODO llj select a compute node if we prefer
                     execHostport = SimpleScheduler.getHost(this.idToBackend, backendIdRef);
                 }
                 if (execHostport == null) {
@@ -1789,7 +1910,7 @@ public class Coordinator implements CoordInterface {
                     // backendIdRef can be null is we call getHostByCurrentBackend() before
                     this.addressToBackendID.put(execHostport, backendIdRef.getRef());
                 }
-                FInstanceExecParam instanceParam = new FInstanceExecParam(null, execHostport,
+                FInstanceExecParam instanceParam = new FInstanceExecParam(execHostport,
                         0, params);
                 params.instanceExecParams.add(instanceParam);
                 continue;
@@ -1810,9 +1931,8 @@ public class Coordinator implements CoordInterface {
                 // (Case B)
                 // there is no leftmost scan; we assign the same hosts as those of our
                 //  input fragment which has a higher instance_number
-                int maxParallelFragmentIndex = findMaxParallelFragmentIndex(fragment);
-                PlanFragmentId inputFragmentId = fragment.getChild(maxParallelFragmentIndex).getFragmentId();
-                // AddAll() soft copy()
+                boolean preferCN = ConnectContext.get() != null && ConnectContext.get().getSessionVariable() != null
+                        && ConnectContext.get().getSessionVariable().isPreferComputeNodeForNoScanFragment();
                 int exchangeInstances = -1;
                 if (ConnectContext.get() != null && ConnectContext.get().getSessionVariable() != null) {
                     exchangeInstances = ConnectContext.get().getSessionVariable().getExchangeInstanceParallel();
@@ -1821,29 +1941,10 @@ public class Coordinator implements CoordInterface {
                 if (leftMostNode.getNumInstances() == 1) {
                     exchangeInstances = 1;
                 }
-                if (exchangeInstances > 0 && fragmentExecParamsMap.get(inputFragmentId)
-                        .instanceExecParams.size() > exchangeInstances) {
-                    // random select some instance
-                    // get distinct host, when parallel_fragment_exec_instance_num > 1,
-                    // single host may execute several instances
-                    Set<TNetworkAddress> hostSet = Sets.newHashSet();
-                    for (FInstanceExecParam execParams :
-                            fragmentExecParamsMap.get(inputFragmentId).instanceExecParams) {
-                        hostSet.add(execParams.host);
-                    }
-                    List<TNetworkAddress> hosts = Lists.newArrayList(hostSet);
-                    Collections.shuffle(hosts, instanceRandom);
-                    for (int index = 0; index < exchangeInstances; index++) {
-                        FInstanceExecParam instanceParam = new FInstanceExecParam(null,
-                                hosts.get(index % hosts.size()), 0, params);
-                        params.instanceExecParams.add(instanceParam);
-                    }
+                if (!cNBackends.isEmpty() && preferCN) {
+                    computeInstancePreferCN(fragment, exchangeInstances, params);
                 } else {
-                    for (FInstanceExecParam execParams
-                            : fragmentExecParamsMap.get(inputFragmentId).instanceExecParams) {
-                        FInstanceExecParam instanceParam = new FInstanceExecParam(null, execParams.host, 0, params);
-                        params.instanceExecParams.add(instanceParam);
-                    }
+                    computeInstancePreferInput(fragment, exchangeInstances, params);
                 }
 
                 // When group by cardinality is smaller than number of backend, only some backends always
@@ -1931,7 +2032,7 @@ public class Coordinator implements CoordInterface {
                         for (int j = 0; j < perInstanceScanRanges.size(); j++) {
                             List<TScanRangeParams> scanRangeParams = perInstanceScanRanges.get(j);
 
-                            FInstanceExecParam instanceParam = new FInstanceExecParam(null, key, 0, params);
+                            FInstanceExecParam instanceParam = new FInstanceExecParam(key, 0, params);
                             instanceParam.perNodeScanRanges.put(planNodeId, scanRangeParams);
                             instanceParam.perNodeSharedScans.put(planNodeId, sharedScan);
                             params.instanceExecParams.add(instanceParam);
@@ -1965,10 +2066,17 @@ public class Coordinator implements CoordInterface {
                     // backendIdRef can be null is we call getHostByCurrentBackend() before
                     this.addressToBackendID.put(execHostport, backendIdRef.getRef());
                 }
-                FInstanceExecParam instanceParam = new FInstanceExecParam(null, execHostport, 0, params);
+                FInstanceExecParam instanceParam = new FInstanceExecParam(execHostport, 0, params);
                 params.instanceExecParams.add(instanceParam);
             }
         }
+    }
+
+    private List<Backend> getChildFragmentCNBackends(PlanFragment fragment) {
+        return fragment.getChildren().stream().map(PlanFragment::getFragmentId).map(fragmentId ->
+            fragmentExecParamsMap.get(fragmentId).instanceExecParams).flatMap(List::stream).map(e -> e.host)
+                .map(addressToBackendID::get).filter(Objects::nonNull).map(idToBackend::get)
+                .filter(Objects::nonNull).filter(Backend::isComputeNode).collect(Collectors.toList());
     }
 
     private int findMaxParallelFragmentIndex(PlanFragment fragment) {
@@ -2771,7 +2879,7 @@ public class Coordinator implements CoordInterface {
 
             if (ignoreStorageDataDistribution) {
                 FInstanceExecParam instanceParam = new FInstanceExecParam(
-                        null, addressScanRange.getKey(), 0, params);
+                        addressScanRange.getKey(), 0, params);
 
                 for (Pair<Integer, Map<Integer, List<TScanRangeParams>>> nodeScanRangeMap : scanRange) {
                     instanceParam.addBucketSeq(nodeScanRangeMap.first);
@@ -2790,7 +2898,7 @@ public class Coordinator implements CoordInterface {
                 params.instanceExecParams.add(instanceParam);
                 for (int i = 1; i < parallelExecInstanceNum; i++) {
                     params.instanceExecParams.add(new FInstanceExecParam(
-                            null, addressScanRange.getKey(), 0, params));
+                            addressScanRange.getKey(), 0, params));
                 }
             } else {
                 int expectedInstanceNum = 1;
@@ -2806,7 +2914,7 @@ public class Coordinator implements CoordInterface {
                 for (List<Pair<Integer, Map<Integer, List<TScanRangeParams>>>> perInstanceScanRange
                         : perInstanceScanRanges) {
                     FInstanceExecParam instanceParam = new FInstanceExecParam(
-                            null, addressScanRange.getKey(), 0, params);
+                            addressScanRange.getKey(), 0, params);
 
                     for (Pair<Integer, Map<Integer, List<TScanRangeParams>>> nodeScanRangeMap : perInstanceScanRange) {
                         instanceParam.addBucketSeq(nodeScanRangeMap.first);
@@ -3343,9 +3451,8 @@ public class Coordinator implements CoordInterface {
             this.bucketSeqSet.add(bucketSeq);
         }
 
-        public FInstanceExecParam(TUniqueId id, TNetworkAddress host,
-                                  int perFragmentInstanceIdx, FragmentExecParams fragmentExecParams) {
-            this.instanceId = id;
+        public FInstanceExecParam(TNetworkAddress host, int perFragmentInstanceIdx,
+                FragmentExecParams fragmentExecParams) {
             this.host = host;
             this.perFragmentInstanceIdx = perFragmentInstanceIdx;
             this.fragmentExecParams = fragmentExecParams;

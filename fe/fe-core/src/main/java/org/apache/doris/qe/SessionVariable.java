@@ -632,6 +632,8 @@ public class SessionVariable implements Serializable, Writable {
 
     public static final String ENABLE_ES_PARALLEL_SCROLL = "enable_es_parallel_scroll";
 
+    public static final String PREFER_COMPUTE_NODE_FOR_NO_SCAN_FRAGMENT = "prefer_compute_node_for_no_scan_fragment";
+
     public static final List<String> DEBUG_VARIABLES = ImmutableList.of(
             SKIP_DELETE_PREDICATE,
             SKIP_DELETE_BITMAP,
@@ -2127,6 +2129,19 @@ public class SessionVariable implements Serializable, Writable {
         "Whether to enable shard-level parallel scroll requests for ES catalog, enabled by default."
     })
     public boolean enableESParallelScroll = true;
+
+    @VariableMgr.VarAttr(name = PREFER_COMPUTE_NODE_FOR_NO_SCAN_FRAGMENT, description = {
+            "当此值为false时，非scan fragment尽量落到输入fragment的节点上，增加local shuffle的概率。当此值为true时，非Scan "
+                    + "fragment 将落在cn上最多的子fragment作为input fragment，并利用其他cn尝试补齐并发度，若一个"
+                    + "fragment的全部子fragment都落在mix node上，则随机选择cn作为执行节点。以上行为不包括用户设置tag的情况。",
+            "When this value is false, non scan fragments should try to land on the input fragment node to increase the"
+                    + " probability of local shuffle. When this value is true, non scan fragments will use the sub "
+                    + "fragments that fall most on cn as input fragments, and attempt to fill in concurrency using "
+                    + "other cn. If all sub fragments of a fragment fall on the mix node, then cn will be randomly "
+                    + "selected as the execution node. The above behavior does not include the situation where users "
+                    + "set tags."
+    })
+    public boolean preferComputeNodeForNoScanFragment = false;
 
     @VariableMgr.VarAttr(name = ENABLE_MATCH_WITHOUT_INVERTED_INDEX, description = {
         "开启无索引match查询功能，建议正式环境保持开启",
@@ -4365,6 +4380,10 @@ public class SessionVariable implements Serializable, Writable {
 
     public int getMaxMsgSizeOfResultReceiver() {
         return this.maxMsgSizeOfResultReceiver;
+    }
+
+    public boolean isPreferComputeNodeForNoScanFragment() {
+        return this.preferComputeNodeForNoScanFragment;
     }
 
     public TSerdeDialect getSerdeDialect() {

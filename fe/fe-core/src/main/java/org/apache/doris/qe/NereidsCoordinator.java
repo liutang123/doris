@@ -99,7 +99,7 @@ public class NereidsCoordinator extends Coordinator {
                 DistributedPlanWorker worker = instanceJob.getAssignedWorker();
                 TNetworkAddress address = new TNetworkAddress(worker.host(), worker.port());
                 FInstanceExecParam instanceExecParam = new FInstanceExecParam(
-                        null, address, 0, fragmentExecParams);
+                        address, 0, fragmentExecParams);
                 instanceExecParam.instanceId = instanceJob.instanceId();
                 fragmentExecParams.instanceExecParams.add(instanceExecParam);
                 addressToBackendID.put(address, worker.id());
