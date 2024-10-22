@@ -106,12 +106,11 @@ for mydir in ${dir_list[*]}; do
   fi
 done
 
-JAVA_HOME=/usr/local/jdk
-if [ -z "$JAVA_HOME" ]; then
-    JAVA=$(which java)
-else
-    JAVA="$JAVA_HOME/bin/java"
+JAVA_HOME=/usr/local/jdk11
+if [ ! -d "$JAVA_HOME" ]; then
+    JAVA_HOME=/usr/local/jdk
 fi
+JAVA="$JAVA_HOME/bin/java"
 
 if [ ! -x "$JAVA" ]; then
     log "The JAVA_HOME environment variable is not defined correctly"
