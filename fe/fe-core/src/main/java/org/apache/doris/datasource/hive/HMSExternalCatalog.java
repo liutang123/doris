@@ -117,6 +117,35 @@ public class HMSExternalCatalog extends ExternalCatalog {
             throw new DdlException(
                     "The parameter " + FILE_META_CACHE_TTL_SECOND + " is wrong, value is " + fileMetaCacheTtlSecond);
         }
+        Map<String, String> properties = catalogProperty.getProperties();
+        if (properties.containsKey(HMSProperties.ENABLE_HMS_EVENTS_INCREMENTAL_SYNC)) {
+            enableHmsEventsIncrementalSync =
+                    properties.get(HMSProperties.ENABLE_HMS_EVENTS_INCREMENTAL_SYNC).equals("true");
+        } else {
+            enableHmsEventsIncrementalSync = Config.enable_hms_events_incremental_sync;
+        }
+
+        if (properties.containsKey(HMSProperties.HMS_EVENTIS_BATCH_SIZE_PER_RPC)) {
+            hmsEventsBatchSizePerRpc = Integer.valueOf(properties.get(HMSProperties.HMS_EVENTIS_BATCH_SIZE_PER_RPC));
+        } else {
+            hmsEventsBatchSizePerRpc = Config.hms_events_batch_size_per_rpc;
+        }
+
+        if (!Config.allow_disable_cosn_fs_cache) {
+            if (properties.containsKey("fs.cosn.impl.disable.cache")
+                    && properties.get("fs.cosn.impl.disable.cache").equals("true")) {
+                throw new DdlException("Can't enable file system cache of cosn");
+            }
+            if (properties.containsKey("fs.ofs.impl.disable.cache")
+                    && properties.get("fs.ofs.impl.disable.cache").equals("true")) {
+                throw new DdlException("Can't enable file system cache of ofs");
+            }
+            if (properties.containsKey("fs.lakefs.impl.disable.cache")
+                    && properties.get("fs.lakefs.impl.disable.cache").equals("true")) {
+                throw new DdlException("Can't enable file system cache of lakefs");
+            }
+        }
+
         // check the dfs.ha properties
         // 'dfs.nameservices'='your-nameservice',
         // 'dfs.ha.namenodes.your-nameservice'='nn1,nn2',

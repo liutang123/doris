@@ -348,6 +348,7 @@ public class PropertyConverter {
         Map<String, String> cosProperties = Maps.newHashMap();
         cosProperties.put(CosProperties.HadoopFsCosConstants.COSN_ENDPOINT_SUFFIX_KEY,
                 props.get(CosProperties.ENDPOINT));
+        cosProperties.put("fs.cosn.impl.disable.cache", "false");
         cosProperties.put("fs.cosn.impl", getHadoopFSImplByScheme("cosn"));
         cosProperties.put("fs.lakefs.impl", getHadoopFSImplByScheme("lakefs"));
         if (credential.isWhole()) {

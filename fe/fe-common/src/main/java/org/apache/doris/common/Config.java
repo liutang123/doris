@@ -2932,7 +2932,7 @@ public class Config extends ConfigBase {
             "For testing purposes, all queries are forcibly forwarded to the master to verify"
                     + "the behavior of forwarding queries."})
     public static boolean force_forward_all_queries = false;
-    
+
     @ConfField(mutable = true, masterOnly = true, description = {})
     public static boolean ignore_cool_down_time_check = true;
 
@@ -2943,4 +2943,7 @@ public class Config extends ConfigBase {
     @ConfField(mutable = true, masterOnly = true, description = {},
             callbackClassString = "org.apache.doris.common.CustomConfHandler$RootConfHandler")
     public static boolean disable_manage_user = false;
+
+    @ConfField(mutable = true, description = {"是否允许禁用 tencent cosn FileSystem 的 Cache"})
+    public static boolean allow_disable_cosn_fs_cache = false;
 }
