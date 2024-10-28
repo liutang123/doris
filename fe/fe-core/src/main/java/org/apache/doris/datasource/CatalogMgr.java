@@ -35,6 +35,7 @@ import org.apache.doris.catalog.TableIf;
 import org.apache.doris.cluster.ClusterNamespace;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.CaseSensibility;
+import org.apache.doris.common.Config;
 import org.apache.doris.common.DdlException;
 import org.apache.doris.common.ErrorCode;
 import org.apache.doris.common.ErrorReport;
@@ -71,6 +72,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -349,6 +351,17 @@ public class CatalogMgr implements Writable, GsonPostProcessable {
             if (stmt.getNewProperties().containsKey("type") && !catalog.getType()
                     .equalsIgnoreCase(stmt.getNewProperties().get("type"))) {
                 throw new DdlException("Can't modify the type of catalog property with name: " + stmt.getCatalogName());
+            }
+            if (!Config.allow_disable_cosn_fs_cache) {
+                for (String key : stmt.getNewProperties().keySet()) {
+                    key = key.toLowerCase(Locale.ROOT);
+                    if (key.indexOf("impl.disable.cache") != -1) {
+                        String schema = key.split("\\.")[1];
+                        if (schema.equals("cosn") || schema.equals("ofs") || schema.equals("lakefs")) {
+                            throw new DdlException("Can't enable file system cache of " + schema);
+                        }
+                    }
+                }
             }
             CatalogLog log = CatalogFactory.createCatalogLog(catalog.getId(), stmt);
             replayAlterCatalogProps(log, oldProperties, false);

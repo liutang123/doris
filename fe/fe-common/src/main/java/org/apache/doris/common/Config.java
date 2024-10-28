@@ -3411,4 +3411,7 @@ public class Config extends ConfigBase {
     @ConfField(mutable = true, masterOnly = true, description = {},
             callbackClassString = "org.apache.doris.common.CustomConfHandler$RootConfHandler")
     public static boolean disable_manage_user = false;
+
+    @ConfField(mutable = true, description = {"是否允许禁用 tencent cosn FileSystem 的 Cache"})
+    public static boolean allow_disable_cosn_fs_cache = false;
 }
