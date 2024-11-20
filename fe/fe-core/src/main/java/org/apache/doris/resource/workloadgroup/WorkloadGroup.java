@@ -134,7 +134,7 @@ public class WorkloadGroup implements Writable, GsonPostProcessable {
     private int maxQueueSize = 0;
     private int queueTimeout = 0;
 
-    private int cpuHardLimit = 0;
+    private int cpuHardLimit = -1;
 
     WorkloadGroup(long id, String name, Map<String, String> properties) {
         this(id, name, properties, 0);
@@ -599,7 +599,7 @@ public class WorkloadGroup implements Writable, GsonPostProcessable {
         // enable_cpu_hard_limit = false, using cpu soft limit
         tWorkloadGroupInfo.setEnableCpuHardLimit(Config.enable_cpu_hard_limit);
 
-        if (Config.enable_cpu_hard_limit && cpuHardLimit <= 0) {
+        if (Config.enable_cpu_hard_limit && !(cpuHardLimit >= 1 && cpuHardLimit <= 100) && -1 != cpuHardLimit) {
             LOG.warn("enable_cpu_hard_limit=true but cpuHardLimit value not illegal,"
                     + "id=" + id + ",name=" + name);
         }
