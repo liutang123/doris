@@ -154,7 +154,7 @@ public:
     bool is_finished() { return _is_finished.load(); }
     bool should_stop() { return _should_stop.load(); }
 
-    virtual std::string debug_string();
+    std::string debug_string();
 
     RuntimeState* state() { return _state; }
     void incr_ctx_scheduling_time(int64_t num) { _scanner_ctx_sched_time->update(num); }
