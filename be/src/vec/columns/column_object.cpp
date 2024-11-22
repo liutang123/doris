@@ -28,8 +28,6 @@
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 
-#include <algorithm>
-#include <cstdlib>
 #include <functional>
 #include <limits>
 #include <map>

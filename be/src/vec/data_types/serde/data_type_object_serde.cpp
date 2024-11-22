@@ -47,7 +47,6 @@ Status DataTypeObjectSerDe::_write_column_to_mysql(const IColumn& column,
     if (!variant.is_finalized()) {
         const_cast<ColumnObject&>(variant).finalize();
     }
-    RETURN_IF_ERROR(variant.sanitize());
     if (variant.is_scalar_variant()) {
         // Serialize scalar types, like int, string, array, faster path
         const auto& root = variant.get_subcolumn({});
