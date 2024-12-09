@@ -299,8 +299,8 @@ else
     LIMIT="/bin/limit3 -c 0 -n 65536"
 fi
 
-# limit in 100g
-ulimit -c 107374182400
+# diable core
+ulimit -S -c 0
 
 ## If you are not running in aws cloud, disable this env since https://github.com/aws/aws-sdk-cpp/issues/1410.
 if [[ "${RUN_IN_AWS}" -eq 0 ]]; then

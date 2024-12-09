@@ -112,7 +112,7 @@ DEFINE_mBool(enable_use_cgroup_memory_info, "true");
 // defaults to bytes if no unit is given"
 // must larger than 0. and if larger than physical memory size,
 // it will be set to physical memory size.
-DEFINE_String(mem_limit, "90%");
+DEFINE_String(mem_limit, "85%");
 
 // Soft memory limit as a fraction of hard memory limit.
 DEFINE_Double(soft_mem_limit_frac, "0.9");
