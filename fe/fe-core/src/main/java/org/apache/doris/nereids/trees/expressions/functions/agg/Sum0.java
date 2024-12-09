@@ -49,7 +49,7 @@ import java.util.List;
  */
 public class Sum0 extends AggregateFunction
         implements UnaryExpression, AlwaysNotNullable, ExplicitlyCastableSignature, ComputePrecisionForSum,
-        SupportWindowAnalytic, RollUpTrait {
+        SupportWindowAnalytic, RollUpTrait, SupportMultiDistinct {
 
     public static final List<FunctionSignature> SIGNATURES = ImmutableList.of(
             FunctionSignature.ret(BigIntType.INSTANCE).args(BooleanType.INSTANCE),
@@ -76,6 +76,7 @@ public class Sum0 extends AggregateFunction
         super("sum0", distinct, arg);
     }
 
+    @Override
     public MultiDistinctSum0 convertToMultiDistinct() {
         Preconditions.checkArgument(distinct,
                 "can't convert to multi_distinct_sum because there is no distinct args");

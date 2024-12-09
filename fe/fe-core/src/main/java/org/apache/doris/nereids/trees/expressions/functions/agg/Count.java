@@ -37,7 +37,8 @@ import java.util.List;
 
 /** count agg function. */
 public class Count extends AggregateFunction
-        implements ExplicitlyCastableSignature, AlwaysNotNullable, SupportWindowAnalytic, RollUpTrait {
+        implements ExplicitlyCastableSignature, AlwaysNotNullable, SupportWindowAnalytic, RollUpTrait,
+        SupportMultiDistinct {
 
     public static final List<FunctionSignature> SIGNATURES = ImmutableList.of(
             // count(*)
@@ -156,5 +157,11 @@ public class Count extends AggregateFunction
     @Override
     public boolean canRollUp() {
         return true;
+    }
+
+    @Override
+    public AggregateFunction convertToMultiDistinct() {
+        return new MultiDistinctCount(getArgument(0),
+                getArguments().subList(1, arity()).toArray(new Expression[0]));
     }
 }
