@@ -169,6 +169,7 @@ public abstract class ExternalDatabase<T extends ExternalTable>
                                             Util.genIdByName(extCatalog.getName(), name, localTableName), extCatalog,
                                             this, true)),
                             (key, value, cause) -> value.ifPresent(ExternalTable::unsetObjectCreated));
+                    listTableNames();  // init lowerCaseToTableName
                 }
                 setLastUpdateTime(System.currentTimeMillis());
             } else {
