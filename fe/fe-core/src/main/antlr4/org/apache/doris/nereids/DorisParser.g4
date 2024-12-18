@@ -54,6 +54,7 @@ statementBase
     | constraintStatement               #constraintStatementAlias
     | supportedDropStatement            #supportedDropStatementAlias
     | supportedShowStatement            #supportedShowStatementAlias
+    | supportedUseStatement             #supportedUseStatementAlias
     | unsupportedStatement              #unsupported
     ;
 
