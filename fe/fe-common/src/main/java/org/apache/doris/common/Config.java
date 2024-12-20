@@ -1999,7 +1999,7 @@ public class Config extends ConfigBase {
                     + "And the max number of compute node is controlled by min_backend_num_for_external_table. "
                     + "If set to false, query on external table will assign to any node. "
                     + "If there is no compute node in cluster, this config takes no effect."})
-    public static boolean prefer_compute_node_for_external_table = false;
+    public static boolean prefer_compute_node_for_external_table = true;
 
     @ConfField(mutable = true, description = {"只有当prefer_compute_node_for_external_table为true时生效，"
             + "如果计算节点数小于这个值，外部表的查询会尝试获取一些混合节点来分配，以使节点总数达到这个值。"

@@ -2234,7 +2234,7 @@ public class SessionVariable implements Serializable, Writable {
                     + "selected as the execution node. The above behavior does not include the situation where users "
                     + "set tags."
     })
-    public boolean preferComputeNodeForNoScanFragment = false;
+    public boolean preferComputeNodeForNoScanFragment = true;
 
     @VariableMgr.VarAttr(name = ENABLE_MATCH_WITHOUT_INVERTED_INDEX, description = {
         "开启无索引match查询功能，建议正式环境保持开启",
