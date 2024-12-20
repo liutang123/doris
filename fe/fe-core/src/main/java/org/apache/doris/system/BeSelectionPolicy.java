@@ -53,6 +53,7 @@ public class BeSelectionPolicy {
 
     public boolean preferComputeNode = false;
     public int expectBeNum = 0;
+    public int makeupPercent = -1;
 
     public boolean enableRoundRobin = false;
     // if enable round robin, choose next be from nextRoundRobinIndex
@@ -114,6 +115,11 @@ public class BeSelectionPolicy {
 
         public Builder assignExpectBeNum(int expectBeNum) {
             policy.expectBeNum = expectBeNum;
+            return this;
+        }
+
+        public Builder makeupPercent(int makeupPercent) {
+            policy.makeupPercent = makeupPercent;
             return this;
         }
 
@@ -188,6 +194,17 @@ public class BeSelectionPolicy {
         List<Backend> candidates = new ArrayList<>();
         if (preferComputeNode && numComputeNode > 0) {
             int realExpectBeNum = expectBeNum == -1 ? numComputeNode : expectBeNum;
+            if (expectBeNum == -1 && makeupPercent >= 0) {
+                if (makeupPercent > 100) {
+                    makeupPercent = 100;
+                }
+                int numMixNode = filterBackends.size() - numComputeNode;
+                if (numMixNode != 0) {
+                    int bigNum = Math.max(numMixNode, numComputeNode);
+                    int minNum = Math.min(numMixNode, numComputeNode);
+                    realExpectBeNum = bigNum + (int) ((makeupPercent / 100.0) * minNum);
+                }
+            }
             int num = 0;
             // pick compute node first
             for (Backend backend : filterBackends) {

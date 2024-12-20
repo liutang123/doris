@@ -2013,6 +2013,25 @@ public class Config extends ConfigBase {
                     + "-1 means only use current compute node."})
     public static int min_backend_num_for_external_table = -1;
 
+    @ConfField(mutable = true, description = {"只有当prefer_compute_node_for_external_table为true"
+            + "且min_backend_num_for_external_table为-1时生效。"
+            + "当该配置为-1时，不使用混合节点；"
+            + "当该配置为0时，以CN节点和混合节点中数量较多的节点数为并发度，优先使用CN节点，并发度不足时使用混合节点补齐；"
+            + "当该配置大于0小于等于100时，以CN节点和混合节点中数量较多的节点数+数量较少的节点数比例（本配置）为并发度，"
+            + "优先使用CN节点，并发度不足时使用混合节点补齐；"
+            + "当该配置大于100时，效果相当于100", "It only takes effect when prefer_compute_node_for_external_table is true"
+            + " and min_backend_num_for_external_table is -1. "
+            + "When the configuration is -1, do not use mix be; "
+            + "When the configuration is set to 0, the number of nodes with a larger number of CN nodes and mixed nodes"
+            + " is used as the concurrency, and CN nodes are prefer. When the concurrency is insufficient, mixed nodes"
+            + " are used to make up for it; "
+            + "When the configuration is greater than 0 and less than or equal to 100, the concurrency is determined by"
+            + " the ratio (this configuration) of the number of nodes with fewer nodes and the number of nodes with"
+            + " more nodes, and CN nodes are used first. If the concurrency is insufficient, mixed nodes are used to"
+            + " make up for it; "
+            + "When the configuration is greater than 100, the effect is equivalent to 100"})
+    public static int makeup_percent_for_external_table = 50;
+
     /**
      * Max query profile num.
      */
