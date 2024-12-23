@@ -57,6 +57,7 @@ import org.apache.doris.nereids.trees.plans.commands.insert.BatchInsertIntoTable
 import org.apache.doris.nereids.trees.plans.commands.insert.InsertIntoTableCommand;
 import org.apache.doris.nereids.trees.plans.commands.insert.InsertOverwriteTableCommand;
 import org.apache.doris.nereids.trees.plans.commands.use.SwitchCommand;
+import org.apache.doris.nereids.trees.plans.commands.use.UseCommand;
 
 /** CommandVisitor. */
 public interface CommandVisitor<R, C> {
@@ -220,5 +221,9 @@ public interface CommandVisitor<R, C> {
 
     default R visitSwitchCommand(SwitchCommand switchCommand, C context) {
         return visitCommand(switchCommand, context);
+    }
+
+    default R visitUseCommand(UseCommand useCommand, C context) {
+        return visitCommand(useCommand, context);
     }
 }
