@@ -47,6 +47,7 @@ import org.apache.doris.catalog.Replica.ReplicaState;
 import org.apache.doris.catalog.ReplicaAllocation;
 import org.apache.doris.catalog.Resource;
 import org.apache.doris.catalog.ResourceMgr;
+import org.apache.doris.catalog.S3Resource;
 import org.apache.doris.catalog.Table;
 import org.apache.doris.catalog.TableIf.TableType;
 import org.apache.doris.catalog.Tablet;
@@ -67,6 +68,12 @@ import org.apache.doris.common.util.PropertyAnalyzer;
 import org.apache.doris.common.util.TimeUtils;
 import org.apache.doris.datasource.InternalCatalog;
 import org.apache.doris.datasource.property.S3ClientBEProperties;
+import org.apache.doris.datasource.property.constants.S3Properties;
+import org.apache.doris.persist.ColocatePersistInfo;
+import org.apache.doris.policy.Policy;
+import org.apache.doris.policy.PolicyMgr;
+import org.apache.doris.policy.PolicyTypeEnum;
+import org.apache.doris.policy.StoragePolicy;
 import org.apache.doris.resource.Tag;
 import org.apache.doris.task.AgentBatchTask;
 import org.apache.doris.task.AgentTask;
@@ -95,6 +102,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Table.Cell;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -108,6 +116,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -116,6 +125,7 @@ import java.util.zip.GZIPOutputStream;
 
 public class RestoreJob extends AbstractJob {
     private static final String PROP_RESERVE_REPLICA = RestoreStmt.PROP_RESERVE_REPLICA;
+    private static final String PROP_RESERVE_COLOCATE = RestoreStmt.PROP_RESERVE_COLOCATE;
     private static final String PROP_RESERVE_DYNAMIC_PARTITION_ENABLE =
             RestoreStmt.PROP_RESERVE_DYNAMIC_PARTITION_ENABLE;
     private static final String PROP_IS_BEING_SYNCED = PropertyAnalyzer.PROPERTIES_IS_BEING_SYNCED;
@@ -123,6 +133,9 @@ public class RestoreJob extends AbstractJob {
     private static final String PROP_CLEAN_PARTITIONS = RestoreStmt.PROP_CLEAN_PARTITIONS;
     private static final String PROP_ATOMIC_RESTORE = RestoreStmt.PROP_ATOMIC_RESTORE;
     private static final String PROP_FORCE_REPLACE = RestoreStmt.PROP_FORCE_REPLACE;
+    private static final String PROP_STORAGE_RESOURCE = RestoreStmt.PROP_STORAGE_RESOURCE;
+    private static final String PROP_RESERVE_STORAGE_POLICY = RestoreStmt.PROP_RESERVE_STORAGE_POLICY;
+
     private static final String ATOMIC_RESTORE_TABLE_PREFIX = "__doris_atomic_restore_prefix__";
 
     private static final Logger LOG = LogManager.getLogger(RestoreJob.class);
@@ -162,6 +175,7 @@ public class RestoreJob extends AbstractJob {
     private ReplicaAllocation replicaAlloc;
 
     private boolean reserveReplica = false;
+    private boolean reserveColocate = false;
     private boolean reserveDynamicPartitionEnable = false;
     private long createReplicasTimeStamp = -1;
     // this 2 members is to save all newly restored objs
@@ -169,6 +183,7 @@ public class RestoreJob extends AbstractJob {
     private List<Pair<String, Partition>> restoredPartitions = Lists.newArrayList();
     private List<Table> restoredTbls = Lists.newArrayList();
     private List<Resource> restoredResources = Lists.newArrayList();
+    private List<StoragePolicy> storagePolicies = Lists.newArrayList();
 
     // save all restored partitions' version info which are already exist in catalog
     // table id -> partition id -> (version, version hash)
@@ -177,6 +192,8 @@ public class RestoreJob extends AbstractJob {
     private com.google.common.collect.Table<Long, Long, SnapshotInfo> snapshotInfos = HashBasedTable.create();
 
     private Map<Long, Long> unfinishedSignatureToId = Maps.newConcurrentMap();
+
+    private List<ColocatePersistInfo> colocatePersistInfos = Lists.newArrayList();
 
     // the meta version is used when reading backup meta from file.
     // we do not persist this field, because this is just a temporary solution.
@@ -198,6 +215,10 @@ public class RestoreJob extends AbstractJob {
     // Whether to restore the table by replacing the exists but conflicted table.
     private boolean isForceReplace = false;
 
+    // the target storage resource
+    private String storageResource = "";
+    // whether to reserve storage policy
+    private boolean reserveStoragePolicy = false;
     // restore properties
     private Map<String, String> properties = Maps.newHashMap();
 
@@ -214,8 +235,9 @@ public class RestoreJob extends AbstractJob {
 
     public RestoreJob(String label, String backupTs, long dbId, String dbName, BackupJobInfo jobInfo, boolean allowLoad,
             ReplicaAllocation replicaAlloc, long timeoutMs, int metaVersion, boolean reserveReplica,
-            boolean reserveDynamicPartitionEnable, boolean isBeingSynced, boolean isCleanTables,
-            boolean isCleanPartitions, boolean isAtomicRestore, boolean isForceReplace, Env env, long repoId) {
+            boolean reserveColocate, boolean reserveDynamicPartitionEnable, boolean isBeingSynced,
+            boolean isCleanTables, boolean isCleanPartitions, boolean isAtomicRestore, boolean isForceReplace,
+            String storageResource, boolean reserveStoragePolicy, Env env, long repoId) {
         super(JobType.RESTORE, label, dbId, dbName, timeoutMs, env, repoId);
         this.backupTimestamp = backupTs;
         this.jobInfo = jobInfo;
@@ -224,6 +246,7 @@ public class RestoreJob extends AbstractJob {
         this.state = RestoreJobState.PENDING;
         this.metaVersion = metaVersion;
         this.reserveReplica = reserveReplica;
+        this.reserveColocate = reserveColocate;
         // if backup snapshot is come from a cluster with force replication allocation,
         // ignore the origin allocation
         if (jobInfo.isForceReplicationAllocation) {
@@ -237,24 +260,28 @@ public class RestoreJob extends AbstractJob {
         if (this.isAtomicRestore) {
             this.isForceReplace = isForceReplace;
         }
+        this.storageResource = storageResource;
+        this.reserveStoragePolicy = reserveStoragePolicy;
         properties.put(PROP_RESERVE_REPLICA, String.valueOf(reserveReplica));
+        properties.put(PROP_RESERVE_COLOCATE, String.valueOf(reserveColocate));
         properties.put(PROP_RESERVE_DYNAMIC_PARTITION_ENABLE, String.valueOf(reserveDynamicPartitionEnable));
         properties.put(PROP_IS_BEING_SYNCED, String.valueOf(isBeingSynced));
         properties.put(PROP_CLEAN_TABLES, String.valueOf(isCleanTables));
         properties.put(PROP_CLEAN_PARTITIONS, String.valueOf(isCleanPartitions));
         properties.put(PROP_ATOMIC_RESTORE, String.valueOf(isAtomicRestore));
         properties.put(PROP_FORCE_REPLACE, String.valueOf(isForceReplace));
+        properties.put(PROP_STORAGE_RESOURCE, storageResource);
+        properties.put(PROP_RESERVE_STORAGE_POLICY, String.valueOf(reserveStoragePolicy));
     }
 
     public RestoreJob(String label, String backupTs, long dbId, String dbName, BackupJobInfo jobInfo, boolean allowLoad,
             ReplicaAllocation replicaAlloc, long timeoutMs, int metaVersion, boolean reserveReplica,
-            boolean reserveDynamicPartitionEnable, boolean isBeingSynced, boolean isCleanTables,
-            boolean isCleanPartitions, boolean isAtomicRestore, boolean isForceReplace, Env env, long repoId,
-            BackupMeta backupMeta) {
+            boolean reserveColocate, boolean reserveDynamicPartitionEnable, boolean isBeingSynced,
+            boolean isCleanTables, boolean isCleanPartitions, boolean isAtomicRestore, boolean isForceReplace,
+            String storageResource, boolean reserveStoragePolicy, Env env, long repoId, BackupMeta backupMeta) {
         this(label, backupTs, dbId, dbName, jobInfo, allowLoad, replicaAlloc, timeoutMs, metaVersion, reserveReplica,
-                reserveDynamicPartitionEnable, isBeingSynced, isCleanTables, isCleanPartitions, isAtomicRestore,
-                isForceReplace, env,
-                repoId);
+                reserveColocate, reserveDynamicPartitionEnable, isBeingSynced, isCleanTables, isCleanPartitions,
+                isAtomicRestore, isForceReplace, storageResource, reserveStoragePolicy, env, repoId);
         this.backupMeta = backupMeta;
     }
 
@@ -272,6 +299,10 @@ public class RestoreJob extends AbstractJob {
 
     public boolean isBeingSynced() {
         return isBeingSynced;
+    }
+
+    public List<ColocatePersistInfo> getColocatePersistInfos() {
+        return colocatePersistInfos;
     }
 
     public synchronized boolean finishTabletSnapshotTask(SnapshotTask task, TFinishTaskRequest request) {
@@ -659,6 +690,32 @@ public class RestoreJob extends AbstractJob {
             }
         }
 
+        for (BackupJobInfo.BackupS3ResourceInfo backupS3ResourceInfo : jobInfo.newBackupObjects.s3Resources) {
+            Resource resource = Env.getCurrentEnv().getResourceMgr().getResource(StringUtils.isNotEmpty(storageResource)
+                    ? storageResource : backupS3ResourceInfo.name);
+            if (resource == null) {
+                continue;
+            }
+            if (resource.getType() != Resource.ResourceType.S3) {
+                status = new Status(ErrCode.COMMON_ERROR,
+                    "The local resource " + resource.getName()
+                        + " with the same name but a different type of backup meta.");
+                return;
+            }
+        }
+
+        for (StoragePolicy backupStoragePolicyInfo : jobInfo.newBackupObjects.storagePolicies) {
+            String backupStoragePoliceName = backupStoragePolicyInfo.getName();
+            Optional<Policy> localPolicy = Env.getCurrentEnv().getPolicyMgr().findPolicy(backupStoragePoliceName,
+                    PolicyTypeEnum.STORAGE);
+            if (localPolicy.isPresent() && localPolicy.get().getType() != PolicyTypeEnum.STORAGE) {
+                status = new Status(ErrCode.COMMON_ERROR,
+                    "The local policy " + backupStoragePoliceName
+                        + " with the same name but a different type of backup meta.");
+                return;
+            }
+        }
+
         // the new tablets -> { local tablet, schema hash, storage medium }, used in atomic restore.
         Map<Long, TabletRef> tabletBases = new HashMap<>();
 
@@ -687,6 +744,12 @@ public class RestoreJob extends AbstractJob {
                 if (localTbl != null) {
                     OlapTable localOlapTbl = (OlapTable) localTbl;
                     OlapTable remoteOlapTbl = (OlapTable) remoteTbl;
+
+                    if (localOlapTbl.isColocateTable() || (reserveColocate && remoteOlapTbl.isColocateTable())) {
+                        status = new Status(ErrCode.COMMON_ERROR, "Not support to restore to local table "
+                                + tableName + " with colocate group.");
+                        return;
+                    }
 
                     localOlapTbl.readLock();
                     try {
@@ -732,6 +795,16 @@ public class RestoreJob extends AbstractJob {
                             BackupPartitionInfo backupPartInfo = partitionEntry.getValue();
                             Partition localPartition = localOlapTbl.getPartition(partitionName);
                             Partition remotePartition = remoteOlapTbl.getPartition(partitionName);
+
+                            String policyName = remoteOlapTbl.getPartitionInfo()
+                                    .getDataProperty(remotePartition.getId()).getStoragePolicy();
+                            if (StringUtils.isNotEmpty(policyName)) {
+                                status = new Status(ErrCode.COMMON_ERROR, "Can't restore remote partition "
+                                        + partitionName + " in table " + remoteTbl.getName() + " with storage policy "
+                                        + policyName + " when local table " + localTbl.getName() + " exist."
+                                        + " Please drop old table and restore again.");
+                                return;
+                            }
                             if (localPartition != null) {
                                 // Partition already exist.
                                 PartitionInfo localPartInfo = localOlapTbl.getPartitionInfo();
@@ -821,7 +894,8 @@ public class RestoreJob extends AbstractJob {
 
                     // reset all ids in this table
                     String srcDbName = jobInfo.dbName;
-                    Status st = remoteOlapTbl.resetIdsForRestore(env, db, replicaAlloc, reserveReplica, srcDbName);
+                    Status st = remoteOlapTbl.resetIdsForRestore(env, db, replicaAlloc,
+                            reserveReplica, reserveStoragePolicy, reserveColocate, colocatePersistInfos, srcDbName);
                     if (!st.ok()) {
                         status = st;
                         return;
@@ -912,6 +986,18 @@ public class RestoreJob extends AbstractJob {
             if (isAtomicRestore && !restoredPartitions.isEmpty()) {
                 throw new RuntimeException("atomic restore is set, but the restored partitions is not empty");
             }
+
+            // check and restore resources
+            checkAndRestoreResources();
+            if (!status.ok()) {
+                return;
+            }
+            // check and restore storage policies, should before createReplicas to get storage_policy_id
+            checkAndRestoreStoragePolicies();
+            if (!status.ok()) {
+                return;
+            }
+
             for (Pair<String, Partition> entry : restoredPartitions) {
                 OlapTable localTbl = (OlapTable) db.getTableNullable(entry.first);
                 Preconditions.checkNotNull(localTbl, localTbl.getName());
@@ -968,11 +1054,6 @@ public class RestoreJob extends AbstractJob {
             db.readUnlock();
         }
 
-        // check and restore resources
-        checkAndRestoreResources();
-        if (!status.ok()) {
-            return;
-        }
         if (LOG.isDebugEnabled()) {
             LOG.debug("finished to restore resources. {}", this.jobId);
         }
@@ -1276,12 +1357,106 @@ public class RestoreJob extends AbstractJob {
             } else {
                 try {
                     // restore resource
-                    resourceMgr.createResource(remoteOdbcResource, false);
+                    resourceMgr.createResource(remoteOdbcResource);
                 } catch (DdlException e) {
                     status = new Status(ErrCode.COMMON_ERROR, e.getMessage());
                     return;
                 }
                 restoredResources.add(remoteOdbcResource);
+            }
+        }
+
+        if (!reserveStoragePolicy) {
+            return;
+        }
+
+        for (BackupJobInfo.BackupS3ResourceInfo backupS3ResourceInfo : jobInfo.newBackupObjects.s3Resources) {
+            String backupResourceName = backupS3ResourceInfo.name;
+            Resource localResource = resourceMgr.getResource(StringUtils.isNotEmpty(storageResource)
+                    ? storageResource : backupResourceName);
+            S3Resource remoteS3Resource = (S3Resource) backupMeta.getResource(backupResourceName);
+
+            if (StringUtils.isNotEmpty(storageResource)) {
+                if (localResource != null) {
+                    if (localResource.getType() != Resource.ResourceType.S3) {
+                        status = new Status(ErrCode.COMMON_ERROR, "The type of local resource "
+                            + backupResourceName + " is not same as restored resource");
+                        return;
+                    }
+                    S3Resource localS3Resource = (S3Resource) localResource;
+                    if (localS3Resource.getProperty(S3Properties.ENDPOINT)
+                            .equals(remoteS3Resource.getProperty(S3Properties.ENDPOINT))
+                            && localS3Resource.getProperty(S3Properties.BUCKET)
+                            .equals(remoteS3Resource.getProperty(S3Properties.BUCKET))
+                            && localS3Resource.getProperty(S3Properties.ROOT_PATH)
+                            .equals(remoteS3Resource.getProperty(S3Properties.ROOT_PATH))) {
+                        status = new Status(ErrCode.COMMON_ERROR, "local S3 resource "
+                                + storageResource + " root path " + localS3Resource.getProperty(S3Properties.ROOT_PATH)
+                                + " should not same as restored resource root path");
+                        return;
+                    }
+                } else {
+                    status = new Status(ErrCode.COMMON_ERROR,
+                            "The local resource " + storageResource + " is not exist.");
+                    return;
+                }
+            } else {
+                if (localResource != null) {
+                    if (localResource.getType() != Resource.ResourceType.S3) {
+                        status = new Status(ErrCode.COMMON_ERROR, "The type of local resource "
+                                + backupResourceName + " is not same as restored resource");
+                        return;
+                    }
+                    S3Resource localS3Resource = (S3Resource) localResource;
+                    if (localS3Resource.getSignature(BackupHandler.SIGNATURE_VERSION)
+                            != remoteS3Resource.getSignature(BackupHandler.SIGNATURE_VERSION)) {
+                        status = new Status(ErrCode.COMMON_ERROR, "S3 resource "
+                                + jobInfo.getAliasByOriginNameIfSet(backupResourceName)
+                                + " already exist but with different properties");
+                        return;
+                    }
+                } else {
+                    status = new Status(ErrCode.COMMON_ERROR, "Local resource "
+                            + backupResourceName + " is not exist");
+                    return;
+                }
+            }
+        }
+    }
+
+    private void checkAndRestoreStoragePolicies() {
+        if (!reserveStoragePolicy) {
+            return;
+        }
+        PolicyMgr policyMgr = Env.getCurrentEnv().getPolicyMgr();
+        for (StoragePolicy backupStoargePolicy : jobInfo.newBackupObjects.storagePolicies) {
+            String backupStoragePoliceName = backupStoargePolicy.getName();
+            Optional<Policy> localPolicy = policyMgr.findPolicy(backupStoragePoliceName,
+                    PolicyTypeEnum.STORAGE);
+            // use specified storageResource
+            if (StringUtils.isNotEmpty(storageResource)) {
+                backupStoargePolicy.setStorageResource(storageResource);
+            }
+            if (localPolicy.isPresent()) {
+                StoragePolicy localStoargePolicy = (StoragePolicy) localPolicy.get();
+                // storage policy name and resource name should be same
+                if (localStoargePolicy.getSignature(BackupHandler.SIGNATURE_VERSION)
+                        != backupStoargePolicy.getSignature(BackupHandler.SIGNATURE_VERSION)) {
+                    status = new Status(ErrCode.COMMON_ERROR, "Storage policy "
+                        + jobInfo.getAliasByOriginNameIfSet(backupStoragePoliceName)
+                        + " already exist but with different properties");
+                    return;
+                }
+
+            } else {
+                // restore storage policy
+                try {
+                    policyMgr.createStoragePolicy(backupStoargePolicy);
+                } catch (Exception e) {
+                    LOG.error("restore storage policy fail should not happen", e);
+                    return;
+                }
+                storagePolicies.add(backupStoargePolicy);
             }
         }
     }
@@ -1345,6 +1520,11 @@ public class RestoreJob extends AbstractJob {
                 Env.getCurrentInvertedIndex().addTablet(restoreTablet.getId(), tabletMeta);
                 for (Replica restoreReplica : restoreTablet.getReplicas()) {
                     Env.getCurrentInvertedIndex().addReplica(restoreTablet.getId(), restoreReplica);
+                    String storagePolicy = "";
+                    if (reserveStoragePolicy) {
+                        storagePolicy = localTbl.getPartitionInfo()
+                                .getDataProperty(restorePart.getId()).getStoragePolicy();
+                    }
                     CreateReplicaTask task = new CreateReplicaTask(restoreReplica.getBackendId(), dbId,
                             localTbl.getId(), restorePart.getId(), restoredIdx.getId(),
                             restoreTablet.getId(), restoreReplica.getId(), indexMeta.getShortKeyColumnCount(),
@@ -1357,7 +1537,8 @@ public class RestoreJob extends AbstractJob {
                             localTbl.getPartitionInfo().getTabletType(restorePart.getId()),
                             null,
                             localTbl.getCompressionType(),
-                            localTbl.getEnableUniqueKeyMergeOnWrite(), localTbl.getStoragePolicy(),
+                            localTbl.getEnableUniqueKeyMergeOnWrite(),
+                            storagePolicy,
                             localTbl.disableAutoCompaction(),
                             localTbl.enableSingleReplicaCompaction(),
                             localTbl.skipWriteIndexOnLoad(),
@@ -1562,6 +1743,22 @@ public class RestoreJob extends AbstractJob {
             }
         }
 
+        // restored resource
+        ResourceMgr resourceMgr = Env.getCurrentEnv().getResourceMgr();
+        for (Resource resource : restoredResources) {
+            resourceMgr.replayCreateResource(resource);
+        }
+
+        // restored storage policy
+        PolicyMgr policyMgr = Env.getCurrentEnv().getPolicyMgr();
+        for (StoragePolicy storagePolicy : storagePolicies) {
+            Optional<Policy> localPolicy = policyMgr.findPolicy(storagePolicy.getPolicyName(),
+                    PolicyTypeEnum.STORAGE);
+            if (!localPolicy.isPresent()) {
+                policyMgr.replayCreate(storagePolicy);
+            }
+        }
+
         // restored partitions
         for (Pair<String, Partition> entry : restoredPartitions) {
             OlapTable localTbl = (OlapTable) db.getTableNullable(entry.first);
@@ -1633,12 +1830,6 @@ public class RestoreJob extends AbstractJob {
             }
         }
 
-        // restored resource
-        ResourceMgr resourceMgr = Env.getCurrentEnv().getResourceMgr();
-        for (Resource resource : restoredResources) {
-            resourceMgr.replayCreateResource(resource);
-        }
-
         LOG.info("replay check and prepare meta. {}", this);
     }
 
@@ -1648,6 +1839,9 @@ public class RestoreJob extends AbstractJob {
             state = RestoreJobState.DOWNLOAD;
 
             env.getEditLog().logRestoreJob(this);
+            for (ColocatePersistInfo info : colocatePersistInfos) {
+                env.getEditLog().logColocateAddTable(info);
+            }
             LOG.info("finished making snapshots. {}", this);
             return;
         }
@@ -2110,6 +2304,7 @@ public class RestoreJob extends AbstractJob {
             restoredPartitions.clear();
             restoredTbls.clear();
             restoredResources.clear();
+            storagePolicies.clear();
 
             com.google.common.collect.Table<Long, Long, SnapshotInfo> savedSnapshotInfos = snapshotInfos;
             snapshotInfos = HashBasedTable.create();
@@ -2380,6 +2575,13 @@ public class RestoreJob extends AbstractJob {
                 LOG.info("remove restored resource when cancelled: {}", resource.getName());
                 resourceMgr.dropResource(resource);
             }
+
+            // remove restored storage policy
+            PolicyMgr policyMgr = Env.getCurrentEnv().getPolicyMgr();
+            for (StoragePolicy storagePolicy : storagePolicies) {
+                LOG.info("remove restored storage polciy when cancelled: {}", storagePolicy.getName());
+                policyMgr.replayDrop(storagePolicy);
+            }
         }
 
         if (!isReplay) {
@@ -2397,6 +2599,11 @@ public class RestoreJob extends AbstractJob {
             state = RestoreJobState.CANCELLED;
             // log
             env.getEditLog().logRestoreJob(this);
+            for (ColocatePersistInfo info : colocatePersistInfos) {
+                Env.getCurrentColocateIndex().removeTable(info.getTableId());
+                env.getEditLog().logColocateRemoveTable(info);
+            }
+            colocatePersistInfos.clear();
 
             LOG.info("finished to cancel restore job. current state: {}. is replay: {}. {}",
                      curState.name(), isReplay, this);
@@ -2764,6 +2971,8 @@ public class RestoreJob extends AbstractJob {
         isCleanPartitions = Boolean.parseBoolean(properties.get(PROP_CLEAN_PARTITIONS));
         isAtomicRestore = Boolean.parseBoolean(properties.get(PROP_ATOMIC_RESTORE));
         isForceReplace = Boolean.parseBoolean(properties.get(PROP_FORCE_REPLACE));
+        storageResource = properties.get(PROP_STORAGE_RESOURCE);
+        reserveStoragePolicy = Boolean.parseBoolean(properties.get(PROP_RESERVE_STORAGE_POLICY));
     }
 
     @Override

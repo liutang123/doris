@@ -18,7 +18,9 @@
 package org.apache.doris.analysis;
 
 import org.apache.doris.backup.Repository;
+import org.apache.doris.catalog.Env;
 import org.apache.doris.catalog.ReplicaAllocation;
+import org.apache.doris.catalog.Resource;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.Config;
 import org.apache.doris.common.ErrorCode;
@@ -40,17 +42,22 @@ public class RestoreStmt extends AbstractBackupStmt {
     private static final String PROP_IS_BEING_SYNCED = PropertyAnalyzer.PROPERTIES_IS_BEING_SYNCED;
 
     public static final String PROP_RESERVE_REPLICA = "reserve_replica";
+    public static final String PROP_RESERVE_COLOCATE = "reserve_colocate";
     public static final String PROP_RESERVE_DYNAMIC_PARTITION_ENABLE = "reserve_dynamic_partition_enable";
     public static final String PROP_CLEAN_TABLES = "clean_tables";
     public static final String PROP_CLEAN_PARTITIONS = "clean_partitions";
     public static final String PROP_ATOMIC_RESTORE = "atomic_restore";
     public static final String PROP_FORCE_REPLACE = "force_replace";
+    public static final String PROP_STORAGE_RESOURCE = "storage_resource";
+    public static final String PROP_RESERVE_STORAGE_POLICY = "reserve_storage_policy";
 
     private boolean allowLoad = false;
     private ReplicaAllocation replicaAlloc = ReplicaAllocation.DEFAULT_ALLOCATION;
     private String backupTimestamp = null;
     private int metaVersion = -1;
     private boolean reserveReplica = false;
+    private boolean reserveColocate = false;
+    private boolean reserveStoragePolicy = true;
     private boolean reserveDynamicPartitionEnable = false;
     private boolean isLocal = false;
     private boolean isBeingSynced = false;
@@ -58,17 +65,23 @@ public class RestoreStmt extends AbstractBackupStmt {
     private boolean isCleanPartitions = false;
     private boolean isAtomicRestore = false;
     private boolean isForceReplace = false;
+    private String storageResource = "";
     private byte[] meta = null;
     private byte[] jobInfo = null;
 
     public RestoreStmt(LabelName labelName, String repoName, AbstractBackupTableRefClause restoreTableRefClause,
             Map<String, String> properties) {
-        super(labelName, repoName, restoreTableRefClause, properties);
+        super(labelName, repoName, restoreTableRefClause, properties, false);
+    }
+
+    public RestoreStmt(LabelName labelName, String repoName,
+                       Map<String, String> properties) {
+        super(labelName, repoName, null, properties, true);
     }
 
     public RestoreStmt(LabelName labelName, String repoName, AbstractBackupTableRefClause restoreTableRefClause,
             Map<String, String> properties, byte[] meta, byte[] jobInfo) {
-        super(labelName, repoName, restoreTableRefClause, properties);
+        super(labelName, repoName, restoreTableRefClause, properties, false);
         this.meta = meta;
         this.jobInfo = jobInfo;
     }
@@ -85,12 +98,24 @@ public class RestoreStmt extends AbstractBackupStmt {
         return backupTimestamp;
     }
 
+    public String getStorageResource() {
+        return storageResource;
+    }
+
     public int getMetaVersion() {
         return metaVersion;
     }
 
     public boolean reserveReplica() {
         return reserveReplica;
+    }
+
+    public boolean reserveColocate() {
+        return reserveColocate;
+    }
+
+    public boolean reserveStoragePolicy() {
+        return reserveStoragePolicy;
     }
 
     public boolean reserveDynamicPartitionEnable() {
@@ -179,7 +204,8 @@ public class RestoreStmt extends AbstractBackupStmt {
         if (reserveReplica && !Config.force_olap_table_replication_allocation.isEmpty()) {
             reserveReplica = false;
         }
-
+        // reserve colocate
+        reserveColocate = eatBooleanProperty(copiedProperties, PROP_RESERVE_COLOCATE, reserveColocate);
         // reserve dynamic partition enable
         reserveDynamicPartitionEnable = eatBooleanProperty(
                 copiedProperties, PROP_RESERVE_DYNAMIC_PARTITION_ENABLE, reserveDynamicPartitionEnable);
@@ -220,6 +246,27 @@ public class RestoreStmt extends AbstractBackupStmt {
 
         // is force replace
         isForceReplace = eatBooleanProperty(copiedProperties, PROP_FORCE_REPLACE, isForceReplace);
+
+        if (copiedProperties.containsKey(PROP_STORAGE_RESOURCE)) {
+            storageResource = copiedProperties.get(PROP_STORAGE_RESOURCE);
+            Resource localResource = Env.getCurrentEnv().getResourceMgr().getResource(storageResource);
+
+            if (localResource == null) {
+                ErrorReport.reportAnalysisException(ErrorCode.ERR_COMMON_ERROR,
+                        "Restore storage resource " + storageResource + " is not exist");
+            }
+
+            if (localResource.getType() != Resource.ResourceType.S3) {
+                ErrorReport.reportAnalysisException(ErrorCode.ERR_COMMON_ERROR,
+                        "The type of local resource "
+                        + storageResource + " is not same as restored resource");
+            }
+
+            copiedProperties.remove(PROP_STORAGE_RESOURCE);
+        }
+
+        // reserve storage policy
+        reserveStoragePolicy = eatBooleanProperty(copiedProperties, PROP_RESERVE_STORAGE_POLICY, reserveStoragePolicy);
 
         if (!copiedProperties.isEmpty()) {
             ErrorReport.reportAnalysisException(ErrorCode.ERR_COMMON_ERROR,
