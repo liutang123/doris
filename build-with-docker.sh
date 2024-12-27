@@ -45,6 +45,30 @@ if [ -n "$CONTAINER_IDS" ]; then
   docker rm -f $CONTAINER_IDS
 fi
 
+# Download maven repo for first time
+ARCHIVE_NAME="cdw-doris-2.1-maven-repo.tar.bz2"
+DOWNLOAD_URL="https://cdwch-cos-apps-gz-1305504398.cos.ap-guangzhou.myqcloud.com/doris/$ARCHIVE_NAME"
+if [ -d ".m2" ]; then
+    echo ".m2 directory already exists."
+else
+    echo ".m2 directory does not exist. Downloading..."
+    wget $DOWNLOAD_URL -O $ARCHIVE_NAME
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to download $ARCHIVE_NAME from $DOWNLOAD_URL"
+        echo "Please check the URL and your network connection."
+    else
+        echo "Download completed. Extracting..."
+        tar -xjf $ARCHIVE_NAME
+        if [ $? -ne 0 ]; then
+            echo "Error: Failed to extract $ARCHIVE_NAME"
+            echo "Please check the archive file and try again."
+        else
+            echo "Extraction completed. .m2 directory is now available."
+            rm -f $ARCHIVE_NAME
+        fi
+    fi
+fi
+
 # build
 docker run -v ${WORK_DIR}/.m2:/root/.m2 -v ${WORK_DIR}/:/root  --name doris-2.x apache/doris:build-env-ldb-toolchain-latest /bin/bash -c /root/build_all.sh
 if [ $? -ne 0 ]; then
