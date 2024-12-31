@@ -118,6 +118,10 @@ under the License.
                     <id>cloudera-public</id>
                     <url>https://repository.cloudera.com/artifactory/cloudera-repos/</url>
                 </repository>
+                <repository>
+                    <id>huaweicloud</id>
+                    <url>https://repo.huaweicloud.com/repository/maven/huaweicloudsdk/</url>
+                </repository>
             </repositories>
         </profile>
     </profiles>
