@@ -27,6 +27,7 @@ import org.apache.doris.catalog.Env;
 import org.apache.doris.cluster.ClusterNamespace;
 import org.apache.doris.common.Config;
 import org.apache.doris.common.util.DebugUtil;
+import org.apache.doris.common.util.SqlParserUtils;
 import org.apache.doris.datasource.CatalogIf;
 import org.apache.doris.datasource.InternalCatalog;
 import org.apache.doris.metric.MetricRepo;
@@ -35,7 +36,11 @@ import org.apache.doris.nereids.analyzer.UnboundOneRowRelation;
 import org.apache.doris.nereids.analyzer.UnboundTableSink;
 import org.apache.doris.nereids.glue.LogicalPlanAdapter;
 import org.apache.doris.nereids.trees.plans.Plan;
+import org.apache.doris.nereids.trees.plans.commands.CreateTableCommand;
+import org.apache.doris.nereids.trees.plans.commands.ExportCommand;
+import org.apache.doris.nereids.trees.plans.commands.LoadCommand;
 import org.apache.doris.nereids.trees.plans.commands.insert.InsertIntoTableCommand;
+import org.apache.doris.nereids.trees.plans.logical.LogicalFileSink;
 import org.apache.doris.nereids.trees.plans.logical.LogicalInlineTable;
 import org.apache.doris.nereids.trees.plans.logical.LogicalPlan;
 import org.apache.doris.nereids.trees.plans.logical.LogicalUnion;
@@ -67,6 +72,10 @@ public class AuditLogHelper {
     public static void logAuditLog(ConnectContext ctx, String origStmt, StatementBase parsedStmt,
             org.apache.doris.proto.Data.PQueryStatistics statistics, boolean printFuzzyVariables) {
         try {
+            if (nereidsNeedEncryption(parsedStmt)) {
+                StatementBase stmt = SqlParserUtils.parseAndAnalyzeStmt(origStmt, ctx, true);
+                origStmt = stmt.toSql();
+            }
             origStmt = handleStmt(origStmt, parsedStmt);
             logAuditLogImpl(ctx, origStmt, parsedStmt, statistics, printFuzzyVariables);
         } catch (Throwable t) {
@@ -245,8 +254,8 @@ public class AuditLogHelper {
         auditEventBuilder.setFeIp(FrontendOptions.getLocalHostAddress());
 
         // We put origin query stmt at the end of audit log, for parsing the log more convenient.
-        if (!ctx.getState().isQuery() && (parsedStmt != null && parsedStmt.needAuditEncryption())) {
-            auditEventBuilder.setStmt(parsedStmt.toSql());
+        if (parsedStmt != null && parsedStmt.needAuditEncryption()) {
+            auditEventBuilder.setStmt(handleStmt(parsedStmt.toSql(), parsedStmt));
         } else {
             auditEventBuilder.setStmt(origStmt);
         }
@@ -264,5 +273,14 @@ public class AuditLogHelper {
             auditEventBuilder.setState(String.valueOf(MysqlStateType.OK));
         }
         Env.getCurrentEnv().getWorkloadRuntimeStatusMgr().submitFinishQueryToAudit(auditEventBuilder.build());
+    }
+
+    private static boolean nereidsNeedEncryption(StatementBase parsedStmt) {
+        if (parsedStmt instanceof LogicalPlanAdapter) {
+            LogicalPlan plan = ((LogicalPlanAdapter) parsedStmt).getLogicalPlan();
+            return plan instanceof LogicalFileSink || plan instanceof ExportCommand || plan instanceof LoadCommand
+                || plan instanceof CreateTableCommand;
+        }
+        return false;
     }
 }

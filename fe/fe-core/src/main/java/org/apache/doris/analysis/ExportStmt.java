@@ -389,7 +389,7 @@ public class ExportStmt extends StatementBase {
         StringBuilder sb = new StringBuilder();
         sb.append("EXPORT TABLE ");
         if (tblName == null) {
-            sb.append("non-exist");
+            sb.append(tableRef.toSql());
         } else {
             sb.append(tblName.toSql());
         }

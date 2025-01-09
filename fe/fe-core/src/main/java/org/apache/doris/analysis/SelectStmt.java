@@ -2895,4 +2895,9 @@ public class SelectStmt extends QueryStmt {
         this.selectList = selectList;
         this.originSelectList = selectList.clone();
     }
+
+    @Override
+    public boolean needAuditEncryption() {
+        return hasOutFileClause();
+    }
 }

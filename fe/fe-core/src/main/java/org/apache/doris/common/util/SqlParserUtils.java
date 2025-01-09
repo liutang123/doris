@@ -88,6 +88,11 @@ public class SqlParserUtils {
     }
 
     public static StatementBase parseAndAnalyzeStmt(String originStmt, ConnectContext ctx) throws UserException {
+        return parseAndAnalyzeStmt(originStmt, ctx, false);
+    }
+
+    public static StatementBase parseAndAnalyzeStmt(String originStmt, ConnectContext ctx, boolean onlyParse)
+            throws UserException {
         LOG.info("begin to parse stmt: " + originStmt);
         SqlScanner input = new SqlScanner(new StringReader(originStmt), ctx.getSessionVariable().getSqlMode());
         SqlParser parser = new SqlParser(input);
@@ -95,6 +100,9 @@ public class SqlParserUtils {
         StatementBase statementBase;
         try {
             statementBase = SqlParserUtils.getFirstStmt(parser);
+            if (onlyParse) {
+                return statementBase;
+            }
         } catch (AnalysisException e) {
             String errorMessage = parser.getErrorMsg(originStmt);
             LOG.error("parse failed: " + errorMessage);

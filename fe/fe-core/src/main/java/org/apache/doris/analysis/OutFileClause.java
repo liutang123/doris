@@ -841,7 +841,7 @@ public class OutFileClause {
         sb.append(" INTO OUTFILE '").append(filePath).append(" FORMAT AS ").append(format);
         if (properties != null && !properties.isEmpty()) {
             sb.append(" PROPERTIES(");
-            sb.append(new PrintableMap<>(properties, " = ", true, false));
+            sb.append(new PrintableMap<>(properties, " = ", true, false, true));
             sb.append(")");
         }
         return sb.toString();
