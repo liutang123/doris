@@ -23,7 +23,6 @@ import org.apache.doris.catalog.HdfsResource;
 import org.apache.doris.cluster.ClusterNamespace;
 import org.apache.doris.common.Config;
 import org.apache.doris.common.DdlException;
-import org.apache.doris.common.FeConstants;
 import org.apache.doris.common.Pair;
 import org.apache.doris.common.ThreadPoolManager;
 import org.apache.doris.common.security.authentication.AuthenticationConfig;
@@ -61,7 +60,6 @@ import org.apache.iceberg.hive.HiveCatalog;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -230,11 +228,7 @@ public class HMSExternalCatalog extends ExternalCatalog {
     @Override
     public List<String> listTableNames(SessionContext ctx, String dbName) {
         makeSureInitialized();
-        if (!FeConstants.runningUnitTest) {
-            return metadataOps.listTableNames(ClusterNamespace.getNameFromFullName(dbName));
-        } else {
-            return new ArrayList<>();
-        }
+        return metadataOps.listTableNames(ClusterNamespace.getNameFromFullName(dbName));
     }
 
     @Override

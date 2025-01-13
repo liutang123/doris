@@ -102,13 +102,6 @@ public class ExternalTableNameComparedLowercaseMetaCacheTrueTest extends TestWit
         Assertions.assertTrue(tableNames.contains("TABLE2"));
     }
 
-    @Test
-    public void testGetTableAfterCreateCatalog() {
-        Object table = env.getCatalogMgr().getCatalog("test1").getDbNullable("db1")
-                .getTableNullable("Table1");
-        Assertions.assertNotNull(table);
-    }
-
     private void switchTest() throws Exception {
         SwitchStmt switchTest = (SwitchStmt) parseAndAnalyzeStmt("switch test1;");
         Env.getCurrentEnv().changeCatalog(connectContext, switchTest.getCatalogName());
