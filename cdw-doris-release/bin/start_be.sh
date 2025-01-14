@@ -308,6 +308,9 @@ else
     LIMIT="/bin/limit3 -c 0 -n 65536"
 fi
 
+# diable core
+ulimit -S -c 0
+
 export AWS_MAX_ATTEMPTS=2
 
 # filter known leak

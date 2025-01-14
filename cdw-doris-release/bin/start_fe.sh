@@ -177,11 +177,11 @@ java_version="$(
     jdk_version "${JAVA}"
 )"
 if [[ "${java_version}" -eq 17 ]]; then
-    if [[ -z "${JAVA_OPTS_FOR_JDK_9}" ]]; then
-        echo "JAVA_OPTS_FOR_JDK_9 is not set in fe.conf"
+    if [[ -z "${JAVA_OPTS_FOR_JDK_17}" ]]; then
+        echo "JAVA_OPTS_FOR_JDK_17 is not set in fe.conf"
         exit 1
     fi
-    final_java_opt="${JAVA_OPTS_FOR_JDK_9}"
+    final_java_opt="${JAVA_OPTS_FOR_JDK_17}"
 else
     echo "ERROR: The jdk_version is ${java_version}, must be 17."
     exit 1

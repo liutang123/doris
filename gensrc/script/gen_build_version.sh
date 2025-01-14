@@ -32,7 +32,7 @@ if [[ $1 != "" ]]; then
     vendor=$1
 fi
 
-build_version_prefix="${vendor}"
+build_version_prefix="tencent-cdw-doris"
 build_version_major=3
 build_version_minor=0
 build_version_patch=8
