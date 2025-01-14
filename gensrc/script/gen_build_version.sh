@@ -39,10 +39,11 @@ build_version_patch=8
 build_version_hotfix=0
 build_version_rc_version="rc01"
 
+# The patch nums for tencent
+user=doris
+SKIP_LINE_NUM=$(git log --oneline | egrep -c -w "^[^[:space:]]+\s+\[Tencent\]")
+build_version_rc_version="$(git log -1 --abbrev=7 --skip=$SKIP_LINE_NUM --pretty=format:"%h")"
 build_version="${build_version_prefix}-${build_version_major}.${build_version_minor}.${build_version_patch}"
-if [[ ${build_version_hotfix} -gt 0 ]]; then
-    build_version+=".${build_version_hotfix}"
-fi
 build_version+="-${build_version_rc_version}"
 
 # This version is used to check FeMetaVersion is not changed during release
@@ -69,15 +70,28 @@ fi
 
 cd "${DORIS_HOME}"
 
-if [[ -d '.git' ]]; then
-    revision="$(git log -1 --pretty=format:"%H")"
-    short_revision="$(git log -1 --pretty=format:"%h")"
-    url="git://${hostname}"
-else
-    revision="Unknown"
+function generate_short_version() {
+    date_str=$(date +"%y%m%d")
+    version_file_path="${DORIS_HOME}/cdw-doris-release/doris/version.txt"
+    if [ -f $version_file_path ]; then
+      read -r file_date counter dump < $version_file_path
+      if [ "$file_date" != "$date_str" ]; then
+          counter=0
+      fi
+    fi
+
+    counter=$((counter + 1))
+    if [ $counter -eq 10 ]; then
+        counter=0
+    fi
+
+    revision="$date_str$counter"
     short_revision="${revision}"
-    url="file://${hostname}"
-fi
+    echo "$date_str $counter ${build_version}-${short_revision}" > "${DORIS_HOME}/version.txt"
+}
+
+generate_short_version
+url="file://${hostname}"
 
 cd "${cwd}"
 
