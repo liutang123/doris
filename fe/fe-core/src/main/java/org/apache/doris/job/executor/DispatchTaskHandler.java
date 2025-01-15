@@ -66,6 +66,8 @@ public class DispatchTaskHandler<T extends AbstractJob> implements WorkHandler<T
                 JobType jobType = event.getJob().getJobType();
                 for (AbstractTask task : tasks) {
                     if (!disruptorMap.get(jobType).addTask(task)) {
+                        log.info("failed to add task, will cancel it. jobId = {}, taskId = {}",
+                                task.getJobId(), task.getTaskId());
                         task.cancel(true);
                         continue;
                     }

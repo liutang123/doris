@@ -215,6 +215,7 @@ public class DdlExecutor {
             }
         } else if (ddlStmt instanceof CancelJobTaskStmt) {
             CancelJobTaskStmt stmt = (CancelJobTaskStmt) ddlStmt;
+            LOG.info("Get cancel job stmt, will cancel job {}, task {}", stmt.getJobName(), stmt.getTaskId());
             try {
                 env.getJobManager().cancelTaskById(stmt.getJobName(), stmt.getTaskId());
             } catch (Exception e) {

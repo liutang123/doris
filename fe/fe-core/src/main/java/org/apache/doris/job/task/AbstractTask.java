@@ -136,6 +136,8 @@ public abstract class AbstractTask implements Task {
      */
     @Override
     public void cancel(boolean needWaitCancelComplete) throws JobException {
+        log.info("cancel task, job id = {}, task id = {}, needWaitCancelComplete = {}",
+                jobId, taskId, needWaitCancelComplete);
         try {
             status = TaskStatus.CANCELED;
             executeCancelLogic(needWaitCancelComplete);
