@@ -150,6 +150,7 @@ public abstract class AbstractJob<T extends AbstractTask, C> implements Job<T, C
 
     @Override
     public void cancelAllTasks(boolean needWaitCancelComplete) throws JobException {
+        log.info("cancelAllTasks for jobId = {}, status = {}", jobId, jobStatus);
         if (CollectionUtils.isEmpty(runningTasks)) {
             return;
         }
@@ -180,6 +181,7 @@ public abstract class AbstractJob<T extends AbstractTask, C> implements Job<T, C
 
     @Override
     public void cancelTaskById(long taskId) throws JobException {
+        log.info("cancelTaskById taskId = {}", taskId);
         if (CollectionUtils.isEmpty(runningTasks)) {
             throw new JobException("no running task");
         }
@@ -292,6 +294,7 @@ public abstract class AbstractJob<T extends AbstractTask, C> implements Job<T, C
             this.finishTimeMs = System.currentTimeMillis();
         }
         if (JobStatus.PAUSED.equals(newJobStatus) || JobStatus.STOPPED.equals(newJobStatus)) {
+            log.info("Will cancel all task of job {} cause its status is {}", jobId, newJobStatus);
             cancelAllTasks(JobStatus.STOPPED.equals(newJobStatus) ? false : true);
         }
         jobStatus = newJobStatus;
