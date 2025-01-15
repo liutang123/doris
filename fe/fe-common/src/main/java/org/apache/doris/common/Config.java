@@ -128,7 +128,7 @@ public class Config extends ConfigBase {
             "The maximum survival time of the FE audit log file. "
                     + "After exceeding this time, the log file will be deleted. "
                     + "Supported formats include: 7d, 10h, 60m, 120s"})
-    public static String audit_log_delete_age = "30d";
+    public static String audit_log_delete_age = "180d";
     @ConfField(description = {"是否压缩 FE 的 Audit 日志", "enable compression for FE audit log file"})
     public static boolean audit_log_enable_compress = false;
 
@@ -2764,7 +2764,7 @@ public class Config extends ConfigBase {
             "The operations of the users in this list will not be recorded in the audit log. "
                     + "Multiple users are separated by commas."
     })
-    public static String skip_audit_user_list = "";
+    public static String skip_audit_user_list = "root";
 
     @ConfField(mutable = true)
     public static int be_report_query_statistics_timeout_ms = 60000;
