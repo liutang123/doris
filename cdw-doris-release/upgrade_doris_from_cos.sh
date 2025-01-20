@@ -356,11 +356,26 @@ upgrade_doris() {
       exit -1
     fi
   fi
-  local version_str=$(${doris_be_bin} --version)
+  local version_file="${dest_dir}/version.txt"
+  local version_str=""
+  if [ -f ${version_file} ]; then
+    read -r dump1 dump2 version_str < $version_file
+    if [ $? -ne 0 ]; then
+      error_on_rollback "read $version_file failed"
+      exit -1
+    fi
+  else
+    version_str=$(${doris_be_bin} --version)
+    if [ $? -ne 0 ]; then
+      error_on_rollback "get version from doris_be failed"
+      exit -1
+    fi
+  fi
   local old_version=$(echo ${version_str} | grep -E -o "[0-9]\.[0-9]+" | head -1)
   log "[INFO] Found your old version string of Doris is ${version_str}"
 
   # backup old doris
+  log "[INFO] start to backup old doris..."
   cp -a ${dest_dir} ${backupDir}
   if [ $? -ne 0 ]; then
     error_on_rollback "copy ${dest_dir} to ${backupDir} failed."
@@ -459,6 +474,37 @@ upgrade_doris() {
     # 5. check and fix cdwch-agent
     log "[INFO] check and fix cdwch-agent"
     update_agent
+
+  # need to check and prepare jdk17 for 3.0
+  elif [ "${new_version}" == "3.0" ] && [ "${old_version}" == "2.1" ]; then
+    local jdk_dest_dir="/usr/local"
+    local jdk_dest_path="${jdk_dest_dir}/jdk17"
+    if [ ! -d "${jdk_dest_path}" ]; then
+      log "[INFO] ${jdk_dest_path} is not exists, it will start to wget from cos..."
+      local jdk17_tar_file="TencentKona-17.0.13.b1-jdk_linux-x86_64.tar.gz"
+      log "And the url is ${cos_bucket_url}/${cos_subdir}/${jdk17_tar_file}"
+      wget -q ${cos_bucket_url}/${cos_subdir}/${jdk17_tar_file} -P ${sourceDir}
+      if [ $? -ne 0 ]; then
+        error_on_rollback "wget file ${jdk17_tar_file} failed!"
+        exit 1
+      fi
+      log "[INFO] downloaded the file ${jdk17_tar_file} package."
+
+      # untar
+      log "[INFO] start to untar jdk17 package ..."
+      tar -zxf "${sourceDir}/${jdk17_tar_file}" -C "${jdk_dest_dir}"
+      if [ $? -ne 0 ]; then
+        error_on_rollback "unzip tar package ${jdk17_tar_file} failed!"
+        exit 1
+      fi
+      local jdk17_untar_file="${jdk_dest_dir}/TencentKona-17.0.13.b1"
+      mv ${jdk17_untar_file} ${jdk_dest_path}
+      if [ $? -ne 0 ]; then
+        error_on_rollback "[WARN] Move ${jdk17_untar_file} to ${jdk_dest_path} failed!"
+        exit 1
+      fi
+      log "[INFO] Moved ${jdk17_untar_file} to ${jdk_dest_path}"
+    fi
   fi
 
   log "[INFO] success to upgrade doris from v${old_version} to v${new_version}."
