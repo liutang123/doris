@@ -2888,4 +2888,8 @@ public class SelectStmt extends QueryStmt implements NotFallbackInParser {
     public StmtType stmtType() {
         return StmtType.SELECT;
     }
+
+    public boolean needAuditEncryption() {
+        return hasOutFileClause();
+    }
 }
