@@ -698,7 +698,6 @@ public class BackupJob extends AbstractJob {
             return status;
         }
 
-        removeUnsupportProperties(copiedTbl);
         copiedTables.add(copiedTbl);
 
         PartitionInfo partitionInfo = olapTable.getPartitionInfo();
@@ -751,12 +750,6 @@ public class BackupJob extends AbstractJob {
             copiedResources.add(copiedResource);
         }
         return Status.OK;
-    }
-
-    private void removeUnsupportProperties(OlapTable tbl) {
-        // We cannot support the colocate attribute because the colocate information is not backed up
-        // synchronously when backing up.
-        tbl.setColocateGroup(null);
     }
 
     private void waitingAllSnapshotsFinished() {
