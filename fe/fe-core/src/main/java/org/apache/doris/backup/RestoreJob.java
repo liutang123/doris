@@ -71,6 +71,7 @@ import org.apache.doris.common.util.TimeUtils;
 import org.apache.doris.datasource.InternalCatalog;
 import org.apache.doris.datasource.property.S3ClientBEProperties;
 import org.apache.doris.datasource.property.constants.S3Properties;
+import org.apache.doris.persist.ColocatePersistInfo;
 import org.apache.doris.persist.gson.GsonPostProcessable;
 import org.apache.doris.persist.gson.GsonUtils;
 import org.apache.doris.policy.Policy;
@@ -127,6 +128,7 @@ import java.util.zip.GZIPInputStream;
 
 public class RestoreJob extends AbstractJob implements GsonPostProcessable {
     private static final String PROP_RESERVE_REPLICA = RestoreStmt.PROP_RESERVE_REPLICA;
+    private static final String PROP_RESERVE_COLOCATE = RestoreStmt.PROP_RESERVE_COLOCATE;
     private static final String PROP_RESERVE_DYNAMIC_PARTITION_ENABLE =
             RestoreStmt.PROP_RESERVE_DYNAMIC_PARTITION_ENABLE;
     private static final String PROP_IS_BEING_SYNCED = PropertyAnalyzer.PROPERTIES_IS_BEING_SYNCED;
@@ -185,6 +187,7 @@ public class RestoreJob extends AbstractJob implements GsonPostProcessable {
     private ReplicaAllocation replicaAlloc;
 
     private boolean reserveReplica = false;
+    private boolean reserveColocate = false;
     private boolean reserveDynamicPartitionEnable = false;
     private long createReplicasTimeStamp = -1;
     // this 2 members is to save all newly restored objs
@@ -207,6 +210,8 @@ public class RestoreJob extends AbstractJob implements GsonPostProcessable {
     private com.google.common.collect.Table<Long, Long, SnapshotInfo> snapshotInfos = HashBasedTable.create();
 
     private Map<Long, Long> unfinishedSignatureToId = Maps.newConcurrentMap();
+
+    private List<ColocatePersistInfo> colocatePersistInfos = Lists.newArrayList();
 
     // the meta version is used when reading backup meta from file.
     // we do not persist this field, because this is just a temporary solution.
@@ -248,9 +253,9 @@ public class RestoreJob extends AbstractJob implements GsonPostProcessable {
 
     public RestoreJob(String label, String backupTs, long dbId, String dbName, BackupJobInfo jobInfo, boolean allowLoad,
             ReplicaAllocation replicaAlloc, long timeoutMs, int metaVersion, boolean reserveReplica,
-            boolean reserveDynamicPartitionEnable, boolean isBeingSynced, boolean isCleanTables,
-            boolean isCleanPartitions, boolean isAtomicRestore, boolean isForceReplace, String storageResource,
-            boolean reserveStoragePolicy, Env env, long repoId) {
+            boolean reserveColocate, boolean reserveDynamicPartitionEnable, boolean isBeingSynced,
+            boolean isCleanTables, boolean isCleanPartitions, boolean isAtomicRestore, boolean isForceReplace,
+            String storageResource, boolean reserveStoragePolicy, Env env, long repoId) {
         super(JobType.RESTORE, label, dbId, dbName, timeoutMs, env, repoId);
         this.backupTimestamp = backupTs;
         this.jobInfo = jobInfo;
@@ -259,6 +264,7 @@ public class RestoreJob extends AbstractJob implements GsonPostProcessable {
         this.state = RestoreJobState.PENDING;
         this.metaVersion = metaVersion;
         this.reserveReplica = reserveReplica;
+        this.reserveColocate = reserveColocate;
         // if backup snapshot is come from a cluster with force replication allocation,
         // ignore the origin allocation
         if (jobInfo.isForceReplicationAllocation) {
@@ -275,6 +281,7 @@ public class RestoreJob extends AbstractJob implements GsonPostProcessable {
         this.storageResource = storageResource;
         this.reserveStoragePolicy = reserveStoragePolicy;
         properties.put(PROP_RESERVE_REPLICA, String.valueOf(reserveReplica));
+        properties.put(PROP_RESERVE_COLOCATE, String.valueOf(reserveColocate));
         properties.put(PROP_RESERVE_DYNAMIC_PARTITION_ENABLE, String.valueOf(reserveDynamicPartitionEnable));
         properties.put(PROP_IS_BEING_SYNCED, String.valueOf(isBeingSynced));
         properties.put(PROP_CLEAN_TABLES, String.valueOf(isCleanTables));
@@ -287,12 +294,12 @@ public class RestoreJob extends AbstractJob implements GsonPostProcessable {
 
     public RestoreJob(String label, String backupTs, long dbId, String dbName, BackupJobInfo jobInfo, boolean allowLoad,
             ReplicaAllocation replicaAlloc, long timeoutMs, int metaVersion, boolean reserveReplica,
-            boolean reserveDynamicPartitionEnable, boolean isBeingSynced, boolean isCleanTables,
-            boolean isCleanPartitions, boolean isAtomicRestore, boolean isForceReplace, String storageResource,
-            boolean reserveStoragePolicy, Env env, long repoId, BackupMeta backupMeta) {
+            boolean reserveColocate, boolean reserveDynamicPartitionEnable, boolean isBeingSynced,
+            boolean isCleanTables, boolean isCleanPartitions, boolean isAtomicRestore, boolean isForceReplace,
+            String storageResource, boolean reserveStoragePolicy, Env env, long repoId, BackupMeta backupMeta) {
         this(label, backupTs, dbId, dbName, jobInfo, allowLoad, replicaAlloc, timeoutMs, metaVersion, reserveReplica,
-                reserveDynamicPartitionEnable, isBeingSynced, isCleanTables, isCleanPartitions, isAtomicRestore,
-                isForceReplace, storageResource, reserveStoragePolicy, env, repoId);
+                reserveColocate, reserveDynamicPartitionEnable, isBeingSynced, isCleanTables, isCleanPartitions,
+                isAtomicRestore, isForceReplace, storageResource, reserveStoragePolicy, env, repoId);
         this.backupMeta = backupMeta;
     }
 
@@ -310,6 +317,10 @@ public class RestoreJob extends AbstractJob implements GsonPostProcessable {
 
     public boolean isBeingSynced() {
         return isBeingSynced;
+    }
+
+    public List<ColocatePersistInfo> getColocatePersistInfos() {
+        return colocatePersistInfos;
     }
 
     public synchronized boolean finishTabletSnapshotTask(SnapshotTask task, TFinishTaskRequest request) {
@@ -752,6 +763,12 @@ public class RestoreJob extends AbstractJob implements GsonPostProcessable {
                     OlapTable localOlapTbl = (OlapTable) localTbl;
                     OlapTable remoteOlapTbl = (OlapTable) remoteTbl;
 
+                    if (localOlapTbl.isColocateTable() || (reserveColocate && remoteOlapTbl.isColocateTable())) {
+                        status = new Status(ErrCode.COMMON_ERROR, "Not support to restore to local table "
+                                + tableName + " with colocate group.");
+                        return;
+                    }
+
                     localOlapTbl.readLock();
                     try {
                         List<String> intersectPartNames = Lists.newArrayList();
@@ -896,7 +913,7 @@ public class RestoreJob extends AbstractJob implements GsonPostProcessable {
                     // reset all ids in this table
                     String srcDbName = jobInfo.dbName;
                     Status st = remoteOlapTbl.resetIdsForRestore(env, db, replicaAlloc,
-                            reserveReplica, reserveStoragePolicy, srcDbName);
+                            reserveReplica, reserveStoragePolicy, reserveColocate, colocatePersistInfos, srcDbName);
                     if (!st.ok()) {
                         status = st;
                         return;
@@ -1870,6 +1887,9 @@ public class RestoreJob extends AbstractJob implements GsonPostProcessable {
             state = RestoreJobState.DOWNLOAD;
 
             env.getEditLog().logRestoreJob(this);
+            for (ColocatePersistInfo info : colocatePersistInfos) {
+                env.getEditLog().logColocateAddTable(info);
+            }
             LOG.info("finished making snapshots. {}", this);
             return;
         }
@@ -2629,6 +2649,11 @@ public class RestoreJob extends AbstractJob implements GsonPostProcessable {
             state = RestoreJobState.CANCELLED;
             // log
             env.getEditLog().logRestoreJob(this);
+            for (ColocatePersistInfo info : colocatePersistInfos) {
+                Env.getCurrentColocateIndex().removeTable(info.getTableId());
+                env.getEditLog().logColocateRemoveTable(info);
+            }
+            colocatePersistInfos.clear();
 
             LOG.info("finished to cancel restore job. current state: {}. is replay: {}. {}",
                      curState.name(), isReplay, this);

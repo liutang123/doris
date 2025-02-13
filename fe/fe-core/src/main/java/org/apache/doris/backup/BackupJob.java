@@ -759,7 +759,6 @@ public class BackupJob extends AbstractJob implements GsonPostProcessable {
             return;
         }
 
-        removeUnsupportProperties(copiedTbl);
         copiedTables.add(copiedTbl);
 
         PartitionInfo partitionInfo = olapTable.getPartitionInfo();
@@ -808,12 +807,6 @@ public class BackupJob extends AbstractJob implements GsonPostProcessable {
             }
             copiedResources.add(copiedResource);
         }
-    }
-
-    private void removeUnsupportProperties(OlapTable tbl) {
-        // We cannot support the colocate attribute because the colocate information is not backed up
-        // synchronously when backing up.
-        tbl.setColocateGroup(null);
     }
 
     private void waitingAllSnapshotsFinished() {
