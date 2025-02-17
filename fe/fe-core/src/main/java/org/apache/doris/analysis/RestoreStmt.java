@@ -20,7 +20,9 @@ package org.apache.doris.analysis;
 import org.apache.doris.backup.BackupJobInfo;
 import org.apache.doris.backup.BackupMeta;
 import org.apache.doris.backup.Repository;
+import org.apache.doris.catalog.Env;
 import org.apache.doris.catalog.ReplicaAllocation;
+import org.apache.doris.catalog.Resource;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.Config;
 import org.apache.doris.common.ErrorCode;
@@ -47,12 +49,15 @@ public class RestoreStmt extends AbstractBackupStmt implements NotFallbackInPars
     public static final String PROP_CLEAN_PARTITIONS = "clean_partitions";
     public static final String PROP_ATOMIC_RESTORE = "atomic_restore";
     public static final String PROP_FORCE_REPLACE = "force_replace";
+    public static final String PROP_STORAGE_RESOURCE = "storage_resource";
+    public static final String PROP_RESERVE_STORAGE_POLICY = "reserve_storage_policy";
 
     private boolean allowLoad = false;
     private ReplicaAllocation replicaAlloc = ReplicaAllocation.DEFAULT_ALLOCATION;
     private String backupTimestamp = null;
     private int metaVersion = -1;
     private boolean reserveReplica = false;
+    private boolean reserveStoragePolicy = true;
     private boolean reserveDynamicPartitionEnable = false;
     private boolean isLocal = false;
     private boolean isBeingSynced = false;
@@ -62,6 +67,7 @@ public class RestoreStmt extends AbstractBackupStmt implements NotFallbackInPars
     private boolean isForceReplace = false;
     private BackupMeta meta = null;
     private BackupJobInfo jobInfo = null;
+    private String storageResource = null;
 
     public RestoreStmt(LabelName labelName, String repoName, AbstractBackupTableRefClause restoreTableRefClause,
             Map<String, String> properties) {
@@ -87,12 +93,20 @@ public class RestoreStmt extends AbstractBackupStmt implements NotFallbackInPars
         return backupTimestamp;
     }
 
+    public String getStorageResource() {
+        return storageResource;
+    }
+
     public int getMetaVersion() {
         return metaVersion;
     }
 
     public boolean reserveReplica() {
         return reserveReplica;
+    }
+
+    public boolean reserveStoragePolicy() {
+        return reserveStoragePolicy;
     }
 
     public boolean reserveDynamicPartitionEnable() {
@@ -222,6 +236,27 @@ public class RestoreStmt extends AbstractBackupStmt implements NotFallbackInPars
 
         // is force replace
         isForceReplace = eatBooleanProperty(copiedProperties, PROP_FORCE_REPLACE, isForceReplace);
+
+        if (copiedProperties.containsKey(PROP_STORAGE_RESOURCE)) {
+            storageResource = copiedProperties.get(PROP_STORAGE_RESOURCE);
+            Resource localResource = Env.getCurrentEnv().getResourceMgr().getResource(storageResource);
+
+            if (localResource == null) {
+                ErrorReport.reportAnalysisException(ErrorCode.ERR_COMMON_ERROR,
+                        "Restore storage resource " + storageResource + " is not exist");
+            }
+
+            if (localResource.getType() != Resource.ResourceType.S3) {
+                ErrorReport.reportAnalysisException(ErrorCode.ERR_COMMON_ERROR,
+                        "The type of local resource "
+                        + storageResource + " is not same as restored resource");
+            }
+
+            copiedProperties.remove(PROP_STORAGE_RESOURCE);
+        }
+
+        // reserve storage policy
+        reserveStoragePolicy = eatBooleanProperty(copiedProperties, PROP_RESERVE_STORAGE_POLICY, reserveStoragePolicy);
 
         if (!copiedProperties.isEmpty()) {
             ErrorReport.reportAnalysisException(ErrorCode.ERR_COMMON_ERROR,
