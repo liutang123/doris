@@ -25,6 +25,7 @@ import org.apache.doris.analysis.DropCatalogStmt;
 import org.apache.doris.analysis.ShowCatalogStmt;
 import org.apache.doris.analysis.ShowCreateCatalogStmt;
 import org.apache.doris.analysis.UserIdentity;
+import org.apache.doris.backup.BackupCatalogMeta;
 import org.apache.doris.catalog.DatabaseIf;
 import org.apache.doris.catalog.Env;
 import org.apache.doris.catalog.EnvFactory;
@@ -454,6 +455,36 @@ public class CatalogMgr implements Writable, GsonPostProcessable {
         return sortedMap;
     }
 
+    public List<List<String>> showCreateCatalog(String catalogName) throws AnalysisException {
+        List<List<String>> rows = Lists.newArrayList();
+        readLock();
+        try {
+            CatalogIf catalog = nameToCatalog.get(catalogName);
+            if (catalog == null) {
+                throw new AnalysisException("No catalog found with name " + catalogName);
+            }
+            StringBuilder sb = new StringBuilder();
+            sb.append("\nCREATE CATALOG `").append(ClusterNamespace.getNameFromFullName(catalogName))
+                .append("`");
+            if (!Strings.isNullOrEmpty(catalog.getComment())) {
+                sb.append("\nCOMMENT \"").append(catalog.getComment()).append("\"\n");
+            }
+            if (catalog.getProperties().size() > 0) {
+                sb.append(" PROPERTIES (\n");
+                PrintableMap<String, String> printableMap = new PrintableMap<>(catalog.getProperties(), "=", true, true,
+                        true, true);
+                printableMap.setAdditionalHiddenKeys(ExternalCatalog.HIDDEN_PROPERTIES);
+                sb.append(printableMap);
+                sb.append("\n);");
+            }
+
+            rows.add(Lists.newArrayList(ClusterNamespace.getNameFromFullName(catalogName), sb.toString()));
+        } finally {
+            readUnlock();
+        }
+
+        return rows;
+    }
 
     public ShowResultSet showCreateCatalog(ShowCreateCatalogStmt showStmt) throws AnalysisException {
         List<List<String>> rows = Lists.newArrayList();
@@ -857,4 +888,24 @@ public class CatalogMgr implements Writable, GsonPostProcessable {
     public int getCatalogNum() {
         return idToCatalog.size();
     }
+
+    public List<BackupCatalogMeta> getAllCatalogsCopied() {
+        List<BackupCatalogMeta> catalogs = Lists.newArrayList();
+        readLock();
+        try {
+            // get all rules
+            for (Map.Entry<String, CatalogIf> entry : nameToCatalog.entrySet()) {
+                CatalogIf catalog = entry.getValue();
+
+                if (!catalog.isInternalCatalog()) {
+                    catalogs.add(new BackupCatalogMeta(catalog.getName(), catalog.getResource(),
+                            catalog.getProperties(), catalog.getComment()));
+                }
+            }
+        } finally {
+            readUnlock();
+        }
+        return catalogs;
+    }
+
 }

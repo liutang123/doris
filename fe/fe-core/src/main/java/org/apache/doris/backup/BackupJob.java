@@ -118,13 +118,16 @@ public class BackupJob extends AbstractJob {
     private BackupMeta backupMeta;
     // job info file content
     private BackupJobInfo jobInfo;
-
+    private boolean isBackupPriv = false;
+    private boolean isBackupCatalog = false;
+    private boolean isBackupWorkloadGroup = false;
     // save the local dir of this backup job
     // after job is done, this dir should be deleted
     private Path localJobDirPath = null;
     // save the local file path of meta info and job info file
     private String localMetaInfoFilePath = null;
     private String localJobInfoFilePath = null;
+    private String localGlobalJobInfoFilePath = null;
     // backup properties && table commit seq with table id
     private Map<String, String> properties = Maps.newHashMap();
 
@@ -140,13 +143,16 @@ public class BackupJob extends AbstractJob {
     }
 
     public BackupJob(String label, long dbId, String dbName, List<TableRef> tableRefs, long timeoutMs,
-                     BackupContent content, Env env, long repoId, long commitSeq) {
+                     BackupStmt stmt, Env env, long repoId, long commitSeq) {
         super(JobType.BACKUP, label, dbId, dbName, timeoutMs, env, repoId);
         this.tableRefs = tableRefs;
         this.state = BackupJobState.PENDING;
         this.commitSeq = commitSeq;
-        properties.put(BackupStmt.PROP_CONTENT, content.name());
+        properties.put(BackupStmt.PROP_CONTENT, stmt.getContent().name());
         properties.put(SNAPSHOT_COMMIT_SEQ, String.valueOf(commitSeq));
+        isBackupPriv = stmt.isBackupPriv();
+        isBackupCatalog = stmt.isBackupCatalog();
+        isBackupWorkloadGroup = stmt.isBackupWorkloadGroup();
     }
 
     public BackupJobState getState() {
@@ -167,6 +173,18 @@ public class BackupJob extends AbstractJob {
 
     public String getLocalMetaInfoFilePath() {
         return localMetaInfoFilePath;
+    }
+
+    public boolean isBackupPriv() {
+        return isBackupPriv;
+    }
+
+    public boolean isBackupCatalog() {
+        return isBackupCatalog;
+    }
+
+    public boolean isBackupWorkloadGroup() {
+        return isBackupWorkloadGroup;
     }
 
     public BackupContent getContent() {
@@ -901,7 +919,8 @@ public class BackupJob extends AbstractJob {
                 }
             }
             jobInfo = BackupJobInfo.fromCatalog(createTime, label, dbName, dbId,
-                    getContent(), backupMeta, snapshotInfos, tableCommitSeqMap);
+                    getContent(), backupMeta, snapshotInfos, tableCommitSeqMap,
+                    isBackupPriv(), isBackupCatalog(), isBackupWorkloadGroup());
             if (LOG.isDebugEnabled()) {
                 LOG.debug("job info: {}. {}", jobInfo, this);
             }
@@ -912,6 +931,17 @@ public class BackupJob extends AbstractJob {
             }
             jobInfo.writeToFile(jobInfoFile);
             localJobInfoFilePath = jobInfoFile.getAbsolutePath();
+
+            if (!jobInfo.newBackupObjects.backupGlobalInfo.isEmpty()) {
+                File globalInfoFile = new File(jobDir, Repository.PREFIX_GLOBAL_INFO + createTimeStr);
+                if (!globalInfoFile.createNewFile()) {
+                    status = new Status(ErrCode.COMMON_ERROR, "Failed to create global info file: "
+                            + globalInfoFile.toString());
+                    return;
+                }
+                jobInfo.newBackupObjects.backupGlobalInfo.writeToFile(globalInfoFile);
+                localGlobalJobInfoFilePath = globalInfoFile.getAbsolutePath();
+            }
         } catch (Exception e) {
             status = new Status(ErrCode.COMMON_ERROR, "failed to save meta info and job info file: " + e.getMessage());
             return;
@@ -966,6 +996,13 @@ public class BackupJob extends AbstractJob {
             String remoteJobInfoFile = repo.assembleJobInfoFilePath(label, createTime);
             if (!uploadFile(localJobInfoFilePath, remoteJobInfoFile)) {
                 return;
+            }
+
+            if (localGlobalJobInfoFilePath != null) {
+                String remoteGlobalInfoFile = repo.assembleGlobalInfoFilePath(label, createTime);
+                if (!uploadFile(localGlobalJobInfoFilePath, remoteGlobalInfoFile)) {
+                    return;
+                }
             }
         }
 
