@@ -244,6 +244,9 @@ public class UserPropertyMgr implements Writable {
         return existProperty.getCamGroups();
     }
 
+    public Map<String, UserProperty> getPropertyMap() {
+        return propertyMap;
+    }
 
     public Pair<Boolean, String> isWorkloadGroupInUse(String groupName) {
         for (Entry<String, UserProperty> entry : propertyMap.entrySet()) {

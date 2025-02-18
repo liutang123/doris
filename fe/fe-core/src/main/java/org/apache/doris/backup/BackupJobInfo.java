@@ -20,6 +20,7 @@ package org.apache.doris.backup;
 import org.apache.doris.analysis.BackupStmt.BackupContent;
 import org.apache.doris.analysis.PartitionNames;
 import org.apache.doris.analysis.TableRef;
+import org.apache.doris.analysis.UserIdentity;
 import org.apache.doris.backup.RestoreFileMapping.IdChain;
 import org.apache.doris.catalog.Env;
 import org.apache.doris.catalog.MaterializedIndex;
@@ -40,9 +41,12 @@ import org.apache.doris.common.FeMetaVersion;
 import org.apache.doris.common.Version;
 import org.apache.doris.common.io.Text;
 import org.apache.doris.common.io.Writable;
+import org.apache.doris.mysql.privilege.Role;
+import org.apache.doris.mysql.privilege.User;
 import org.apache.doris.persist.gson.GsonPostProcessable;
 import org.apache.doris.persist.gson.GsonUtils;
 import org.apache.doris.policy.StoragePolicy;
+import org.apache.doris.resource.workloadgroup.WorkloadGroup;
 import org.apache.doris.thrift.TNetworkAddress;
 
 import com.google.common.base.Joiner;
@@ -343,6 +347,16 @@ public class BackupJobInfo implements Writable, GsonPostProcessable {
         public List<BackupS3ResourceInfo> s3ResourceList = Lists.newArrayList();
         @SerializedName("storage_policy_list")
         public List<StoragePolicy> storagePolicyList = Lists.newArrayList();
+        @SerializedName("user_list")
+        public List<BackupUserInfo> userList = Lists.newArrayList();
+        @SerializedName("role_list")
+        public List<BackupRoleInfo> roleList = Lists.newArrayList();
+        @SerializedName("catalog_list")
+        public List<BackupCatalogInfo> catalogList = Lists.newArrayList();
+        @SerializedName("workload_group_list")
+        public List<BackupWorkloadGroupInfo> workloadGroupList = Lists.newArrayList();
+        @SerializedName("sqls")
+        public String sqls = null;
 
         public static BriefBackupJobInfo fromBackupJobInfo(BackupJobInfo backupJobInfo) {
             BriefBackupJobInfo briefBackupJobInfo = new BriefBackupJobInfo();
@@ -362,6 +376,42 @@ public class BackupJobInfo implements Writable, GsonPostProcessable {
             briefBackupJobInfo.odbcResourceList = backupJobInfo.newBackupObjects.odbcResources;
             briefBackupJobInfo.s3ResourceList = backupJobInfo.newBackupObjects.s3Resources;
             briefBackupJobInfo.storagePolicyList = backupJobInfo.newBackupObjects.storagePolicies;
+            BackupGlobalInfo backupGlobalInfo = backupJobInfo.newBackupObjects.backupGlobalInfo;
+            if (backupGlobalInfo != null) {
+                //users
+                List<User> userList = backupGlobalInfo.getUserList();
+                for (User user : userList) {
+                    BackupUserInfo backupUserInfo = new BackupUserInfo();
+                    backupUserInfo.userIdentity = user.getUserIdentity();
+                    briefBackupJobInfo.userList.add(backupUserInfo);
+                }
+
+                // roles
+                List<Role> roleList = backupGlobalInfo.getRoleList();
+                for (Role role : roleList) {
+                    BackupRoleInfo backupRoleInfo = new BackupRoleInfo();
+                    backupRoleInfo.name = role.getRoleName();
+                    briefBackupJobInfo.roleList.add(backupRoleInfo);
+                }
+
+                // catalogs
+                List<BackupCatalogMeta> catalogs = backupGlobalInfo.getCatalogs();
+                for (BackupCatalogMeta catalog : catalogs) {
+                    BackupCatalogInfo backupCatalogInfo = new BackupCatalogInfo();
+                    backupCatalogInfo.name = catalog.getCatalogName();
+                    briefBackupJobInfo.catalogList.add(backupCatalogInfo);
+                }
+
+                // workloadGroups
+                List<WorkloadGroup> workloadGroups = backupGlobalInfo.getWorkloadGroups();
+                for (WorkloadGroup workloadGroup : workloadGroups) {
+                    BackupWorkloadGroupInfo backupWorkloadGroupInfo = new BackupWorkloadGroupInfo();
+                    backupWorkloadGroupInfo.name = workloadGroup.getName();
+                    briefBackupJobInfo.workloadGroupList.add(backupWorkloadGroupInfo);
+                }
+                // sqls
+                briefBackupJobInfo.sqls = backupGlobalInfo.getSqls();
+            }
             return briefBackupJobInfo;
         }
     }
@@ -384,6 +434,8 @@ public class BackupJobInfo implements Writable, GsonPostProcessable {
         public List<BackupS3ResourceInfo> s3Resources = Lists.newArrayList();
         @SerializedName("storage_policy")
         public List<StoragePolicy> storagePolicies = Lists.newArrayList();
+        @SerializedName("BackupGlobalInfo")
+       public BackupGlobalInfo backupGlobalInfo = null;
     }
 
     public static class BackupOlapTableInfo {
@@ -509,6 +561,26 @@ public class BackupJobInfo implements Writable, GsonPostProcessable {
         public String name;
     }
 
+    public static class BackupUserInfo {
+        @SerializedName("userIdentity")
+        public UserIdentity userIdentity;
+    }
+
+    public static class BackupRoleInfo {
+        @SerializedName("name")
+        public String name;
+    }
+
+    public static class BackupCatalogInfo {
+        @SerializedName("name")
+        public String name;
+    }
+
+    public static class BackupWorkloadGroupInfo {
+        @SerializedName("name")
+        public String name;
+    }
+
     // eg: __db_10001/__tbl_10002/__part_10003/__idx_10002/__10004
     public String getFilePath(String db, String tbl, String part, String idx, long tabletId) {
         if (!db.equalsIgnoreCase(dbName)) {
@@ -622,7 +694,8 @@ public class BackupJobInfo implements Writable, GsonPostProcessable {
 
     public static BackupJobInfo fromCatalog(long backupTime, String label, String dbName, long dbId,
                                             BackupContent content, BackupMeta backupMeta,
-                                            Map<Long, SnapshotInfo> snapshotInfos, Map<Long, Long> tableCommitSeqMap) {
+                                            Map<Long, SnapshotInfo> snapshotInfos, Map<Long, Long> tableCommitSeqMap,
+                                            boolean backupPriv, boolean backupCatalog, boolean backupWorkloadGroup) {
 
         BackupJobInfo jobInfo = new BackupJobInfo();
         jobInfo.backupTime = backupTime;
@@ -724,6 +797,9 @@ public class BackupJobInfo implements Writable, GsonPostProcessable {
         for (StoragePolicy storagePolicy : storagePolicies) {
             jobInfo.newBackupObjects.storagePolicies.add(storagePolicy.clone());
         }
+
+        jobInfo.newBackupObjects.backupGlobalInfo = new BackupGlobalInfo();
+        jobInfo.newBackupObjects.backupGlobalInfo.init(backupPriv, backupCatalog, backupWorkloadGroup);
 
         return jobInfo;
     }

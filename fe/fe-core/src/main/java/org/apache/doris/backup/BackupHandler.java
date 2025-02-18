@@ -44,6 +44,7 @@ import org.apache.doris.common.Config;
 import org.apache.doris.common.DdlException;
 import org.apache.doris.common.ErrorCode;
 import org.apache.doris.common.ErrorReport;
+import org.apache.doris.common.FeConstants;
 import org.apache.doris.common.Pair;
 import org.apache.doris.common.io.Writable;
 import org.apache.doris.common.util.DebugPointUtil;
@@ -66,6 +67,7 @@ import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -327,6 +329,9 @@ public class BackupHandler extends MasterDaemon implements Writable {
 
         // check if db exist
         String dbName = stmt.getDbName();
+        if (StringUtils.isEmpty(dbName) && stmt.isBackupGlobal()) {
+            dbName = FeConstants.INTERNAL_DB_NAME;
+        }
         Database db = env.getInternalCatalog().getDbOrDdlException(dbName);
 
         // Try to get sequence lock.
@@ -384,7 +389,9 @@ public class BackupHandler extends MasterDaemon implements Writable {
 
             // Determine the tables to be backed up
             if (abstractBackupTableRefClause == null) {
-                tableNames = db.getTableNames();
+                if (!stmt.isBackupGlobal()) {
+                    tableNames = db.getTableNames();
+                }
             } else if (abstractBackupTableRefClause.isExclude()) {
                 tableNames = db.getTableNames();
                 for (TableRef tableRef : abstractBackupTableRefClause.getTableRefList()) {
@@ -500,7 +507,7 @@ public class BackupHandler extends MasterDaemon implements Writable {
         // Create a backup job
         BackupJob backupJob = new BackupJob(stmt.getLabel(), db.getId(),
                 ClusterNamespace.getNameFromFullName(db.getFullName()),
-                tblRefs, stmt.getTimeoutMs(), stmt.getContent(), env, repoId, commitSeq);
+                tblRefs, stmt.getTimeoutMs(), stmt, env, repoId, commitSeq);
         // write log
         env.getEditLog().logBackupJob(backupJob);
 
@@ -532,7 +539,6 @@ public class BackupHandler extends MasterDaemon implements Writable {
                         "Failed to get info of snapshot '" + stmt.getLabel() + "' because: "
                                 + status.getErrMsg() + ". Maybe specified wrong backup timestamp");
             }
-
             // Check if all restore objects are exist in this snapshot.
             // Also remove all unrelated objs
             Preconditions.checkState(infos.size() == 1);

@@ -73,12 +73,17 @@ public class RestoreStmt extends AbstractBackupStmt implements NotFallbackInPars
 
     public RestoreStmt(LabelName labelName, String repoName, AbstractBackupTableRefClause restoreTableRefClause,
             Map<String, String> properties) {
-        super(labelName, repoName, restoreTableRefClause, properties);
+        super(labelName, repoName, restoreTableRefClause, properties, false);
+    }
+
+    public RestoreStmt(LabelName labelName, String repoName,
+                       Map<String, String> properties) {
+        super(labelName, repoName, null, properties, true);
     }
 
     public RestoreStmt(LabelName labelName, String repoName, AbstractBackupTableRefClause restoreTableRefClause,
             Map<String, String> properties, BackupMeta meta, BackupJobInfo jobInfo) {
-        super(labelName, repoName, restoreTableRefClause, properties);
+        super(labelName, repoName, restoreTableRefClause, properties, false);
         this.meta = meta;
         this.jobInfo = jobInfo;
     }

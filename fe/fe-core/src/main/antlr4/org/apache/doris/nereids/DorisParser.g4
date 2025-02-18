@@ -99,7 +99,6 @@ materializedViewStatement
         | (SET  LEFT_PAREN fileProperties=propertyItemList RIGHT_PAREN))                        #alterMTMV
     | DROP MATERIALIZED VIEW (IF EXISTS)? mvName=multipartIdentifier
         (ON tableName=multipartIdentifier)?                                                     #dropMTMV
-    | DROP DATA MASK POLICY (IF EXISTS)? name=identifier                  #dropDataMaskPolicy
     | PAUSE MATERIALIZED VIEW JOB ON mvName=multipartIdentifier                                 #pauseMTMV
     | RESUME MATERIALIZED VIEW JOB ON mvName=multipartIdentifier                                #resumeMTMV
     | CANCEL MATERIALIZED VIEW TASK taskId=INTEGER_VALUE ON mvName=multipartIdentifier          #cancelMTMVTask
@@ -114,7 +113,7 @@ supportedJobStatement
             |
             (AT (atTime=STRING_LITERAL | CURRENT_TIMESTAMP)))
         commentSpec?
-        DO supportedDmlStatement                                                               #createScheduledJob
+        DO supportedDmlStatement                                                               #createScheduledJob                                                                    
    ;
 constraintStatement
     : ALTER TABLE table=multipartIdentifier
@@ -123,7 +122,6 @@ constraintStatement
     | ALTER TABLE table=multipartIdentifier
         DROP CONSTRAINT constraintName=errorCapturingIdentifier           #dropConstraint
     | SHOW CONSTRAINTS FROM table=multipartIdentifier                     #showConstraint
-    | SHOW DATA MASK POLICY (FOR (user=userIdentify | ROLE roleName=identifier))? #showDataMaskPolicy
     ;
 
 supportedDmlStatement
@@ -195,12 +193,17 @@ supportedAlterStatement
 
 supportedDropStatement
     : DROP CATALOG RECYCLE BIN WHERE idType=STRING_LITERAL EQ id=INTEGER_VALUE #dropCatalogRecycleBin
+    | DROP DATA MASK POLICY (IF EXISTS)? name=identifier                  #dropDataMaskPolicy
     ;
 
 supportedShowStatement
     : SHOW VIEW
         (FROM |IN) tableName=multipartIdentifier
         ((FROM | IN) database=identifier)?                                          #showView
+    | SHOW DATA MASK POLICY (FOR (user=userIdentify | ROLE roleName=identifier))? #showDataMaskPolicy
+    // FIXME: like should be wildWhere? FRONTEND should not contain FROM backendid
+    | ADMIN? SHOW type=(FRONTEND | BACKEND) CONFIG (LIKE pattern=valueExpression)?
+        (FROM backendId=INTEGER_VALUE)?                                             #showConfig
     ;
 
 unsupportedOtherStatement
@@ -832,10 +835,10 @@ optionWithoutType
     | (CHAR SET | CHARSET) (charsetName=identifierOrText | DEFAULT)     #setCharset
     | NAMES (charsetName=identifierOrText | DEFAULT)
         (COLLATE collateName=identifierOrText | DEFAULT)?               #setCollate
-    | PASSWORD (FOR userIdentify)? EQ (pwd=STRING_LITERAL
-        | (PASSWORD LEFT_PAREN pwd=STRING_LITERAL RIGHT_PAREN))         #setPassword
-    | LDAP_ADMIN_PASSWORD EQ (pwd=STRING_LITERAL
-    | (PASSWORD LEFT_PAREN pwd=STRING_LITERAL RIGHT_PAREN))             #setLdapAdminPassword
+    | PASSWORD (FOR userIdentify)? EQ (STRING_LITERAL
+        | (PASSWORD LEFT_PAREN STRING_LITERAL RIGHT_PAREN))             #setPassword
+    | LDAP_ADMIN_PASSWORD EQ (STRING_LITERAL
+    | (PASSWORD LEFT_PAREN STRING_LITERAL RIGHT_PAREN))                 #setLdapAdminPassword
     | variable                                                          #setVariableWithoutType
     ;
 
@@ -857,10 +860,13 @@ unsupoortedUnsetStatement
     | UNSET DEFAULT STORAGE VAULT
     ;
 
+supportedUseStatement
+     : SWITCH catalog=identifier                                                      #switchCatalog
+     | USE (catalog=identifier DOT)? database=identifier                              #useDatabase
+     ;
+
 unsupportedUseStatement
-    : USE (catalog=identifier DOT)? database=identifier                              #useDatabase
-    | USE ((catalog=identifier DOT)? database=identifier)? ATSIGN cluster=identifier #useCloudCluster
-    | SWITCH catalog=identifier                                                      #switchCatalog
+    : USE ((catalog=identifier DOT)? database=identifier)? ATSIGN cluster=identifier #useCloudCluster
     ;
 
 unsupportedDmlStatement
@@ -1231,11 +1237,11 @@ hintAssignment
     : key=identifierOrText (EQ (constantValue=constant | identifierValue=identifier))?
     | constant
     ;
-
+    
 updateAssignment
     : col=multipartIdentifier EQ (expression | DEFAULT)
     ;
-
+    
 updateAssignmentSeq
     : assignments+=updateAssignment (COMMA assignments+=updateAssignment)*
     ;
@@ -1333,7 +1339,7 @@ tableAlias
 multipartIdentifier
     : parts+=errorCapturingIdentifier (DOT parts+=errorCapturingIdentifier)*
     ;
-
+    
 // ----------------Create Table Fields----------
 simpleColumnDefs
     : cols+=simpleColumnDef (COMMA cols+=simpleColumnDef)*
@@ -1346,7 +1352,7 @@ simpleColumnDef
 columnDefs
     : cols+=columnDef (COMMA cols+=columnDef)*
     ;
-
+    
 columnDef
     : colName=identifier type=dataType
         KEY?
@@ -1363,23 +1369,23 @@ columnDef
 indexDefs
     : indexes+=indexDef (COMMA indexes+=indexDef)*
     ;
-
+    
 indexDef
     : INDEX (IF NOT EXISTS)? indexName=identifier cols=identifierList (USING indexType=(BITMAP | INVERTED | NGRAM_BF))? (PROPERTIES LEFT_PAREN properties=propertyItemList RIGHT_PAREN)? (COMMENT comment=STRING_LITERAL)?
     ;
-
+    
 partitionsDef
     : partitions+=partitionDef (COMMA partitions+=partitionDef)*
     ;
-
+    
 partitionDef
     : (lessThanPartitionDef | fixedPartitionDef | stepPartitionDef | inPartitionDef) (LEFT_PAREN partitionProperties=propertyItemList RIGHT_PAREN)?
     ;
-
+    
 lessThanPartitionDef
     : PARTITION (IF NOT EXISTS)? partitionName=identifier VALUES LESS THAN (MAXVALUE | partitionValueList)
     ;
-
+    
 fixedPartitionDef
     : PARTITION (IF NOT EXISTS)? partitionName=identifier VALUES LEFT_BRACKET lower=partitionValueList COMMA upper=partitionValueList RIGHT_PAREN
     ;
@@ -1392,19 +1398,19 @@ inPartitionDef
     : PARTITION (IF NOT EXISTS)? partitionName=identifier ((VALUES IN)? ((LEFT_PAREN partitionValueLists+=partitionValueList
         (COMMA partitionValueLists+=partitionValueList)* RIGHT_PAREN) | constants=partitionValueList))?
     ;
-
+    
 partitionValueList
     : LEFT_PAREN values+=partitionValueDef (COMMA values+=partitionValueDef)* RIGHT_PAREN
     ;
-
+    
 partitionValueDef
     : SUBTRACT? INTEGER_VALUE | STRING_LITERAL | MAXVALUE | NULL
     ;
-
+    
 rollupDefs
     : rollups+=rollupDef (COMMA rollups+=rollupDef)*
     ;
-
+    
 rollupDef
     : rollupName=identifier rollupCols=identifierList (DUPLICATE KEY dupKeys=identifierList)? properties=propertyClause?
     ;
@@ -1416,7 +1422,7 @@ aggTypeDef
 tabletList
     : TABLET LEFT_PAREN tabletIdList+=INTEGER_VALUE (COMMA tabletIdList+=INTEGER_VALUE)*  RIGHT_PAREN
     ;
-
+    
 
 inlineTable
     : VALUES rowConstructor (COMMA rowConstructor)*
@@ -1526,7 +1532,7 @@ primaryExpression
                 timestamp=valueExpression COMMA
                 (INTERVAL unitsAmount=valueExpression  unit=datetimeUnit
                 | unitsAmount=valueExpression)
-            RIGHT_PAREN                                                                        #dateFloor
+            RIGHT_PAREN                                                                        #dateFloor 
     | name=DATE_CEIL
             LEFT_PAREN
                 timestamp=valueExpression COMMA
@@ -1591,7 +1597,7 @@ functionCallExpression
             (OVER windowSpec)?
     ;
 
-functionIdentifier
+functionIdentifier 
     : (dbName=identifier DOT)? functionNameIdentifier
     ;
 
