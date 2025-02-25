@@ -666,7 +666,7 @@ DEFINE_Int32(num_cores, "0");
 
 // When BE start, If there is a broken disk, BE process will exit by default.
 // Otherwise, we will ignore the broken disk,
-DEFINE_Bool(ignore_broken_disk, "false");
+DEFINE_Bool(ignore_broken_disk, "true");
 DEFINE_Bool(ignore_file_cache_dir_upgrade_failure, "false");
 
 // Sleep time in milliseconds between memory maintenance iterations
