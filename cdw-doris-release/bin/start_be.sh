@@ -206,8 +206,10 @@ while read -r line; do
     envline1="$(echo $envline | egrep "^[[:upper:]]([[:upper:]]|_|[[:digit:]])*=" || true)"
     envline2="$(echo $envline | egrep "pull_load_task_dir|small_file_dir|storage_root_path" || true)"
     if [[ $envline1 == *"="* ]]; then
+        envline1="$(eval "echo ${envline1}")"
         eval 'export "$envline1"'
     elif [[ $envline2 == *"="* ]]; then
+        envline2="$(eval "echo ${envline2}")"
         eval 'export "$envline2"'
     fi
 done <"${DORIS_HOME}/conf/be.conf"
