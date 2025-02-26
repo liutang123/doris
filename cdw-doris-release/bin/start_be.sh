@@ -371,12 +371,12 @@ JDBC_OPTS="-DJDBC_MIN_POOL=1 -DJDBC_MAX_POOL=100 -DJDBC_MAX_IDLE_TIME=300000 -DJ
 
 if [[ "${java_version}" -gt 8 ]]; then
     if [[ -z ${JAVA_OPTS_FOR_JDK_9} ]]; then
-        JAVA_OPTS_FOR_JDK_9="-Xmx1024m ${LOG_PATH} -Xlog:gc:${LOG_DIR}/be.gc.log.${CUR_DATE} ${COMMON_OPTS} ${JDBC_OPTS}"
+        JAVA_OPTS_FOR_JDK_9="-Xmx4096m ${LOG_PATH} -Xlog:gc:${LOG_DIR}/be.gc.log.${CUR_DATE} ${COMMON_OPTS} ${JDBC_OPTS}"
     fi
     final_java_opt="${JAVA_OPTS_FOR_JDK_9}"
 else
     if [[ -z ${JAVA_OPTS} ]]; then
-        JAVA_OPTS="-Xmx1024m ${LOG_PATH} -Xloggc:${LOG_DIR}/be.gc.log.${CUR_DATE} ${COMMON_OPTS} ${JDBC_OPTS}"
+        JAVA_OPTS="-Xmx4096m ${LOG_PATH} -Xloggc:${LOG_DIR}/be.gc.log.${CUR_DATE} ${COMMON_OPTS} ${JDBC_OPTS}"
     fi
     final_java_opt="${JAVA_OPTS}"
 fi
