@@ -46,6 +46,24 @@ if [ $? -ne 0 ]; then
 fi
 log "[INFO] success to install doris_be."
 
+# install meta service libs
+mkdir -p "${dest_dir}/lib/ms"
+ret=$(cp -a ${cur_dir}/output/ms/lib/{doris_cloud,libfdb_c.so} "${dest_dir}/lib/ms")
+if [ $? -ne 0 ]; then
+  log "[ERROR] failed to install ms(doris_cloud,libfdb_c.so)."
+  exit 1
+fi
+log "[INFO] success to install ms(doris_cloud,libfdb_c.so)."
+
+# install tools
+rm -fr "${dest_dir}/tools"
+ret=$(cp -a "${cur_dir}/output/tools" "${dest_dir}/tools")
+if [ $? -ne 0 ]; then
+  log "[ERROR] failed to install tools."
+  exit 1
+fi
+log "[INFO] success to install tools."
+
 # install hadoop_hdfs and java_extensions
 ret=$(cp -a "${cur_dir}/output/be/lib/"{hadoop_hdfs,java_extensions} "${dest_dir}/lib")
 if [ $? -ne 0 ]; then
