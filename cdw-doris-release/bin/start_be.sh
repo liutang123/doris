@@ -199,18 +199,17 @@ export NLS_LANG='AMERICAN_AMERICA.AL32UTF8'
 export LSAN_OPTIONS="suppressions=${DORIS_HOME}/conf/lsan_suppr.conf"
 export ASAN_OPTIONS="suppressions=${DORIS_HOME}/conf/asan_suppr.conf"
 
+# export env variables from be.conf
+# LOG_DIR PID_DIR and etc.
 while read -r line; do
     envline="$(echo "${line}" |
         sed 's/[[:blank:]]*=[[:blank:]]*/=/g' |
-        sed 's/^[[:blank:]]*//g' || true)"
-    envline1="$(echo $envline | egrep "^[[:upper:]]([[:upper:]]|_|[[:digit:]])*=" || true)"
-    envline2="$(echo $envline | egrep "pull_load_task_dir|small_file_dir|storage_root_path" || true)"
-    if [[ $envline1 == *"="* ]]; then
-        envline1="$(eval "echo ${envline1}")"
-        eval 'export "$envline1"'
-    elif [[ $envline2 == *"="* ]]; then
-        envline2="$(eval "echo ${envline2}")"
-        eval 'export "$envline2"'
+        sed 's/^[[:blank:]]*//g' |
+        grep -E "^[[:upper:]]([[:upper:]]|_|[[:digit:]])*=" ||
+        true)"
+    envline="$(eval "echo ${envline}")"
+    if [[ "${envline}" == *"="* ]]; then
+        eval 'export "${envline}"'
     fi
 done <"${DORIS_HOME}/conf/be.conf"
 
