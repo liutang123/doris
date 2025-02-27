@@ -156,6 +156,12 @@ setup_java_env() {
     fi
 }
 
+JAVA_HOME=/usr/local/jdk17
+if [ ! -d "$JAVA_HOME" ]; then
+    JAVA_HOME=/usr/local/jdk
+fi
+export JAVA_HOME
+
 # prepare jvm if needed
 setup_java_env || true
 
@@ -264,19 +270,6 @@ fi
 
 export PPROF_TMPDIR="${LOG_DIR}"
 
-JAVA_HOME=/usr/local/jdk17
-if [ ! -d "$JAVA_HOME" ]; then
-    JAVA_HOME=/usr/local/jdk
-fi
-
-if [[ -z "${JAVA_HOME}" ]]; then
-    echo "The JAVA_HOME environment variable is not set correctly"
-    echo "This environment variable is required to run this program"
-    echo "Note: JAVA_HOME should point to a JDK and not a JRE"
-    echo "You can set JAVA_HOME in the be.conf configuration file"
-    exit 1
-fi
-
 for var in http_proxy HTTP_PROXY https_proxy HTTPS_PROXY; do
     if [[ -n ${!var} ]]; then
         echo "env '${var}' = '${!var}', need unset it using 'unset ${var}'"
@@ -374,12 +367,12 @@ java_version="$(
 )"
 
 CUR_DATE=$(date +%Y%m%d-%H%M%S)
-LOG_PATH="-DlogPath=${DORIS_HOME}/log/jni.log"
-COMMON_OPTS="-Dsun.java.command=DorisBE -XX:-CriticalJNINatives"
-
+LOG_PATH="-DlogPath=${LOG_DIR}/jni.log"
+COMMON_OPTS="-Dsun.java.command=DorisBE"
+JDBC_OPTS="-DJDBC_MIN_POOL=1 -DJDBC_MAX_POOL=100 -DJDBC_MAX_IDLE_TIME=300000 -DJDBC_MAX_WAIT_TIME=5000"
 if [[ "${java_version}" -eq 17 ]]; then
     if [[ -z ${JAVA_OPTS_FOR_JDK_17} ]]; then
-        JAVA_OPTS_FOR_JDK_17="-Xmx1024m ${LOG_PATH} -Xlog:gc:${DORIS_HOME}/log/be.gc.log.${CUR_DATE} ${COMMON_OPTS} --add-opens=java.base/java.net=ALL-UNNAMED"
+        JAVA_OPTS_FOR_JDK_17="-Xmx4096m ${LOG_PATH} -Xlog:gc:${LOG_DIR}/be.gc.log.${CUR_DATE} ${COMMON_OPTS} ${JDBC_OPTS} --add-opens=java.base/java.net=ALL-UNNAMED"
     fi
     final_java_opt="${JAVA_OPTS_FOR_JDK_17}"
 else
