@@ -92,15 +92,16 @@ ret=$(
   cp -a "${cur_dir}/be/output/udf" "${dest_dir}" &&
   cp -a "${cur_dir}/output/fe/spark-dpp" "${dest_dir}" &&
   cp -a "${cur_dir}/output/fe/webroot" "${dest_dir}" &&
+  cp -a "${cur_dir}/output/fe/mysql_ssl_default_certificate" "${dest_dir}" &&
   cp -a "${cur_dir}/output/be/www" "${dest_dir}" &&
   cp -a "${cur_dir}/output/be/dict" "${dest_dir}" &&
   cp -a "${work_dir}/zoneinfo" "${dest_dir}"
 )
 if [ $? -ne 0 ]; then
-  log "[ERROR] failed to install udf, spark-dpp, webroot, dict, zoneinfo and www."
+  log "[ERROR] failed to install udf, spark-dpp, webroot, mysql_ssl_default_certificate, dict, zoneinfo and www."
   exit 1
 fi
-log "[INFO] success to install udf, spark-dpp, webroot, dict, zoneinfo and www."
+log "[INFO] success to install udf, spark-dpp, webroot, mysql_ssl_default_certificate, dict, zoneinfo and www."
 
 # install conf bin and jdbc drivers.
 ret=$(cp -a "${work_dir}/"{conf,bin,jdbc_drivers} "${dest_dir}")
