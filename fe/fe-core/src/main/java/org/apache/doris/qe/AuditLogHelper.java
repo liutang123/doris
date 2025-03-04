@@ -50,6 +50,7 @@ import org.apache.doris.qe.QueryState.MysqlStateType;
 import org.apache.doris.service.FrontendOptions;
 
 import org.apache.commons.codec.digest.DigestUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -74,7 +75,9 @@ public class AuditLogHelper {
         try {
             if (nereidsNeedEncryption(parsedStmt)) {
                 StatementBase stmt = SqlParserUtils.parseAndAnalyzeStmt(origStmt, ctx, true);
-                origStmt = stmt.toSql();
+                if (StringUtils.isNotEmpty(stmt.toSql())) {
+                    origStmt = stmt.toSql();
+                }
             }
             origStmt = handleStmt(origStmt, parsedStmt);
             logAuditLogImpl(ctx, origStmt, parsedStmt, statistics, printFuzzyVariables);
