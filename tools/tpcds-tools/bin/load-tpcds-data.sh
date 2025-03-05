@@ -184,8 +184,9 @@ for table_name in ${!table_columns[*]}; do
                     -u "${USER}":"${PASSWORD:-}" \
                     -H "column_separator:|" \
                     -H "columns: ${table_columns[${table_name}]}" \
+                    -H "Expect: 100-continue" \
                     -T "${file}" \
-                    http://"${FE_HOST}":"${FE_HTTP_PORT:-8030}"/api/"${DB}"/"${table_name}"/_stream_load 2>/dev/null)
+                    -XPUT http://"${FE_HOST}":"${FE_HTTP_PORT:-8030}"/api/"${DB}"/"${table_name}"/_stream_load 2>/dev/null)
             else
                 ret=$(curl \
                     --location-trusted \
@@ -193,8 +194,9 @@ for table_name in ${!table_columns[*]}; do
                     -H "label:${TXN_ID}_${FILE_ID}" \
                     -H "column_separator:|" \
                     -H "columns: ${table_columns[${table_name}]}" \
+                    -H "Expect: 100-continue" \
                     -T "${file}" \
-                    http://"${FE_HOST}":"${FE_HTTP_PORT:-8030}"/api/"${DB}"/"${table_name}"/_stream_load 2>/dev/null)
+                    -XPUT http://"${FE_HOST}":"${FE_HTTP_PORT:-8030}"/api/"${DB}"/"${table_name}"/_stream_load 2>/dev/null)
             fi
 
             if [[ $(echo "${ret}" | jq ".Status") == '"Success"' ]]; then
