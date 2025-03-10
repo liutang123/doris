@@ -68,8 +68,6 @@ ret=$(
   cp -a "${work_dir}/tencent_libs/common/"*.jar "${dest_dir}/lib/broker" && 
   cp -a "${work_dir}/tencent_libs/common/"*.jar "${dest_dir}/lib/hadoop_hdfs/common" &&
   cp -a "${work_dir}/tencent_libs/common/"*.jar "${dest_dir}/lib/fe" &&
-  cp -a "${work_dir}/tencent_libs/broker/"*.jar "${dest_dir}/lib/broker" && 
-  cp -a "${work_dir}/tencent_libs/be/"*.jar "${dest_dir}/lib/hadoop_hdfs/common" &&
   cp -a "${work_dir}/tencent_libs/fe/"*.jar "${dest_dir}/lib/fe"
 )
 if [ $? -ne 0 ]; then
