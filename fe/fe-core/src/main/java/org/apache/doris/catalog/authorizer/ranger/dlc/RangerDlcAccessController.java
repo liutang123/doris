@@ -168,6 +168,11 @@ public class RangerDlcAccessController extends RangerAccessController {
     }
 
     @Override
+    public boolean checkStorageVaultPriv(UserIdentity currentUser, String storageVaultName, PrivPredicate wanted) {
+        return false;
+    }
+
+    @Override
     public boolean checkResourcePriv(UserIdentity currentUser, String resourceName, PrivPredicate wanted) {
         return false;
     }
