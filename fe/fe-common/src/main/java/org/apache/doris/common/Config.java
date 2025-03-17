@@ -2969,4 +2969,7 @@ public class Config extends ConfigBase {
 
     @ConfField(mutable = true, description = {"是否允许禁用 tencent cosn FileSystem 的 Cache"})
     public static boolean allow_disable_cosn_fs_cache = false;
+
+    @ConfField(mutable = true, description = {"是否进行lambda表达式参数嵌套检查"})
+    public static boolean enable_lambda_arg_check = true;
 }
