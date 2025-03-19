@@ -520,6 +520,12 @@ JINDOFS_NAME=jindofs-6.8.2-libs-0.1.tar.gz
 JINDOFS_SOURCE=jindofs-6.8.2-libs-0.1
 JINDOFS_MD5SUM="0e5b0f71e636b8ed3f09e0bf16208fd1"
 
+# datasketches
+DATASKETCHES_DOWNLOAD="https://github.com/apache/datasketches-cpp/archive/refs/tags/5.2.0.tar.gz"
+DATASKETCHES_NAME="datasketches-cpp-5.2.0.tar.gz"
+DATASKETCHES_SOURCE="datasketches-cpp-5.2.0"
+DATASKETCHES_MD5SUM="f6d606295cac2bdd6231ee0e8cf00313"
+
 # all thirdparties which need to be downloaded is set in array TP_ARCHIVES
 export TP_ARCHIVES=(
     'LIBEVENT'
@@ -597,6 +603,7 @@ export TP_ARCHIVES=(
     'BASE64'
     'ICU'
     'JINDOFS'
+    'DATASKETCHES'
 )
 
 if [[ "$(uname -s)" == 'Darwin' ]]; then
