@@ -501,10 +501,42 @@ FE_MODULES="$(
     echo "${modules[*]}"
 )"
 
+build_ds() {
+    local TP_DIR=$DORIS_THIRDPARTY
+    if [[ ! -d "${TP_DIR}/installed/include/DataSketches" ]]; then
+        echo "Build DataSketches"
+        local TP_INSTALL_DIR="${TP_DIR:-.}/installed"
+
+        local TP_LIB_DIR="${TP_INSTALL_DIR}/lib"
+        local TP_SOURCE_DIR="${TP_DIR:-.}/src"
+        local BUILD_DIR=doris_build
+
+        mkdir -p $TP_SOURCE_DIR
+        cd $TP_SOURCE_DIR
+        wget -O datasketches-cpp-5.2.0.tar.gz https://github.com/apache/datasketches-cpp/archive/refs/tags/5.2.0.tar.gz
+        tar xzvf datasketches-cpp-5.2.0.tar.gz
+        cd  datasketches-cpp-5.2.0/
+
+        mkdir -p $BUILD_DIR
+        cd $BUILD_DIR
+        LDFLAGS="-L${TP_LIB_DIR}" \
+                ${CMAKE_CMD} -G "${GENERATOR}" -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX="${TP_INSTALL_DIR}" \
+                -DCMAKE_PREFIX_PATH="${TP_INSTALL_DIR}" -DBUILD_TESTS=OFF \
+                -DCMAKE_BUILD_TYPE=Release ..
+        "${BUILD_SYSTEM}" install
+        cd "${DORIS_HOME}"
+    else
+        echo 'DataSketches has already installed'
+    fi
+}
+
+cd $WORK_DIR
+
 # Clean and build Backend
 if [[ "${BUILD_BE}" -eq 1 ]]; then
     update_submodule "be/src/apache-orc" "apache-orc" "https://github.com/apache/doris-thirdparty/archive/refs/heads/orc.tar.gz"
     update_submodule "be/src/clucene" "clucene" "https://github.com/apache/doris-thirdparty/archive/refs/heads/clucene-2.1.tar.gz"
+    build_ds
     if [[ -e "${DORIS_HOME}/gensrc/build/gen_cpp/version.h" ]]; then
         rm -f "${DORIS_HOME}/gensrc/build/gen_cpp/version.h"
     fi
