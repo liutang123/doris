@@ -70,7 +70,7 @@ while read -r line; do
     fi
 done <"${DORIS_HOME}/conf/doris_cloud.conf"
 
-STDOUT_LOGGER="${log_dir}/doris_cloud.out"
+STDOUT_LOGGER="${LOG_DIR}/doris_cloud.out"
 log() {
     # same datetime format as in fe.log: 2024-06-03 14:54:41,478
     cur_date=$(date +"%Y-%m-%d %H:%M:%S,$(date +%3N)")
@@ -139,6 +139,32 @@ export LD_LIBRARY_PATH="${JAVA_HOME}/lib/server:${JAVA_HOME}/lib:${LD_LIBRARY_PA
 if [[ -f "${DORIS_HOME}/conf/hdfs-site.xml" ]]; then
     export LIBHDFS3_CONF="${DORIS_HOME}/conf/hdfs-site.xml"
 fi
+
+jdk_version() {
+    local java_cmd="${1}"
+    local result
+    local IFS=$'\n'
+
+    if ! command -v "${java_cmd}" >/dev/null; then
+        echo "ERROR: invalid java_cmd ${java_cmd}" >>"${STDOUT_LOGGER}"
+        result=no_java
+        return 1
+    else
+        echo "INFO: java_cmd ${java_cmd}" >>"${STDOUT_LOGGER}"
+        local version
+        # remove \r for Cygwin
+        version="$("${java_cmd}" -Xms32M -Xmx32M -version 2>&1 | tr '\r' '\n' | grep version | awk '{print $3}')"
+        version="${version//\"/}"
+        if [[ "${version}" =~ ^1\. ]]; then
+            result="$(echo "${version}" | awk -F '.' '{print $2}')"
+        else
+            result="$(echo "${version}" | awk -F '.' '{print $1}')"
+        fi
+        echo "INFO: jdk_version ${result}" >>"${STDOUT_LOGGER}"
+    fi
+    echo "${result}"
+    return 0
+}
 
 # echo "LIBHDFS3_CONF=${LIBHDFS3_CONF}"
 # check java version and choose correct JAVA_OPTS
