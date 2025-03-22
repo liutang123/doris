@@ -95,7 +95,17 @@ public enum SchemaTableType {
     SCH_ROUTINE_LOAD_JOBS("ROUTINE_LOAD_JOBS", "ROUTINE_LOAD_JOBS",
             TSchemaTableType.SCH_ROUTINE_LOAD_JOBS),
     SCH_VIEW_DEPENDENCY("VIEW_DEPENDENCY", "VIEW_DEPENDENCY",
-                    TSchemaTableType.SCH_VIEW_DEPENDENCY);
+                    TSchemaTableType.SCH_VIEW_DEPENDENCY),
+    SCH_TRANSACTIONS("TRANSACTIONS", "TRANSACTIONS",
+            TSchemaTableType.SCH_TRANSACTIONS),
+    SCH_DATA_SKEW("DATA_SKEW", "DATA_SKEW",
+            TSchemaTableType.SCH_DATA_SKEW),
+    SCH_OLAP_TABLES("OLAP_TABLES", "OLAP_TABLES",
+            TSchemaTableType.SCH_OLAP_TABLES),
+    SCH_STREAM_LOAD("STREAM_LOAD", "STREAM_LOAD",
+                    TSchemaTableType.SCH_STREAM_LOAD),
+    SCH_OLAP_PARTITIONS("OLAP_PARTITIONS", "OLAP_PARTITIONS",
+                    TSchemaTableType.SCH_OLAP_PARTITIONS);
 
     private static final String dbName = "INFORMATION_SCHEMA";
     private static SelectList fullSelectLists;

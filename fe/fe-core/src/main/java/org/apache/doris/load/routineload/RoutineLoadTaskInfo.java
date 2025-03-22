@@ -196,7 +196,7 @@ public abstract class RoutineLoadTaskInfo {
         RoutineLoadJob routineLoadJob = routineLoadManager.getJob(jobId);
         try {
             txnId = Env.getCurrentGlobalTransactionMgr().beginTransaction(routineLoadJob.getDbId(),
-                    Lists.newArrayList(routineLoadJob.getTableId()), DebugUtil.printId(id), null,
+                    Lists.newArrayList(routineLoadJob.getTableId()), DebugUtil.printId(id), null, null,
                     new TxnCoordinator(TxnSourceType.FE, 0,
                             FrontendOptions.getLocalHostAddress(),
                             ExecuteEnv.getInstance().getStartupTime()),

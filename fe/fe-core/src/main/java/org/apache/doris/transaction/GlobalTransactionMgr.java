@@ -136,7 +136,7 @@ public class GlobalTransactionMgr implements GlobalTransactionMgrIface {
             LoadJobSourceType sourceType, long timeoutSecond)
             throws AnalysisException, LabelAlreadyUsedException, BeginTransactionException, DuplicatedRequestException,
             QuotaExceedException, MetaNotFoundException {
-        return beginTransaction(dbId, tableIdList, label, null, coordinator, sourceType, -1, timeoutSecond);
+        return beginTransaction(dbId, tableIdList, label, null, null, coordinator, sourceType, -1, timeoutSecond);
     }
 
     /**
@@ -152,7 +152,7 @@ public class GlobalTransactionMgr implements GlobalTransactionMgrIface {
      * @throws DuplicatedRequestException
      */
     @Override
-    public long beginTransaction(long dbId, List<Long> tableIdList, String label, TUniqueId requestId,
+    public long beginTransaction(long dbId, List<Long> tableIdList, String label, TUniqueId requestId, String user,
             TxnCoordinator coordinator, LoadJobSourceType sourceType, long listenerId, long timeoutSecond)
             throws AnalysisException, LabelAlreadyUsedException, BeginTransactionException, DuplicatedRequestException,
             QuotaExceedException, MetaNotFoundException {
@@ -172,8 +172,8 @@ public class GlobalTransactionMgr implements GlobalTransactionMgrIface {
             }
 
             DatabaseTransactionMgr dbTransactionMgr = getDatabaseTransactionMgr(dbId);
-            return dbTransactionMgr.beginTransaction(tableIdList, label, requestId,
-                    coordinator, sourceType, listenerId, timeoutSecond);
+            return dbTransactionMgr.beginTransaction(tableIdList, label, requestId, user,
+                coordinator, sourceType, listenerId, timeoutSecond);
         } catch (DuplicatedRequestException e) {
             throw e;
         } catch (Exception e) {
@@ -591,6 +591,14 @@ public class GlobalTransactionMgr implements GlobalTransactionMgrIface {
     public void updateMultiTableRunningTransactionTableIds(Long dbId, Long transactionId, List<Long> tableIds)
             throws UserException {
         getDatabaseTransactionMgr(dbId).updateMultiTableRunningTransactionTableIds(transactionId, tableIds);
+    }
+
+    public List<List<String>> getAllTransInfos() {
+        List<List<String>> infos = new ArrayList<>();
+        for (DatabaseTransactionMgr databaseTransactionMgr : dbIdToDatabaseTransactionMgrs.values()) {
+            databaseTransactionMgr.getAllTxnStateInfoList(infos);
+        }
+        return infos;
     }
 
     @Override

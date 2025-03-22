@@ -1338,7 +1338,7 @@ public class FrontendServiceImpl implements FrontendService.Iface {
         }
         long txnId = Env.getCurrentGlobalTransactionMgr().beginTransaction(
                 db.getId(), Lists.newArrayList(table.getId()), request.getLabel(), request.getRequestId(),
-                txnCoord,
+                request.getUser(), txnCoord,
                 TransactionState.LoadJobSourceType.BACKEND_STREAMING, -1, timeoutSecond);
         TLoadTxnBeginResult result = new TLoadTxnBeginResult();
         result.setTxnId(txnId).setDbId(db.getId());
@@ -1448,7 +1448,7 @@ public class FrontendServiceImpl implements FrontendService.Iface {
         TxnCoordinator txnCoord = new TxnCoordinator(TxnSourceType.BE, request.getBackendId(), clientIp, startTime);
         // step 6: begin transaction
         long txnId = Env.getCurrentGlobalTransactionMgr().beginTransaction(
-                db.getId(), tableIdList, request.getLabel(), request.getRequestId(), txnCoord,
+                db.getId(), tableIdList, request.getLabel(), request.getRequestId(), request.getUser(), txnCoord,
                 TransactionState.LoadJobSourceType.BACKEND_STREAMING, -1, timeoutSecond);
 
         // step 7: return result

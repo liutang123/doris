@@ -87,7 +87,7 @@ public class TransactionStateTest {
     public void testSerDe() throws IOException {
         UUID uuid = UUID.randomUUID();
         TransactionState transactionState = new TransactionState(1000L, Lists.newArrayList(20000L, 20001L),
-                3000, "label123", new TUniqueId(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits()),
+                3000, "label123", new TUniqueId(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits()), null,
                 LoadJobSourceType.BACKEND_STREAMING,
                 new TxnCoordinator(TxnSourceType.BE, 0, "127.0.0.1", System.currentTimeMillis()),
                 50000L, 60 * 1000L);

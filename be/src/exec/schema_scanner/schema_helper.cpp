@@ -39,6 +39,8 @@ class TShowProcessListRequest;
 class TShowProcessListResult;
 class TShowUserRequest;
 class TShowUserResult;
+class TShowTxnRequest;
+class TShowTxnrResult;
 
 Status SchemaHelper::get_db_names(const std::string& ip, const int32_t port,
                                   const TGetDbsParams& request, TGetDbsResult* result) {

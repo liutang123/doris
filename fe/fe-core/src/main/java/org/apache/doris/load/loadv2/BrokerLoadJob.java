@@ -128,6 +128,7 @@ public class BrokerLoadJob extends BulkLoadJob {
             QuotaExceedException, MetaNotFoundException {
         transactionId = Env.getCurrentGlobalTransactionMgr()
                 .beginTransaction(dbId, Lists.newArrayList(fileGroupAggInfo.getAllTableIds()), label, null,
+                        userInfo.getQualifiedUser(),
                         new TxnCoordinator(TxnSourceType.FE, 0,
                                 FrontendOptions.getLocalHostAddress(),
                                 ExecuteEnv.getInstance().getStartupTime()),

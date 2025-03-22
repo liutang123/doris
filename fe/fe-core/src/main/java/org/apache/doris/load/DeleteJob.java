@@ -289,7 +289,7 @@ public class DeleteJob extends AbstractTxnStateChangeCallback implements DeleteJ
     @Override
     public long beginTxn() throws Exception {
         long txnId = Env.getCurrentGlobalTransactionMgr().beginTransaction(deleteInfo.getDbId(),
-                Lists.newArrayList(deleteInfo.getTableId()), label, null,
+                Lists.newArrayList(deleteInfo.getTableId()), label, null, null,
                 new TransactionState.TxnCoordinator(TransactionState.TxnSourceType.FE, 0,
                         FrontendOptions.getLocalHostAddress(),
                         ExecuteEnv.getInstance().getStartupTime()),

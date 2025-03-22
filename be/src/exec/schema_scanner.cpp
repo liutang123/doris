@@ -33,10 +33,13 @@
 #include "exec/schema_scanner/schema_charsets_scanner.h"
 #include "exec/schema_scanner/schema_collations_scanner.h"
 #include "exec/schema_scanner/schema_columns_scanner.h"
+#include "exec/schema_scanner/schema_data_skew_scanner.h"
 #include "exec/schema_scanner/schema_dummy_scanner.h"
 #include "exec/schema_scanner/schema_file_cache_statistics.h"
 #include "exec/schema_scanner/schema_files_scanner.h"
 #include "exec/schema_scanner/schema_metadata_name_ids_scanner.h"
+#include "exec/schema_scanner/schema_olap_partitions_scanner.h"
+#include "exec/schema_scanner/schema_olap_tables_scanner.h"
 #include "exec/schema_scanner/schema_partitions_scanner.h"
 #include "exec/schema_scanner/schema_processlist_scanner.h"
 #include "exec/schema_scanner/schema_profiling_scanner.h"
@@ -50,6 +53,7 @@
 #include "exec/schema_scanner/schema_table_properties_scanner.h"
 #include "exec/schema_scanner/schema_tables_scanner.h"
 #include "exec/schema_scanner/schema_tablets_scanner.h"
+#include "exec/schema_scanner/schema_txn_scanner.h"
 #include "exec/schema_scanner/schema_user_privileges_scanner.h"
 #include "exec/schema_scanner/schema_user_scanner.h"
 #include "exec/schema_scanner/schema_variables_scanner.h"
@@ -233,6 +237,14 @@ std::unique_ptr<SchemaScanner> SchemaScanner::create(TSchemaTableType::type type
         return SchemaRoutinesScanner::create_unique();
     case TSchemaTableType::SCH_USER:
         return SchemaUserScanner::create_unique();
+    case TSchemaTableType::SCH_TRANSACTIONS:
+        return SchemaTxnScanner::create_unique();
+    case TSchemaTableType::SCH_DATA_SKEW:
+        return SchemaTableDataSkewScanner::create_unique();
+    case TSchemaTableType::SCH_OLAP_TABLES:
+        return SchemaOlapTablesScanner::create_unique();
+    case TSchemaTableType::SCH_OLAP_PARTITIONS:
+        return SchemaTableOlapPartitionsScanner::create_unique();
     case TSchemaTableType::SCH_WORKLOAD_POLICY:
         return SchemaWorkloadSchedulePolicyScanner::create_unique();
     case TSchemaTableType::SCH_TABLE_OPTIONS:

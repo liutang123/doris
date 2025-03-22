@@ -79,7 +79,7 @@ public interface GlobalTransactionMgrIface extends Writable {
             throws AnalysisException, LabelAlreadyUsedException, BeginTransactionException, DuplicatedRequestException,
             QuotaExceedException, MetaNotFoundException;
 
-    public long beginTransaction(long dbId, List<Long> tableIdList, String label, TUniqueId requestId,
+    public long beginTransaction(long dbId, List<Long> tableIdList, String label, TUniqueId requestId, String user,
             TxnCoordinator coordinator, LoadJobSourceType sourceType, long listenerId, long timeoutSecond)
             throws AnalysisException, LabelAlreadyUsedException, BeginTransactionException, DuplicatedRequestException,
             QuotaExceedException, MetaNotFoundException;
@@ -218,4 +218,6 @@ public interface GlobalTransactionMgrIface extends Writable {
 
     public List<TransactionState> getUnFinishedPreviousLoad(long endTransactionId,
                 long dbId, List<Long> tableIdList) throws UserException;
+
+    public List<List<String>> getAllTransInfos();
 }

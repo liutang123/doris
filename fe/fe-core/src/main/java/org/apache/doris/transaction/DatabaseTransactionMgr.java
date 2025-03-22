@@ -49,6 +49,7 @@ import org.apache.doris.common.util.DebugPointUtil;
 import org.apache.doris.common.util.DebugUtil;
 import org.apache.doris.common.util.InternalDatabaseUtil;
 import org.apache.doris.common.util.MetaLockUtils;
+import org.apache.doris.common.util.TimeUtils;
 import org.apache.doris.event.DataChangeEvent;
 import org.apache.doris.metric.MetricRepo;
 import org.apache.doris.mtmv.MTMVUtil;
@@ -88,6 +89,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -306,7 +308,65 @@ public class DatabaseTransactionMgr {
     }
 
 
-    public long beginTransaction(List<Long> tableIdList, String label, TUniqueId requestId,
+    public void getAllTxnStateInfoList(List<List<String>> infos) {
+        List<TransactionState> transactionStateCollection = Lists.newArrayList();
+        readLock();
+        try {
+            //transactionStateCollection.addAll(idToFinalStatusTransactionState.values());
+            transactionStateCollection.addAll(idToRunningTransactionState.values());
+            transactionStateCollection.stream()
+                    .forEach(t -> {
+                        List<String> info = Lists.newArrayList();
+                        getTxnStateInfoDetail(t, info);
+                        infos.add(info);
+                    });
+        } finally {
+            readUnlock();
+        }
+    }
+
+    private void getTxnStateInfoDetail(TransactionState txnState, List<String> info) {
+        String dbName = "";
+        String tableName = "";
+        Optional<Database> db = Env.getCurrentInternalCatalog().getDb(txnState.getDbId());
+        if (db.isPresent()) {
+            dbName = db.get().getName();
+            List<String> tableNames = Lists.newArrayList();
+            txnState.getTableIdList().forEach(tableId -> {
+                Optional<Table> table = db.get().getTable(tableId);
+                table.ifPresent(t -> {
+                    tableNames.add(t.getName());
+                });
+            });
+            tableName = Joiner.on(",").join(tableNames);
+        }
+        info.add(String.valueOf(txnState.getTransactionId()));
+        info.add(txnState.getLabel());
+        info.add(DebugUtil.printId(txnState.getRequestId()));
+        info.add(txnState.getUser());
+        info.add(txnState.getCoordinator().toString());
+        info.add(txnState.getTransactionStatus().name());
+        info.add(txnState.getSourceType().name());
+        info.add(String.valueOf(txnState.getDbId()));
+        info.add(dbName);
+        info.add(Joiner.on(", ").join(txnState.getTableIdList()));
+        info.add(tableName);
+        info.add(TimeUtils.longToTimeString(txnState.getPrepareTime()));
+        info.add(TimeUtils.longToTimeString(txnState.getPreCommitTime()));
+        info.add(TimeUtils.longToTimeString(txnState.getCommitTime()));
+        info.add(String.valueOf(txnState.getPublishCount()));
+        info.add(TimeUtils.longToTimeString(txnState.getLastPublishVersionTime()));
+        info.add(TimeUtils.longToTimeString(txnState.getFinishTime()));
+        info.add(txnState.getReason());
+        info.add(String.valueOf(txnState.getErrorReplicas().size()));
+        info.add(String.valueOf(txnState.getCallbackId()));
+        info.add(String.valueOf(txnState.getTimeoutMs()));
+        info.add(String.valueOf(txnState.isPartialUpdate()));
+        info.add(txnState.getErrMsg());
+
+    }
+
+    public long beginTransaction(List<Long> tableIdList, String label, TUniqueId requestId, String user,
             TransactionState.TxnCoordinator coordinator, TransactionState.LoadJobSourceType sourceType,
             long listenerId, long timeoutSecond)
             throws DuplicatedRequestException, LabelAlreadyUsedException, BeginTransactionException,
@@ -365,7 +425,7 @@ public class DatabaseTransactionMgr {
 
             tid = idGenerator.getNextTransactionId();
             TransactionState transactionState = new TransactionState(dbId, tableIdList,
-                    tid, label, requestId, sourceType, coordinator, listenerId, timeoutSecond * 1000);
+                    tid, label, requestId, user, sourceType, coordinator, listenerId, timeoutSecond * 1000);
             transactionState.setPrepareTime(System.currentTimeMillis());
             unprotectUpsertTransactionState(transactionState, false);
 

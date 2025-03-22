@@ -194,11 +194,11 @@ public class CloudGlobalTransactionMgr implements GlobalTransactionMgrIface {
             LoadJobSourceType sourceType, long timeoutSecond)
             throws AnalysisException, LabelAlreadyUsedException, BeginTransactionException, DuplicatedRequestException,
             QuotaExceedException, MetaNotFoundException {
-        return beginTransaction(dbId, tableIdList, label, null, coordinator, sourceType, -1, timeoutSecond);
+        return beginTransaction(dbId, tableIdList, label, null, null, coordinator, sourceType, -1, timeoutSecond);
     }
 
     @Override
-    public long beginTransaction(long dbId, List<Long> tableIdList, String label, TUniqueId requestId,
+    public long beginTransaction(long dbId, List<Long> tableIdList, String label, TUniqueId requestId, String user,
             TxnCoordinator coordinator, LoadJobSourceType sourceType, long listenerId, long timeoutSecond)
             throws AnalysisException, LabelAlreadyUsedException, BeginTransactionException, DuplicatedRequestException,
             QuotaExceedException, MetaNotFoundException {
@@ -2275,5 +2275,9 @@ public class CloudGlobalTransactionMgr implements GlobalTransactionMgrIface {
             v.remove(txnId);
             return v.isEmpty() ? null : v;
         });
+    }
+
+    public List<List<String>> getAllTransInfos() {
+        return new ArrayList<>();
     }
 }

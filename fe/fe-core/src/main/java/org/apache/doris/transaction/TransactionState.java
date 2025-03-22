@@ -207,6 +207,7 @@ public class TransactionState implements Writable {
     // requestId is used to judge whether a begin request is a internal retry request.
     // no need to persist it.
     private TUniqueId requestId;
+    private String user;
     @SerializedName(value = "idToTableCommitInfos")
     private Map<Long, TableCommitInfo> idToTableCommitInfos;
     // coordinator is show who begin this txn (FE, or one of BE, etc...)
@@ -343,12 +344,13 @@ public class TransactionState implements Writable {
     }
 
     public TransactionState(long dbId, List<Long> tableIdList, long transactionId, String label, TUniqueId requestId,
-            LoadJobSourceType sourceType, TxnCoordinator txnCoordinator, long callbackId, long timeoutMs) {
+            String user, LoadJobSourceType sourceType, TxnCoordinator txnCoordinator, long callbackId, long timeoutMs) {
         this.dbId = dbId;
         this.tableIdList = (tableIdList == null ? Lists.newArrayList() : tableIdList);
         this.transactionId = transactionId;
         this.label = label;
         this.requestId = requestId;
+        this.user = user;
         this.idToTableCommitInfos = Maps.newHashMap();
         this.txnCoordinator = txnCoordinator;
         this.transactionStatus = TransactionStatus.PREPARE;
@@ -371,7 +373,8 @@ public class TransactionState implements Writable {
             LoadJobSourceType sourceType, TxnCoordinator txnCoordinator, TransactionStatus transactionStatus,
             String reason, long callbackId, long timeoutMs, TxnCommitAttachment txnCommitAttachment, long prepareTime,
             long preCommitTime, long commitTime, long finishTime) {
-        this(dbId, tableIdList, transactionId, label, requestId, sourceType, txnCoordinator, callbackId, timeoutMs);
+        this(dbId, tableIdList, transactionId, label, requestId, null, sourceType, txnCoordinator, callbackId,
+                timeoutMs);
 
         this.transactionStatus = transactionStatus;
         this.prepareTime = prepareTime;
@@ -433,6 +436,10 @@ public class TransactionState implements Writable {
 
     public void setTransactionId(long transactionId) {
         this.transactionId = transactionId;
+    }
+
+    public String getUser() {
+        return this.user;
     }
 
     public long getTransactionId() {

@@ -306,7 +306,7 @@ public class GlobalTransactionMgrTest {
                 partitionIdToOffset, false, -1, false);
         Deencapsulation.setField(routineLoadTaskInfo, "txnId", 1L);
         routineLoadTaskInfoList.add(routineLoadTaskInfo);
-        TransactionState transactionState = new TransactionState(1L, Lists.newArrayList(1L), 1L, "label", null,
+        TransactionState transactionState = new TransactionState(1L, Lists.newArrayList(1L), 1L, "label", null, null,
                 LoadJobSourceType.ROUTINE_LOAD_TASK,
                 new TxnCoordinator(TxnSourceType.BE, 0, "be1", System.currentTimeMillis()),
                 routineLoadJob.getId(),
@@ -373,7 +373,7 @@ public class GlobalTransactionMgrTest {
                 partitionIdToOffset, false, -1, false);
         Deencapsulation.setField(routineLoadTaskInfo, "txnId", 1L);
         routineLoadTaskInfoList.add(routineLoadTaskInfo);
-        TransactionState transactionState = new TransactionState(1L, Lists.newArrayList(1L), 1L, "label", null,
+        TransactionState transactionState = new TransactionState(1L, Lists.newArrayList(1L), 1L, "label", null, null,
                 LoadJobSourceType.ROUTINE_LOAD_TASK,
                 new TxnCoordinator(TxnSourceType.BE, 0, "be1", System.currentTimeMillis()),
                 routineLoadJob.getId(),

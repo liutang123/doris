@@ -96,7 +96,7 @@ public class LoadJobTest {
         new Expectations() {
             {
                 globalTransactionMgr.beginTransaction(anyLong, Lists.newArrayList(), anyString, (TUniqueId) any,
-                        (TransactionState.TxnCoordinator) any,
+                        anyString, (TransactionState.TxnCoordinator) any,
                         (TransactionState.LoadJobSourceType) any, anyLong, anyLong);
                 minTimes = 0;
                 result = 1;

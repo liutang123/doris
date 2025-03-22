@@ -27,6 +27,7 @@ import org.apache.doris.catalog.DistributionInfo.DistributionInfoType;
 import org.apache.doris.catalog.Env;
 import org.apache.doris.catalog.HashDistributionInfo;
 import org.apache.doris.catalog.MTMV;
+import org.apache.doris.catalog.MaterializedIndex;
 import org.apache.doris.catalog.OlapTable;
 import org.apache.doris.catalog.Partition;
 import org.apache.doris.catalog.PartitionInfo;
@@ -38,6 +39,7 @@ import org.apache.doris.catalog.Table;
 import org.apache.doris.catalog.TableIf;
 import org.apache.doris.catalog.TableIf.TableType;
 import org.apache.doris.catalog.TableProperty;
+import org.apache.doris.catalog.Tablet;
 import org.apache.doris.catalog.Type;
 import org.apache.doris.catalog.View;
 import org.apache.doris.common.AnalysisException;
@@ -115,11 +117,13 @@ import org.apache.logging.log4j.Logger;
 import org.apache.thrift.TException;
 import org.jetbrains.annotations.NotNull;
 
+import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -148,6 +152,14 @@ public class MetadataGenerator {
     private static final ImmutableMap<String, Integer> PARTITIONS_COLUMN_TO_INDEX;
 
     private static final ImmutableMap<String, Integer> VIEW_DEPENDENCY_COLUMN_TO_INDEX;
+
+    private static final ImmutableMap<String, Integer> DATA_SKEW_COLUMN_TO_INDEX;
+
+    private static final ImmutableMap<String, Integer> OLAP_TABLES_COLUMN_TO_INDEX;
+
+    private static final ImmutableMap<String, Integer> TRANSACTIONS_COLUMN_TO_INDEX;
+
+    private static final ImmutableMap<String, Integer> OLAP_PARTITIONS_COLUMN_TO_INDEX;
 
     static {
         ImmutableMap.Builder<String, Integer> activeQueriesbuilder = new ImmutableMap.Builder();
@@ -217,6 +229,34 @@ public class MetadataGenerator {
             viewDependencyBuilder.put(viewDependencyBuilderColList.get(i).getName().toLowerCase(), i);
         }
         VIEW_DEPENDENCY_COLUMN_TO_INDEX = viewDependencyBuilder.build();
+
+        ImmutableMap.Builder<String, Integer> dataSkewBuilder = new ImmutableMap.Builder();
+        List<Column> dataSkewBuilderColList = SchemaTable.TABLE_MAP.get("data_skew").getFullSchema();
+        for (int i = 0; i < dataSkewBuilderColList.size(); i++) {
+            dataSkewBuilder.put(dataSkewBuilderColList.get(i).getName().toLowerCase(), i);
+        }
+        DATA_SKEW_COLUMN_TO_INDEX = dataSkewBuilder.build();
+
+        ImmutableMap.Builder<String, Integer> olapTablesBuilder = new ImmutableMap.Builder();
+        List<Column> olapTablesBuilderColList = SchemaTable.TABLE_MAP.get("olap_tables").getFullSchema();
+        for (int i = 0; i < olapTablesBuilderColList.size(); i++) {
+            olapTablesBuilder.put(olapTablesBuilderColList.get(i).getName().toLowerCase(), i);
+        }
+        OLAP_TABLES_COLUMN_TO_INDEX = olapTablesBuilder.build();
+
+        ImmutableMap.Builder<String, Integer> olapPartitionsBuilder = new ImmutableMap.Builder();
+        List<Column> olapPartitionsBuilderColList = SchemaTable.TABLE_MAP.get("olap_partitions").getFullSchema();
+        for (int i = 0; i < olapPartitionsBuilderColList.size(); i++) {
+            olapPartitionsBuilder.put(olapPartitionsBuilderColList.get(i).getName().toLowerCase(), i);
+        }
+        OLAP_PARTITIONS_COLUMN_TO_INDEX = olapPartitionsBuilder.build();
+
+        ImmutableMap.Builder<String, Integer> transactionsBuilder = new ImmutableMap.Builder();
+        List<Column> transactionsBuilderColList = SchemaTable.TABLE_MAP.get("transactions").getFullSchema();
+        for (int i = 0; i < transactionsBuilderColList.size(); i++) {
+            transactionsBuilder.put(transactionsBuilderColList.get(i).getName().toLowerCase(), i);
+        }
+        TRANSACTIONS_COLUMN_TO_INDEX = transactionsBuilder.build();
     }
 
     public static TFetchSchemaTableDataResult getMetadataTable(TFetchSchemaTableDataRequest request) throws TException {
@@ -279,7 +319,7 @@ public class MetadataGenerator {
     }
 
     public static TFetchSchemaTableDataResult getSchemaTableData(TFetchSchemaTableDataRequest request)
-            throws TException {
+            throws Exception {
         if (!request.isSetSchemaTableParams()) {
             return errorResult("schema table params is not set.");
         }
@@ -326,6 +366,22 @@ public class MetadataGenerator {
             case VIEW_DEPENDENCY:
                 result = viewDependencyMetadataResult(schemaTableParams);
                 columnIndex = VIEW_DEPENDENCY_COLUMN_TO_INDEX;
+                break;
+            case DATA_SKEW:
+                result = dataSkewMetadataResult(schemaTableParams);
+                columnIndex = DATA_SKEW_COLUMN_TO_INDEX;
+                break;
+            case OLAP_TABLES:
+                result = olapTablesMetadataResult(schemaTableParams);
+                columnIndex = OLAP_TABLES_COLUMN_TO_INDEX;
+                break;
+            case OLAP_PARTITIONS:
+                result = olapPartitionsMetadataResult(schemaTableParams);
+                columnIndex = OLAP_PARTITIONS_COLUMN_TO_INDEX;
+                break;
+            case TRANSACTIONS:
+                result = transactionsMetadataResult(schemaTableParams);
+                columnIndex = TRANSACTIONS_COLUMN_TO_INDEX;
                 break;
             default:
                 return errorResult("invalid schema table name.");
@@ -663,6 +719,52 @@ public class MetadataGenerator {
         return result;
     }
 
+    private static TFetchSchemaTableDataResult transactionsMetadataResult(TSchemaTableRequestParams params) {
+        if (!params.isSetCurrentUserIdent()) {
+            return errorResult("current user ident is not set.");
+        }
+        List<List<String>> transInfos = Env.getCurrentEnv().getCurrentGlobalTransactionMgr().getAllTransInfos();
+        TFetchSchemaTableDataResult result = new TFetchSchemaTableDataResult();
+        List<TRow> dataBatch = Lists.newArrayList();
+        for (List<String> info : transInfos) {
+            TRow trow = new TRow();
+            trow.addToColumnValue(new TCell().setLongVal(Long.valueOf(info.get(0)))); // transaction_id
+            trow.addToColumnValue(new TCell().setStringVal(info.get(1))); // label
+            trow.addToColumnValue(new TCell().setStringVal(info.get(2))); // requert_id
+            trow.addToColumnValue(new TCell().setStringVal(info.get(3))); // user
+            trow.addToColumnValue(new TCell().setStringVal(info.get(4))); // coordinator
+            trow.addToColumnValue(new TCell().setStringVal(info.get(5))); // state
+            trow.addToColumnValue(new TCell().setStringVal(info.get(6))); // soruce_type
+            trow.addToColumnValue(new TCell().setLongVal(Long.valueOf(info.get(7)))); // db_id
+            trow.addToColumnValue(new TCell().setStringVal(info.get(8))); // db_name
+            trow.addToColumnValue(new TCell().setStringVal(info.get(9))); // tableid_list
+            trow.addToColumnValue(new TCell().setStringVal(info.get(10))); // table name
+            // prepare_time
+            trow.addToColumnValue(new TCell().setStringVal(info.get(11)));
+            // precommit_time
+            trow.addToColumnValue(new TCell().setStringVal(info.get(12)));
+            // commit_time
+            trow.addToColumnValue(new TCell().setStringVal(info.get(13)));
+            trow.addToColumnValue(new TCell().setLongVal(Long.valueOf(info.get(14)))); // publish_count
+            // publish version time
+            trow.addToColumnValue(new TCell().setStringVal(info.get(15)));
+            // finish time
+            trow.addToColumnValue(new TCell().setStringVal(info.get(16)));
+            trow.addToColumnValue(new TCell().setStringVal(info.get(17))); // reason
+            trow.addToColumnValue(new TCell().setLongVal(Long.valueOf(info.get(18)))); // error_replicas
+            trow.addToColumnValue(new TCell().setLongVal(Long.valueOf(info.get(19)))); // callback_id
+            trow.addToColumnValue(new TCell().setLongVal(Long.valueOf(info.get(20)))); // timeout_ms
+            trow.addToColumnValue(
+                new TCell().setBoolVal(Boolean.valueOf(info.get(21)))); // is partition update
+            trow.addToColumnValue(new TCell().setStringVal(info.get(22))); // err_msg
+            dataBatch.add(trow);
+        }
+
+        result.setDataBatch(dataBatch);
+        result.setStatus(new TStatus(TStatusCode.OK));
+        return result;
+    }
+
     private static TFetchSchemaTableDataResult workloadSchedPolicyMetadataResult(TSchemaTableRequestParams params) {
         if (!params.isSetCurrentUserIdent()) {
             return errorResult("current user ident is not set.");
@@ -953,6 +1055,149 @@ public class MetadataGenerator {
         }
         return result;
     }
+
+    private static TFetchSchemaTableDataResult olapPartitionsMetadataResult(TSchemaTableRequestParams params) {
+        if (!params.isSetCurrentUserIdent()) {
+            return errorResult("current user ident is not set.");
+        }
+
+        if (!params.isSetDbId()) {
+            return errorResult("current db id is not set.");
+        }
+
+        if (!params.isSetCatalog()) {
+            return errorResult("current catalog is not set.");
+        }
+
+        TUserIdentity tcurrentUserIdentity = params.getCurrentUserIdent();
+        UserIdentity currentUserIdentity = UserIdentity.fromThrift(tcurrentUserIdentity);
+        TFetchSchemaTableDataResult result = new TFetchSchemaTableDataResult();
+        Long dbId = params.getDbId();
+        String clg = params.getCatalog();
+        List<TRow> dataBatch = Lists.newArrayList();
+        CatalogIf catalog = Env.getCurrentEnv().getCatalogMgr().getCatalog(clg);
+        if (catalog == null) {
+            // catalog is NULL let return empty to BE
+            result.setDataBatch(dataBatch);
+            result.setStatus(new TStatus(TStatusCode.OK));
+            return result;
+        }
+        DatabaseIf database = catalog.getDbNullable(dbId);
+        if (database == null) {
+            // BE gets the database id list from FE and then invokes this interface
+            // per database. there is a chance that in between database can be dropped.
+            // so need to handle database not exist case and return ok so that BE continue
+            // the loop with next database.
+            result.setDataBatch(dataBatch);
+            result.setStatus(new TStatus(TStatusCode.OK));
+            return result;
+        }
+        List<TableIf> tables = database.getTables();
+        if (catalog instanceof InternalCatalog) {
+            olapPartitionsForInternalCatalog(currentUserIdentity, catalog, database, tables, dataBatch);
+        } else if (catalog instanceof ExternalCatalog) {
+            errorResult("not support external catalog");
+        }
+        result.setDataBatch(dataBatch);
+        result.setStatus(new TStatus(TStatusCode.OK));
+        return result;
+    }
+
+    private static TFetchSchemaTableDataResult dataSkewMetadataResult(TSchemaTableRequestParams params) {
+        if (!params.isSetCurrentUserIdent()) {
+            return errorResult("current user ident is not set.");
+        }
+
+        if (!params.isSetDbId()) {
+            return errorResult("current db id is not set.");
+        }
+
+        if (!params.isSetCatalog()) {
+            return errorResult("current catalog is not set.");
+        }
+
+        TUserIdentity tcurrentUserIdentity = params.getCurrentUserIdent();
+        UserIdentity currentUserIdentity = UserIdentity.fromThrift(tcurrentUserIdentity);
+        TFetchSchemaTableDataResult result = new TFetchSchemaTableDataResult();
+        Long dbId = params.getDbId();
+        String clg = params.getCatalog();
+        List<TRow> dataBatch = Lists.newArrayList();
+        CatalogIf catalog = Env.getCurrentEnv().getCatalogMgr().getCatalog(clg);
+        if (catalog == null) {
+            // catalog is NULL let return empty to BE
+            result.setDataBatch(dataBatch);
+            result.setStatus(new TStatus(TStatusCode.OK));
+            return result;
+        }
+        DatabaseIf database = catalog.getDbNullable(dbId);
+        if (database == null) {
+            // BE gets the database id list from FE and then invokes this interface
+            // per database. there is a chance that in between database can be dropped.
+            // so need to handle database not exist case and return ok so that BE continue
+            // the loop with next database.
+            result.setDataBatch(dataBatch);
+            result.setStatus(new TStatus(TStatusCode.OK));
+            return result;
+        }
+        List<TableIf> tables = database.getTables();
+        if (catalog instanceof InternalCatalog) {
+            dataSkewForInternalCatalog(currentUserIdentity, catalog, database, tables, dataBatch);
+        } else if (catalog instanceof ExternalCatalog) {
+            errorResult("not support external catalog");
+        }
+        result.setDataBatch(dataBatch);
+        result.setStatus(new TStatus(TStatusCode.OK));
+        return result;
+    }
+
+    private static TFetchSchemaTableDataResult olapTablesMetadataResult(TSchemaTableRequestParams params)
+            throws Exception {
+        if (!params.isSetCurrentUserIdent()) {
+            return errorResult("current user ident is not set.");
+        }
+
+        if (!params.isSetDbId()) {
+            return errorResult("current db id is not set.");
+        }
+
+        if (!params.isSetCatalog()) {
+            return errorResult("current catalog is not set.");
+        }
+
+        TUserIdentity tcurrentUserIdentity = params.getCurrentUserIdent();
+        UserIdentity currentUserIdentity = UserIdentity.fromThrift(tcurrentUserIdentity);
+        TFetchSchemaTableDataResult result = new TFetchSchemaTableDataResult();
+        Long dbId = params.getDbId();
+        String clg = params.getCatalog();
+        List<TRow> dataBatch = Lists.newArrayList();
+        CatalogIf catalog = Env.getCurrentEnv().getCatalogMgr().getCatalog(clg);
+        if (catalog == null) {
+            // catalog is NULL let return empty to BE
+            result.setDataBatch(dataBatch);
+            result.setStatus(new TStatus(TStatusCode.OK));
+            return result;
+        }
+        DatabaseIf database = catalog.getDbNullable(dbId);
+        if (database == null) {
+            // BE gets the database id list from FE and then invokes this interface
+            // per database. there is a chance that in between database can be dropped.
+            // so need to handle database not exist case and return ok so that BE continue
+            // the loop with next database.
+            result.setDataBatch(dataBatch);
+            result.setStatus(new TStatus(TStatusCode.OK));
+            return result;
+        }
+        List<TableIf> tables = database.getTables();
+        if (catalog instanceof InternalCatalog) {
+            olapTablesForInternalCatalog(currentUserIdentity, catalog, database, tables, dataBatch);
+        } else if (catalog instanceof ExternalCatalog) {
+            errorResult("not support external catalog");
+        }
+        result.setDataBatch(dataBatch);
+        result.setStatus(new TStatus(TStatusCode.OK));
+        return result;
+    }
+
 
     private static TFetchSchemaTableDataResult partitionMetadataResult(TMetadataTableRequestParams params) {
         if (LOG.isDebugEnabled()) {
@@ -1290,6 +1535,244 @@ public class MetadataGenerator {
         result.setDataBatch(dataBatch);
         result.setStatus(new TStatus(TStatusCode.OK));
         return result;
+    }
+
+    private static String graph(long num, long totalNum) {
+        StringBuilder sb = new StringBuilder();
+        long normalized = num == totalNum ? (totalNum == 0L ? 0 : 100) : (int) Math.ceil(num * 100 / totalNum);
+        for (int i = 0; i < normalized; ++i) {
+            sb.append(">");
+        }
+        return sb.toString();
+    }
+
+    private static void dataSkewForInternalCatalog(UserIdentity currentUserIdentity,
+                CatalogIf catalog, DatabaseIf database, List<TableIf> tables, List<TRow> dataBatch) {
+        DecimalFormat df = new DecimalFormat("00.00 %");
+
+        for (TableIf table : tables) {
+            if (!(table instanceof OlapTable)) {
+                continue;
+            }
+            if (!Env.getCurrentEnv().getAccessManager().checkTblPriv(currentUserIdentity, catalog.getName(),
+                    database.getFullName(), table.getName(), PrivPredicate.SHOW)) {
+                continue;
+            }
+            OlapTable olapTable = (OlapTable) table;
+            olapTable.readLock();
+            try {
+                Collection<Partition> allPartitions = olapTable.getAllPartitions();
+                for (Partition partition : allPartitions) {
+                    DistributionInfo distributionInfo = partition.getDistributionInfo();
+                    List<Long> rowCountTabletInfos = Lists.newArrayListWithCapacity(distributionInfo.getBucketNum());
+                    List<Long> dataSizeTabletInfos = Lists.newArrayListWithCapacity(distributionInfo.getBucketNum());
+                    for (long i = 0; i < distributionInfo.getBucketNum(); i++) {
+                        rowCountTabletInfos.add(0L);
+                        dataSizeTabletInfos.add(0L);
+                    }
+
+                    long totalSize = 0;
+                    for (MaterializedIndex mIndex :
+                            partition.getMaterializedIndices(MaterializedIndex.IndexExtState.VISIBLE)) {
+                        List<Long> tabletIds = mIndex.getTabletIdsInOrder();
+                        for (int i = 0; i < tabletIds.size(); i++) {
+                            Tablet tablet = mIndex.getTablet(tabletIds.get(i));
+                            long rowCount = tablet.getRowCount(true);
+                            long dataSize = tablet.getDataSize(true, true);
+                            rowCountTabletInfos.set(i, rowCountTabletInfos.get(i) + rowCount);
+                            dataSizeTabletInfos.set(i, dataSizeTabletInfos.get(i) + dataSize);
+                            totalSize += dataSize;
+                        }
+                    }
+
+                    // graph
+                    for (int i = 0; i < distributionInfo.getBucketNum(); i++) {
+                        TRow trow = new TRow();
+                        trow.addToColumnValue(new TCell().setStringVal(catalog.getName())); // CATALOG_NAME
+                        trow.addToColumnValue(new TCell().setStringVal(database.getFullName())); // TABLE_SCHEMA
+                        trow.addToColumnValue(new TCell().setStringVal(table.getName())); // TABLE_NAME
+                        trow.addToColumnValue(new TCell().setLongVal(table.getId())); // TABLE_ID
+                        trow.addToColumnValue(new TCell().setLongVal(partition.getId())); // PARTITION_ID
+                        trow.addToColumnValue(new TCell().setStringVal(partition.getName())); // PARTITIONNAME
+                        trow.addToColumnValue(new TCell().setIntVal(i)); // BUCKETIDX
+                        trow.addToColumnValue(new TCell().setLongVal(rowCountTabletInfos.get(i))); // AVGROWCOUNT
+                        trow.addToColumnValue(new TCell().setLongVal(dataSizeTabletInfos.get(i))); // AVGDATASIZE
+                        // GRAPH
+                        trow.addToColumnValue(new TCell().setStringVal(graph(dataSizeTabletInfos.get(i), totalSize)));
+                        // PERCENT
+                        trow.addToColumnValue(new TCell().setStringVal(totalSize == dataSizeTabletInfos.get(i)
+                                ? (totalSize == 0L ? "0.00%" : "100.00%") :
+                                df.format((double) dataSizeTabletInfos.get(i) / totalSize)));
+                        dataBatch.add(trow);
+                    }
+                }
+            } finally {
+                olapTable.readUnlock();
+            }
+        } // for table
+    }
+
+    private static void olapPartitionsForInternalCatalog(UserIdentity currentUserIdentity, CatalogIf catalog,
+                DatabaseIf database, List<TableIf> tables, List<TRow> dataBatch) {
+        for (TableIf table : tables) {
+            if (!(table instanceof OlapTable)) {
+                continue;
+            }
+            if (!Env.getCurrentEnv().getAccessManager().checkTblPriv(currentUserIdentity, catalog.getName(),
+                    database.getFullName(), table.getName(), PrivPredicate.SHOW)) {
+                continue;
+            }
+            OlapTable olapTable = (OlapTable) table;
+            if (!olapTable.tryReadLock(3, TimeUnit.MILLISECONDS)) {
+                continue;
+            }
+            try {
+                Collection<Partition> allPartitions = olapTable.getAllPartitions();
+                for (Partition partition : allPartitions) {
+                    TRow trow = new TRow();
+                    trow.addToColumnValue(new TCell().setStringVal(catalog.getName())); // CATALOG_NAME
+                    trow.addToColumnValue(new TCell().setStringVal(database.getFullName())); // TABLE_SCHEMA
+                    trow.addToColumnValue(new TCell().setStringVal(table.getName())); // TABLE_NAME
+                    trow.addToColumnValue(new TCell().setLongVal(table.getId())); // TABLE_ID
+                    trow.addToColumnValue(new TCell().setLongVal(partition.getId())); // PARTITION_ID
+                    trow.addToColumnValue(new TCell().setStringVal(partition.getName())); // PARTITION_NAME
+                    trow.addToColumnValue(new TCell().setLongVal(partition.getRowCount())); // ROW_COUNT
+                    // DATA_SIZE
+                    trow.addToColumnValue(new TCell().setLongVal(partition.getAllDataSize(true)));
+                    // LOCAL_DATA_SIZE
+                    trow.addToColumnValue(new TCell().setLongVal(partition.getDataSize(true)));
+                    trow.addToColumnValue(new TCell().setLongVal(partition.getRemoteDataSize())); // REMOTE_DATA_SIZE
+                    // BUCKET_COUNT
+                    trow.addToColumnValue(new TCell().setLongVal(partition.getDistributionInfo().getBucketNum()));
+                    trow.addToColumnValue(new TCell().setLongVal(olapTable.getPartitionInfo()
+                            .getReplicaAllocation(partition.getId()).getTotalReplicaNum())); // REPLICA_COUNT
+                    trow.addToColumnValue(new TCell().setLongVal(partition.getCommittedVersion())); // COMMITTED_VERSION
+                    trow.addToColumnValue(new TCell().setLongVal(partition.getVisibleVersion())); // VISIABLE_VERSION
+                    // VISIABLE_VERSION_TIME
+                    trow.addToColumnValue(new TCell().setStringVal(
+                            TimeUtils.longToTimeString(partition.getVisibleVersionTime())));
+                    trow.addToColumnValue(new TCell().setLongVal(
+                            partition.getAllDataSize(true) / partition.getDistributionInfo().getBucketNum()));
+                    dataBatch.add(trow);
+                }
+            } finally {
+                olapTable.readUnlock();
+            }
+        } // for table
+    }
+
+    private static void olapTablesForInternalCatalog(UserIdentity currentUserIdentity,
+            CatalogIf catalog, DatabaseIf database, List<TableIf> tables, List<TRow> dataBatch) throws Exception {
+        for (TableIf table : tables) {
+            if (!(table instanceof OlapTable)) {
+                continue;
+            }
+            if (!Env.getCurrentEnv().getAccessManager().checkTblPriv(currentUserIdentity, catalog.getName(),
+                    database.getFullName(), table.getName(), PrivPredicate.SHOW)) {
+                continue;
+            }
+            OlapTable olapTable = (OlapTable) table;
+            if (!olapTable.tryReadLock(3, TimeUnit.SECONDS)) {
+                continue;
+            }
+            try {
+                TRow trow = new TRow();
+                trow.addToColumnValue(new TCell().setStringVal(catalog.getName())); // CATALOG_NAME
+                trow.addToColumnValue(new TCell().setLongVal(database.getId())); // DB_ID
+                trow.addToColumnValue(new TCell().setStringVal(database.getFullName())); // TABLE_SCHEMA
+                trow.addToColumnValue(new TCell().setStringVal(table.getName())); // TABLE_NAME
+                trow.addToColumnValue(new TCell().setLongVal(table.getId())); // TABLE_ID
+                trow.addToColumnValue(new TCell().setStringVal(olapTable.getType().name())); // TYPE
+                trow.addToColumnValue(new TCell().setStringVal(olapTable.getCompressionType().name())); // COMPRESS_TYPE
+                trow.addToColumnValue(new TCell().setLongVal(olapTable.getIndexNumber())); // INDEX_COUNT
+                trow.addToColumnValue(new TCell().setLongVal(olapTable.getRowCount())); // ROW_COUNT
+                trow.addToColumnValue(new TCell().setLongVal(olapTable.getDefaultReplicaAllocation()
+                        .getTotalReplicaNum())); // REPLICA_COUNT
+                trow.addToColumnValue(new TCell().setLongVal(olapTable.getAllTablets().size())); // TABLETS_COUNT
+                // BUCKET_NUM
+                trow.addToColumnValue(new TCell().setLongVal(olapTable.getDefaultDistributionInfo().getBucketNum()));
+                trow.addToColumnValue(new TCell().setLongVal(olapTable.getAllPartitions().size())); // PARTITION_NUM
+                // AUTO_PARTITION
+                trow.addToColumnValue(new TCell().setBoolVal(olapTable.getPartitionInfo().enableAutomaticPartition()));
+                trow.addToColumnValue(new TCell().setBoolVal(olapTable.dynamicPartitionExists())); // DYNAMIC_PARTITION
+                if (olapTable.dynamicPartitionExists()) {
+                    trow.addToColumnValue(new TCell().setStringVal(olapTable.getTableProperty()
+                            .getDynamicPartitionProperty().getTimeUnit())); // DYNAMIC_PARTITION_TIME_UNIT
+                    trow.addToColumnValue(new TCell().setLongVal(olapTable.getTableProperty()
+                            .getDynamicPartitionProperty().getStart())); // DYNAMIC_PARTITION_START
+                    trow.addToColumnValue(new TCell().setLongVal(olapTable.getTableProperty()
+                            .getDynamicPartitionProperty().getEnd())); // DYNAMIC_PARTITION_END
+                } else {
+                    trow.addToColumnValue(new TCell().setStringVal("")); // DYNAMIC_PARTITION_TIME_UNIT
+                    trow.addToColumnValue(new TCell().setLongVal(0)); // DYNAMIC_PARTITION_START
+                    trow.addToColumnValue(new TCell().setLongVal(0)); // DYNAMIC_PARTITION_END
+                }
+                trow.addToColumnValue(new TCell().setLongVal(olapTable.getDataSize())); // DATA_SIZE
+                trow.addToColumnValue(new TCell().setLongVal(olapTable.getDataLength())); // DATA_LENGTH
+                trow.addToColumnValue(new TCell().setLongVal(olapTable.getRemoteDataSize())); // REMOTE_SIZE
+                trow.addToColumnValue(new TCell().setLongVal(olapTable.getAvgRowLength())); // AVG_ROW_LENGTH
+                trow.addToColumnValue(new TCell().setStringVal(
+                        TimeUtils.longToTimeString(olapTable.getCreateTime() * 1000))); // CREATE_TIME
+                trow.addToColumnValue(new TCell().setStringVal(
+                        TimeUtils.longToTimeString(olapTable.getUpdateTime()))); // UPDATE_TIME
+                trow.addToColumnValue(new TCell().setLongVal(olapTable.getVisibleVersion())); // VISIBLE_VERSION
+                trow.addToColumnValue(new TCell().setStringVal(
+                        TimeUtils.longToTimeString(olapTable.getVisibleVersionTime()))); // VISIBLE_VERSION_TIME
+
+                boolean isDataSkew = false;
+                Collection<Partition> allPartitions = olapTable.getAllPartitions();
+                for (Partition partition : allPartitions) {
+                    DistributionInfo distributionInfo = partition.getDistributionInfo();
+                    if (distributionInfo.getBucketNum() == 1) {
+                        isDataSkew = false;
+                        break;
+                    }
+
+                    List<Long> dataSizeTabletInfos = Lists.newArrayListWithCapacity(distributionInfo.getBucketNum());
+                    for (long i = 0; i < distributionInfo.getBucketNum(); i++) {
+                        dataSizeTabletInfos.add(0L);
+                    }
+
+                    long totalSize = 0;
+                    for (MaterializedIndex mIndex :
+                            partition.getMaterializedIndices(MaterializedIndex.IndexExtState.VISIBLE)) {
+                        List<Long> tabletIds = mIndex.getTabletIdsInOrder();
+                        for (int i = 0; i < tabletIds.size(); i++) {
+                            Tablet tablet = mIndex.getTablet(tabletIds.get(i));
+                            long dataSize = tablet.getDataSize(true, true);
+                            dataSizeTabletInfos.set(i, dataSizeTabletInfos.get(i) + dataSize);
+                            totalSize += dataSize;
+                        }
+                    }
+                    dataSizeTabletInfos.sort(Collections.reverseOrder());
+                    // get data size of top 10 percent
+                    int k = (int) Math.round(dataSizeTabletInfos.size() * 0.1);
+                    if (k == 0) {
+                        k = 1;
+                    }
+                    long sum = 0;
+                    for (int i = 0; i < Math.min(k, dataSizeTabletInfos.size()); i++) {
+                        sum += dataSizeTabletInfos.get(i);
+                    }
+
+                    // if top 10 percent bigger than 30% of total size, then set isDataSkew to true
+                    if (distributionInfo.getBucketNum() == 2) {
+                        if (sum > totalSize * 0.7) {
+                            isDataSkew = true;
+                            break;
+                        }
+                    }  else if (sum > totalSize * 0.3) {
+                        isDataSkew = true;
+                        break;
+                    }
+                }
+                trow.addToColumnValue(new TCell().setBoolVal(isDataSkew)); // IS_DATA_SKEW
+                dataBatch.add(trow);
+
+            } finally {
+                olapTable.readUnlock();
+            }
+        } // for table
     }
 
     private static void tablePropertiesForInternalCatalog(UserIdentity currentUserIdentity,

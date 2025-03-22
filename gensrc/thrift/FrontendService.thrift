@@ -1025,6 +1025,10 @@ enum TSchemaTableName {
   CATALOG_META_CACHE_STATS = 9,
   PARTITIONS = 10,
   VIEW_DEPENDENCY = 11,
+  TRANSACTIONS = 30,
+  DATA_SKEW = 31,
+  OLAP_TABLES = 32,
+  OLAP_PARTITIONS = 33,
 }
 
 struct TMetadataTableRequestParams {
