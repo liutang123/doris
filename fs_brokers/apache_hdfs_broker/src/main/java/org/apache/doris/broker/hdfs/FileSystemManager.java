@@ -109,6 +109,10 @@ public class FileSystemManager {
     // which is not thread-safe and may cause 'Filesystem closed' exception when it is closed by other thread.
     private static final String FS_HDFS_IMPL_DISABLE_CACHE = "fs.hdfs.impl.disable.cache";
 
+    // arguments for ofs
+    private static final String FS_OFS_ACCESS_KEY = "s3.access.key";
+    private static final String FS_OFS_SECRET_KEY = "s3.secret.key";
+
     // arguments for s3a
     private static final String FS_S3A_ACCESS_KEY = "fs.s3a.access.key";
     private static final String FS_S3A_SECRET_KEY = "fs.s3a.secret.key";
@@ -662,7 +666,7 @@ public class FileSystemManager {
      */
     public BrokerFileSystem getChdfsFileSystem(String path, Map<String, String> properties) {
         WildcardURI pathUri = new WildcardURI(path);
-        String host = CHDFS_SCHEME;
+        String host = CHDFS_SCHEME + "://" + pathUri.getAuthority();
         String authentication = properties.getOrDefault(CommonConfigurationKeysPublic.HADOOP_SECURITY_AUTHENTICATION,
                 AUTHENTICATION_SIMPLE);
         if (Strings.isNullOrEmpty(authentication) || (!authentication.equals(AUTHENTICATION_SIMPLE)
@@ -672,9 +676,12 @@ public class FileSystemManager {
                     "invalid authentication:" + authentication);
         }
 
+        String username = properties.getOrDefault(FS_OFS_ACCESS_KEY, "");
+        String password = properties.getOrDefault(FS_OFS_SECRET_KEY, "");
+        String hdfsUgi = username + "," + password;
         FileSystemIdentity fileSystemIdentity = null;
         if (authentication.equals(AUTHENTICATION_SIMPLE)) {
-            fileSystemIdentity = new FileSystemIdentity(host, "");
+            fileSystemIdentity = new FileSystemIdentity(host, hdfsUgi);
         } else {
             // for kerberos, use host + principal + keytab as filesystemindentity
             String kerberosContent = "";
