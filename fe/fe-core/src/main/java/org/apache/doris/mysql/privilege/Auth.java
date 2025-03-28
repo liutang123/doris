@@ -1167,6 +1167,15 @@ public class Auth implements Writable {
         }
     }
 
+    public String getInitCatalog(String qualifiedUser) {
+        readLock();
+        try {
+            return propertyMgr.getInitCatalog(qualifiedUser);
+        } finally {
+            readUnlock();
+        }
+    }
+
     public void getAllDomains(Set<String> allDomains) {
         readLock();
         try {

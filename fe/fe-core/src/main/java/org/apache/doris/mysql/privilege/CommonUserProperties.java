@@ -19,6 +19,7 @@ package org.apache.doris.mysql.privilege;
 
 import org.apache.doris.common.io.Text;
 import org.apache.doris.common.io.Writable;
+import org.apache.doris.datasource.InternalCatalog;
 import org.apache.doris.persist.gson.GsonUtils;
 import org.apache.doris.resource.Tag;
 import org.apache.doris.resource.workloadgroup.WorkloadGroupMgr;
@@ -72,6 +73,9 @@ public class CommonUserProperties implements Writable {
 
     @SerializedName("camGroups")
     private String camGroups = "";
+
+    @SerializedName("ic")
+    private String initCatalog = InternalCatalog.INTERNAL_CATALOG_NAME;
 
     private String[] sqlBlockRulesSplit = {};
 
@@ -182,6 +186,14 @@ public class CommonUserProperties implements Writable {
 
     public void setCamGroups(String camGroups) {
         this.camGroups = camGroups;
+    }
+
+    public String getInitCatalog() {
+        return initCatalog;
+    }
+
+    public void setInitCatalog(String initCatalog) {
+        this.initCatalog = initCatalog;
     }
 
     public static CommonUserProperties read(DataInput in) throws IOException {

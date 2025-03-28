@@ -30,6 +30,7 @@ import org.apache.doris.common.UserException;
 import org.apache.doris.common.io.DeepCopy;
 import org.apache.doris.common.io.Text;
 import org.apache.doris.common.io.Writable;
+import org.apache.doris.datasource.CatalogIf;
 import org.apache.doris.load.DppConfig;
 import org.apache.doris.qe.ConnectContext;
 import org.apache.doris.resource.Tag;
@@ -87,6 +88,8 @@ public class UserProperty implements Writable {
 
     private static final String PROP_CAM_GROUP_LIST = "cam_group_list";
 
+    public static final String PROP_DEFAULT_INIT_CATALOG = "default_init_catalog";
+
     // for system user
     public static final Set<Pattern> ADVANCED_PROPERTIES = Sets.newHashSet();
     // for normal user
@@ -138,6 +141,7 @@ public class UserProperty implements Writable {
         COMMON_PROPERTIES.add(Pattern.compile("^" + PROP_LOAD_CLUSTER + "." + DppConfig.CLUSTER_NAME_REGEX + ".",
                 Pattern.CASE_INSENSITIVE));
         COMMON_PROPERTIES.add(Pattern.compile("^" + PROP_WORKLOAD_GROUP + "$", Pattern.CASE_INSENSITIVE));
+        COMMON_PROPERTIES.add(Pattern.compile("^" + PROP_DEFAULT_INIT_CATALOG + "$", Pattern.CASE_INSENSITIVE));
     }
 
     public UserProperty() {
@@ -187,6 +191,10 @@ public class UserProperty implements Writable {
         return commonProperties.getCamGroups();
     }
 
+    public String getInitCatalog() {
+        return commonProperties.getInitCatalog();
+    }
+
     @Deprecated
     public WhiteList getWhiteList() {
         return whiteList;
@@ -222,8 +230,10 @@ public class UserProperty implements Writable {
         String workloadGroup = this.commonProperties.getWorkloadGroup();
         boolean allowResourceTagDowngrade = this.commonProperties.isAllowResourceTagDowngrade();
         String camGroups = this.commonProperties.getCamGroups();
+        String initCatalog = this.commonProperties.getInitCatalog();
 
         String newDefaultLoadCluster = defaultLoadCluster;
+
         Map<String, DppConfig> newDppConfigs = Maps.newHashMap(clusterToDppConfig);
 
         // update
@@ -388,6 +398,15 @@ public class UserProperty implements Writable {
                     }
                 }
                 camGroups = value;
+            } else if (keyArr[0].equalsIgnoreCase(PROP_DEFAULT_INIT_CATALOG)) {
+                if (keyArr.length != 1) {
+                    throw new DdlException(PROP_DEFAULT_INIT_CATALOG + " format error");
+                }
+                CatalogIf catalog = Env.getCurrentEnv().getCatalogMgr().getCatalog(value);
+                if (catalog == null) {
+                    throw new DdlException("catalog " + value + " not exists");
+                }
+                initCatalog = value;
             } else {
                 if (isReplay) {
                     // After using SET PROPERTY to modify the user property, if FE rolls back to a version without
@@ -413,6 +432,7 @@ public class UserProperty implements Writable {
         this.commonProperties.setWorkloadGroup(workloadGroup);
         this.commonProperties.setAllowResourceTagDowngrade(allowResourceTagDowngrade);
         this.commonProperties.setCamGroups(camGroups);
+        this.commonProperties.setInitCatalog(initCatalog);
         if (newDppConfigs.containsKey(newDefaultLoadCluster)) {
             defaultLoadCluster = newDefaultLoadCluster;
         } else {
@@ -551,7 +571,10 @@ public class UserProperty implements Writable {
 
         result.add(Lists.newArrayList(PROP_ALLOW_RESOURCE_TAG_DOWNGRADE,
                 String.valueOf(commonProperties.isAllowResourceTagDowngrade())));
+
         result.add(Lists.newArrayList(PROP_CAM_GROUP_LIST, String.valueOf(commonProperties.getCamGroups())));
+
+        result.add(Lists.newArrayList(PROP_DEFAULT_INIT_CATALOG, String.valueOf(commonProperties.getInitCatalog())));
 
         // load cluster
         if (defaultLoadCluster != null) {
