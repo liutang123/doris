@@ -144,14 +144,14 @@ clean_up() {
 }
 backup_session_variables
 
-echo '============================================'
-echo "Optimize session variables"
-run_sql "source ${TPCDS_OPT_CONF};"
-echo '============================================'
-run_sql "show variables;"
-echo '============================================'
-run_sql "show table status;"
-echo '============================================'
+#echo '============================================'
+#echo "Optimize session variables"
+#run_sql "source ${TPCDS_OPT_CONF};"
+#echo '============================================'
+#run_sql "show variables;"
+#echo '============================================'
+#run_sql "show table status;"
+#echo '============================================'
 
 RESULT_DIR="${CURDIR}/result"
 if [[ -d "${RESULT_DIR}" ]]; then
@@ -171,22 +171,34 @@ for i in ${query_array[@]}; do
     hot2=0
     echo -ne "query${i}\t" | tee -a result.csv
     start=$(date +%s%3N)
+    on_error=""
     mysql -h"${FE_HOST}" -u"${USER}" -P"${FE_QUERY_PORT}" -D"${DB}" --comments <"${TPCDS_QUERIES_DIR}"/query"${i}".sql >"${RESULT_DIR}"/result"${i}".out 2>"${RESULT_DIR}"/result"${i}".log
+    if [ $? -ne 0 ]; then
+        on_error="[ERR]"
+    fi
     end=$(date +%s%3N)
     cold=$((end - start))
-    echo -ne "${cold}\t" | tee -a result.csv
+    echo -ne "${cold}${on_error}\t" | tee -a result.csv
 
     start=$(date +%s%3N)
+    on_error=""
     mysql -h"${FE_HOST}" -u"${USER}" -P"${FE_QUERY_PORT}" -D"${DB}" --comments <"${TPCDS_QUERIES_DIR}"/query"${i}".sql >"${RESULT_DIR}"/result"${i}".out 2>"${RESULT_DIR}"/result"${i}".log
+    if [ $? -ne 0 ]; then
+        on_error="[ERR]"
+    fi
     end=$(date +%s%3N)
     hot1=$((end - start))
-    echo -ne "${hot1}\t" | tee -a result.csv
+    echo -ne "${hot1}${on_error}\t" | tee -a result.csv
 
     start=$(date +%s%3N)
+    on_error=""
     mysql -h"${FE_HOST}" -u"${USER}" -P"${FE_QUERY_PORT}" -D"${DB}" --comments <"${TPCDS_QUERIES_DIR}"/query"${i}".sql >"${RESULT_DIR}"/result"${i}".out 2>"${RESULT_DIR}"/result"${i}".log
+    if [ $? -ne 0 ]; then
+        on_error="[ERR]"
+    fi
     end=$(date +%s%3N)
     hot2=$((end - start))
-    echo -ne "${hot2}\t" | tee -a result.csv
+    echo -ne "${hot2}${on_error}\t" | tee -a result.csv
 
     cold_run_sum=$((cold_run_sum + cold))
     if [[ ${hot1} -lt ${hot2} ]]; then
