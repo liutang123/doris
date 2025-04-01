@@ -1659,6 +1659,9 @@ public class Config extends ConfigBase {
     @ConfField(mutable = true, masterOnly = true)
     public static int table_name_length_limit = 64;
 
+    @ConfField(mutable = true, masterOnly = true)
+    public static int column_comment_length_limit = 255;
+
     /*
      * The job scheduling interval of the schema change handler.
      * The user should not set this parameter.

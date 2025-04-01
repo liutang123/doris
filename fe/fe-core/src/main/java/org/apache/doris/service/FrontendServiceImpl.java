@@ -870,7 +870,8 @@ public class FrontendServiceImpl implements FrontendService.Iface {
                         final TColumnDef colDef = new TColumnDef(desc);
                         final String comment = column.getComment();
                         if (comment != null) {
-                            colDef.setComment(comment);
+                            colDef.setComment(comment.substring(0,
+                                    Math.min(comment.length(), Config.column_comment_length_limit)));
                         }
                         if (column.isKey()) {
                             if (table instanceof OlapTable) {
@@ -931,7 +932,8 @@ public class FrontendServiceImpl implements FrontendService.Iface {
                             final TColumnDef colDef = new TColumnDef(desc);
                             final String comment = column.getComment();
                             if (comment != null) {
-                                colDef.setComment(comment);
+                                colDef.setComment(comment.substring(0,
+                                        Math.min(comment.length(), Config.column_comment_length_limit)));
                             }
                             if (column.isKey()) {
                                 if (table instanceof OlapTable) {
