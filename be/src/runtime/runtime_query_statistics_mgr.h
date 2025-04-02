@@ -53,7 +53,6 @@ public:
     ~QueryStatisticsCtx() = default;
 
     void collect_query_statistics(TQueryStatistics* tq_s);
-
 public:
     std::vector<std::shared_ptr<QueryStatistics>> _qs_list;
     bool _is_query_finished;

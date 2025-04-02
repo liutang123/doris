@@ -586,6 +586,8 @@ private:
 
     std::shared_ptr<MemTracker> _mem_tracker;
 
+    std::shared_ptr<QueryStatistics> _write_statistics = nullptr;
+
     ObjectPool* _pool = nullptr;
 
     bthread_t _sender_thread = 0;

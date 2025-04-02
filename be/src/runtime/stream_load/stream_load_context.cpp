@@ -28,6 +28,9 @@
 #include <new>
 #include <sstream>
 
+#include "stream_load_recorder.h"
+#include "olap/storage_engine.h"
+
 #include "common/logging.h"
 
 namespace doris {
@@ -45,6 +48,22 @@ std::string StreamLoadContext::to_json() const {
     // label
     writer.Key("Label");
     writer.String(label.c_str());
+
+    // db
+    writer.Key("Db");
+    writer.String(db.c_str());
+
+    // table
+    writer.Key("Table");
+    writer.String(table.c_str());
+
+    // user
+    writer.Key("User");
+    writer.String(auth.user.c_str());
+
+    // client ip
+    writer.Key("ClientIp");
+    writer.String(auth.user_ip.c_str());
 
     // comment
     writer.Key("Comment");
@@ -93,8 +112,14 @@ std::string StreamLoadContext::to_json() const {
     writer.Int64(number_filtered_rows);
     writer.Key("NumberUnselectedRows");
     writer.Int64(number_unselected_rows);
+    writer.Key("CpuCostMs");
+    writer.Int64(cpu_cost_nanos / 1000000);
+    writer.Key("PeakUsedMemoryBytes");
+    writer.Int64(peak_used_memory_bytes);
     writer.Key("LoadBytes");
     writer.Int64(receive_bytes);
+    writer.Key("StartTime");
+    writer.Int64(start_millis);
     writer.Key("LoadTimeMs");
     writer.Int64(load_cost_millis);
     if (!group_commit) {
@@ -113,7 +138,7 @@ std::string StreamLoadContext::to_json() const {
         writer.Key("CommitAndPublishTimeMs");
         writer.Int64(commit_and_publish_txn_cost_nanos / 1000000);
     }
-
+    
     if (!error_url.empty()) {
         writer.Key("ErrorURL");
         writer.String(error_url.c_str());
@@ -136,6 +161,13 @@ std::string StreamLoadContext::prepare_stream_load_record(const std::string& str
     cluster_value.SetString(auth.cluster.c_str(), auth.cluster.size());
     if (!cluster_value.IsNull()) {
         document.AddMember("cluster", cluster_value, allocator);
+    }
+
+    rapidjson::Value load_id_value(rapidjson::kStringType);
+    std::string load_id = id.to_string();
+    load_id_value.SetString(load_id.c_str(), load_id.size());
+    if (!load_id_value.IsNull()) {
+        document.AddMember("LoadId", load_id_value, allocator);
     }
 
     rapidjson::Value db_value(rapidjson::kStringType);
@@ -161,6 +193,9 @@ std::string StreamLoadContext::prepare_stream_load_record(const std::string& str
     if (!client_ip_value.IsNull()) {
         document.AddMember("ClientIp", client_ip_value, allocator);
     }
+
+    document.AddMember("CpuCostMs", cpu_cost_nanos, allocator);
+    document.AddMember("PeakUsedMemoryBytes", peak_used_memory_bytes, allocator);
 
     rapidjson::Value comment_value(rapidjson::kStringType);
     comment_value.SetString(load_comment.c_str(), load_comment.size());
@@ -260,6 +295,18 @@ void StreamLoadContext::parse_stream_load_record(const std::string& stream_load_
         ss << ", NumberUnselectedRows: " << unselected_rows.GetInt64();
     }
 
+    if (document.HasMember("CpuCostMs")) {
+        const rapidjson::Value& cpu_cost_ms = document["CpuCostMs"];
+        stream_load_item.__set_cpu_cost_ms(cpu_cost_ms.GetInt64());
+        ss << ", CpuCostMs: " << cpu_cost_ms.GetInt64();
+    }
+
+    if (document.HasMember("PeakUsedMemoryBytes")) {
+        const rapidjson::Value& peak_used_memory_bytes = document["PeakUsedMemoryBytes"];
+        stream_load_item.__set_peak_used_memory_bytes(peak_used_memory_bytes.GetInt64());
+        ss << ", PeakUsedMemoryBytes: " << peak_used_memory_bytes.GetInt64();
+    }
+
     if (document.HasMember("LoadBytes")) {
         const rapidjson::Value& load_bytes = document["LoadBytes"];
         stream_load_item.__set_load_bytes(load_bytes.GetInt64());
@@ -284,7 +331,103 @@ void StreamLoadContext::parse_stream_load_record(const std::string& stream_load_
         ss << ", Comment: " << comment_value.GetString();
     }
 
+    if (document.HasMember("LoadId")) {
+        const rapidjson::Value& load_id = document["LoadId"];
+        stream_load_item.__set_load_id(load_id.GetString());
+        ss << ", LoadId: " << load_id.GetString();
+    }
+
+    if (document.HasMember("TxnId")) {
+        const rapidjson::Value& txn_id = document["TxnId"];
+        stream_load_item.__set_txn_id(txn_id.GetInt64());
+        ss << ", TxnId: " << txn_id.GetInt64();
+    }
+
+    if (document.HasMember("TwoPhaseCommit")) {
+        const rapidjson::Value& two_phase_commit = document["TwoPhaseCommit"];
+        stream_load_item.__set_two_phase_commit(two_phase_commit.GetBool());
+        ss << ", TwoPhaseCommit: " << two_phase_commit.GetBool();
+    }
+
+    if (document.HasMember("GroupCommit")) {
+        const rapidjson::Value& group_commit = document["GroupCommit"];
+        stream_load_item.__set_group_commit(group_commit.GetBool());
+        ss << ", GroupCommit: " << group_commit.GetBool();
+    }
+
+    if (document.HasMember("ExistingJobStatus")) {
+        const rapidjson::Value& existing_job_status = document["ExistingJobStatus"];
+        stream_load_item.__set_existing_job_status(existing_job_status.GetString());
+        ss << ", ExistingJobStatus: " << existing_job_status.GetString();
+    }
+
+    if (document.HasMember("LoadTimeMs")) {
+        const rapidjson::Value& load_time_ms = document["LoadTimeMs"];
+        stream_load_item.__set_load_time_ms(load_time_ms.GetInt64());
+        ss << ", LoadTimeMs: " << load_time_ms.GetInt64();
+    }
+
+    if (document.HasMember("BeginTxnTimeMs")) {
+        const rapidjson::Value& begin_txn_time_ms = document["BeginTxnTimeMs"];
+        stream_load_item.__set_begin_txn_time_ms(begin_txn_time_ms.GetInt64());
+        ss << ", BeginTxnTimeMs: " << begin_txn_time_ms.GetInt64();
+    }
+
+    if (document.HasMember("StreamLoadPutTimeMs")) {
+        const rapidjson::Value& stream_load_put_time_ms = document["StreamLoadPutTimeMs"];
+        stream_load_item.__set_stream_load_put_time_ms(stream_load_put_time_ms.GetInt64());
+        ss << ", StreamLoadPutTimeMs: " << stream_load_put_time_ms.GetInt64();
+    }
+
+    if (document.HasMember("ReadDataTimeMs")) {
+        const rapidjson::Value& read_data_time_ms = document["ReadDataTimeMs"];
+        stream_load_item.__set_read_data_time_ms(read_data_time_ms.GetInt64());
+        ss << ", ReadDataTimeMs: " << read_data_time_ms.GetInt64();
+    }
+
+    if (document.HasMember("WriteDataTimeMs")) {
+        const rapidjson::Value& write_data_time_ms = document["WriteDataTimeMs"];
+        stream_load_item.__set_write_data_time_ms(write_data_time_ms.GetInt64());
+        ss << ", WriteDataTimeMs: " << write_data_time_ms.GetInt64();
+    }
+
+    if (document.HasMember("ReceiveDataTimeMs")) {
+        const rapidjson::Value& receive_data_time_ms = document["ReceiveDataTimeMs"];
+        stream_load_item.__set_receive_data_time_ms(receive_data_time_ms.GetInt64());
+        ss << ", ReceiveDataTimeMs: " << receive_data_time_ms.GetInt64();
+    }
+
+    if (document.HasMember("CommitAndPublishTimeMs")) {
+        const rapidjson::Value& commit_and_publish_time_ms = document["CommitAndPublishTimeMs"];
+        stream_load_item.__set_commit_and_publish_time_ms(commit_and_publish_time_ms.GetInt64());
+        ss << ", CommitAndPublishTimeMs: " << commit_and_publish_time_ms.GetInt64();
+    }
+
     VLOG(1) << "parse json from rocksdb. " << ss.str();
+}
+
+void StreamLoadContext::save_stream_load_record(std::string& str) {
+#ifndef BE_TEST
+    if (config::enable_stream_load_record) {
+        if (table == "stream_load_audit_log") {
+            LOG(INFO) << "stream load audit log skip";
+            return;
+        }
+        str = prepare_stream_load_record(str);
+        auto stream_load_recorder = ExecEnv::GetInstance()->storage_engine().get_stream_load_recorder();
+        if (stream_load_recorder != nullptr) {
+            std::string key =
+                    std::to_string(start_millis + load_cost_millis) + "_" + label;
+            auto st = stream_load_recorder->put(key, str);
+            if (st.ok()) {
+                LOG(INFO) << "put stream_load_record rocksdb successfully. label: " << label
+                          << ", key: " << key;
+            }
+        } else {
+            LOG(WARNING) << "put stream_load_record rocksdb failed. stream_load_recorder is null.";
+        }
+    }
+#endif
 }
 
 /*

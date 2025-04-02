@@ -18,7 +18,6 @@
 package org.apache.doris.plugin.audit;
 
 import org.apache.doris.catalog.Env;
-import org.apache.doris.catalog.InternalSchema;
 import org.apache.doris.common.Config;
 import org.apache.doris.common.FeConstants;
 import org.apache.doris.qe.GlobalVariable;
@@ -33,7 +32,6 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Calendar;
-import java.util.stream.Collectors;
 
 public class AuditStreamLoader {
     private static final Logger LOG = LogManager.getLogger(AuditStreamLoader.class);
@@ -45,14 +43,16 @@ public class AuditStreamLoader {
     private String auditLogTbl;
     private String auditLogLoadUrlStr;
     private String feIdentity;
+    private String columns;
 
-    public AuditStreamLoader() {
+    public AuditStreamLoader(String tbl, String columns) {
         this.hostPort = "127.0.0.1:" + Config.http_port;
         this.db = FeConstants.INTERNAL_DB_NAME;
-        this.auditLogTbl = AuditLoader.AUDIT_LOG_TABLE;
+        this.auditLogTbl = tbl;
         this.auditLogLoadUrlStr = String.format(loadUrlPattern, hostPort, db, auditLogTbl);
         // currently, FE identity is FE's IP:port, so we replace the "." and ":" to make it suitable for label
         this.feIdentity = Env.getCurrentEnv().getSelfNode().getIdent().replaceAll("\\.", "_").replaceAll(":", "_");
+        this.columns = columns;
     }
 
     private HttpURLConnection getConnection(String urlStr, String label, String clusterToken) throws IOException {
@@ -69,9 +69,7 @@ public class AuditStreamLoader {
         conn.setReadTimeout(HTTP_TIMEOUT_MS);
         conn.setRequestProperty("timeout", String.valueOf(GlobalVariable.auditPluginLoadTimeoutS));
         conn.addRequestProperty("max_filter_ratio", "1.0");
-        conn.addRequestProperty("columns",
-                InternalSchema.AUDIT_SCHEMA.stream().map(c -> c.getName()).collect(
-                        Collectors.joining(",")));
+        conn.addRequestProperty("columns", columns);
         conn.addRequestProperty("redirect-policy", "random-be");
         conn.addRequestProperty("column_separator", AuditLoader.AUDIT_TABLE_COL_SEPARATOR_STR);
         conn.addRequestProperty("line_delimiter", AuditLoader.AUDIT_TABLE_LINE_DELIMITER_STR);
@@ -87,9 +85,7 @@ public class AuditStreamLoader {
         sb.append("-H \"").append("Expect\":").append("\"100-continue\" \\\n  ");
         sb.append("-H \"").append("Content-Type\":").append("\"text/plain; charset=UTF-8\" \\\n  ");
         sb.append("-H \"").append("max_filter_ratio\":").append("\"1.0\" \\\n  ");
-        sb.append("-H \"").append("columns\":")
-                .append("\"" + InternalSchema.AUDIT_SCHEMA.stream().map(c -> c.getName()).collect(
-                        Collectors.joining(",")) + "\" \\\n  ");
+        sb.append("-H \"").append("columns\":").append("\"").append(columns).append("\" \\\n  ");
         sb.append("-H \"").append("redirect-policy\":").append("\"random-be").append("\" \\\n  ");
         sb.append("\"").append(conn.getURL()).append("\"");
         return sb.toString();

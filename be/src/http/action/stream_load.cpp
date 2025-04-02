@@ -130,12 +130,7 @@ void StreamLoadAction::handle(HttpRequest* req) {
     // add new line at end
     str = str + '\n';
     HttpChannel::send_reply(req, str);
-#ifndef BE_TEST
-    if (config::enable_stream_load_record) {
-        str = ctx->prepare_stream_load_record(str);
-        _save_stream_load_record(ctx, str);
-    }
-#endif
+    ctx->save_stream_load_record(str);
 
     LOG(INFO) << "finished to execute stream load. label=" << ctx->label
               << ", txn_id=" << ctx->txn_id << ", query_id=" << ctx->id
@@ -235,12 +230,7 @@ int StreamLoadAction::on_header(HttpRequest* req) {
         // add new line at end
         str = str + '\n';
         HttpChannel::send_reply(req, str);
-#ifndef BE_TEST
-        if (config::enable_stream_load_record) {
-            str = ctx->prepare_stream_load_record(str);
-            _save_stream_load_record(ctx, str);
-        }
-#endif
+        ctx->save_stream_load_record(str);
         return -1;
     }
     return 0;
@@ -736,24 +726,6 @@ Status StreamLoadAction::_data_saved_path(HttpRequest* req, std::string* file_pa
     ss << prefix << "/" << req->param(HTTP_TABLE_KEY) << "." << buf << "." << tv.tv_usec;
     *file_path = ss.str();
     return Status::OK();
-}
-
-void StreamLoadAction::_save_stream_load_record(std::shared_ptr<StreamLoadContext> ctx,
-                                                const std::string& str) {
-    std::shared_ptr<StreamLoadRecorder> stream_load_recorder =
-            ExecEnv::GetInstance()->storage_engine().get_stream_load_recorder();
-
-    if (stream_load_recorder != nullptr) {
-        std::string key =
-                std::to_string(ctx->start_millis + ctx->load_cost_millis) + "_" + ctx->label;
-        auto st = stream_load_recorder->put(key, str);
-        if (st.ok()) {
-            LOG(INFO) << "put stream_load_record rocksdb successfully. label: " << ctx->label
-                      << ", key: " << key;
-        }
-    } else {
-        LOG(WARNING) << "put stream_load_record rocksdb failed. stream_load_recorder is null.";
-    }
 }
 
 Status StreamLoadAction::_handle_group_commit(HttpRequest* req,

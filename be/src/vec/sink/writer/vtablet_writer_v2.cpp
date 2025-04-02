@@ -40,6 +40,7 @@
 #include "runtime/descriptors.h"
 #include "runtime/exec_env.h"
 #include "runtime/runtime_state.h"
+#include "runtime/query_context.h"
 #include "runtime/thread_context.h"
 #include "util/debug_points.h"
 #include "util/defer_op.h"
@@ -189,6 +190,8 @@ Status VTabletWriterV2::_init(RuntimeState* state, RuntimeProfile* profile) {
     DBUG_EXECUTE_IF("VTabletWriterV2._init.is_high_priority", { _is_high_priority = true; });
     _mem_tracker =
             std::make_shared<MemTracker>("VTabletWriterV2:" + std::to_string(state->load_job_id()));
+    _write_statistics = std::make_shared<QueryStatistics>();
+    _state->get_query_ctx()->register_query_statistics(_write_statistics);
     SCOPED_TIMER(_profile->total_time_counter());
     SCOPED_CONSUME_MEM_TRACKER(_mem_tracker.get());
 
@@ -459,6 +462,8 @@ Status VTabletWriterV2::write(RuntimeState* state, Block& input_block) {
     // the real 'num_rows_load_total' will be set when sink being closed.
     _state->update_num_rows_load_total(input_rows);
     _state->update_num_bytes_load_total(input_bytes);
+    _write_statistics->add_load_rows(input_rows);
+    _write_statistics->add_load_bytes(input_bytes);
     DorisMetrics::instance()->load_rows->increment(input_rows);
     DorisMetrics::instance()->load_bytes->increment(input_bytes);
 

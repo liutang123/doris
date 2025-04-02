@@ -344,9 +344,10 @@ public class NereidsParser {
     }
 
     public LogicalPlan parseForEncryption(String sql, Map<Pair<Integer, Integer>, String> indexInSqlToString) {
+        CommonTokenStream tokenStream = parseAllTokens(sql);
         ParserRuleContext tree = toAst(sql, DorisParser::singleStatement);
         LogicalPlanBuilder realLogicalPlanBuilder = new LogicalPlanBuilderForEncryption(
-                getHintMap(sql, DorisParser::selectHint), indexInSqlToString);
+                getHintMap(sql, tokenStream, DorisParser::selectHint), indexInSqlToString);
         return (LogicalPlan) realLogicalPlanBuilder.visit(tree);
     }
 

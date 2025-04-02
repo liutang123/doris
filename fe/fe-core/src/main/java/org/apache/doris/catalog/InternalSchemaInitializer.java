@@ -45,6 +45,7 @@ import org.apache.doris.common.util.PropertyAnalyzer;
 import org.apache.doris.datasource.InternalCatalog;
 import org.apache.doris.ha.FrontendNodeType;
 import org.apache.doris.plugin.audit.AuditLoader;
+import org.apache.doris.plugin.audit.StreamLoadAuditLoader;
 import org.apache.doris.statistics.StatisticConstants;
 import org.apache.doris.statistics.util.StatisticsUtil;
 
@@ -108,6 +109,7 @@ public class InternalSchemaInitializer extends Thread {
         modifyTblReplicaCount(database, StatisticConstants.TABLE_STATISTIC_TBL_NAME);
         modifyTblReplicaCount(database, StatisticConstants.PARTITION_STATISTIC_TBL_NAME);
         modifyTblReplicaCount(database, AuditLoader.AUDIT_LOG_TABLE);
+        modifyTblReplicaCount(database, StreamLoadAuditLoader.AUDIT_LOG_TABLE);
     }
 
     public void modifyColumnStatsTblSchema() {
@@ -254,6 +256,8 @@ public class InternalSchemaInitializer extends Thread {
                     Lists.newArrayList("catalog_id", "db_id", "tbl_id", "idx_id", "part_name", "part_id", "col_id")));
         // audit table
         Env.getCurrentEnv().getInternalCatalog().createTable(buildAuditTblStmt());
+        // stream load audit table
+        Env.getCurrentEnv().getInternalCatalog().createTable(buildStreamLoadAuditTblStmt());
     }
 
     @VisibleForTesting
@@ -325,6 +329,37 @@ public class InternalSchemaInitializer extends Thread {
         return createTableStmt;
     }
 
+    private static CreateTableStmt buildStreamLoadAuditTblStmt() throws UserException {
+        TableName tableName = new TableName("",
+                FeConstants.INTERNAL_DB_NAME, StreamLoadAuditLoader.AUDIT_LOG_TABLE);
+        String engineName = "olap";
+        ArrayList<String> dupKeys = Lists.newArrayList("load_id", "txn_id", "label");
+        KeysDesc keysDesc = new KeysDesc(KeysType.DUP_KEYS, dupKeys);
+        // partition
+        PartitionDesc partitionDesc = new RangePartitionDesc(Lists.newArrayList("start_time"), Lists.newArrayList());
+        // distribution
+        int bucketNum = 3;
+        DistributionDesc distributionDesc = new HashDistributionDesc(bucketNum, Lists.newArrayList("load_id"));
+        Map<String, String> properties = new HashMap<String, String>() {
+            {
+                put("dynamic_partition.time_unit", "DAY");
+                put("dynamic_partition.start", "-180");
+                put("dynamic_partition.end", "3");
+                put("dynamic_partition.prefix", "p");
+                put("dynamic_partition.buckets", String.valueOf(bucketNum));
+                put("dynamic_partition.enable", "true");
+                put("replication_num", String.valueOf(Math.max(1,
+                        Config.min_replication_num_per_tablet)));
+            }
+        };
+        CreateTableStmt createTableStmt = new CreateTableStmt(true, false,
+                tableName, InternalSchema.getCopiedSchema(StreamLoadAuditLoader.AUDIT_LOG_TABLE),
+                engineName, keysDesc, partitionDesc, distributionDesc,
+                properties, null, "Doris internal audit table, DO NOT MODIFY IT", null);
+        StatisticsUtil.analyze(createTableStmt);
+        return createTableStmt;
+    }
+
 
     private boolean created() {
         // 1. check database exist
@@ -355,6 +390,11 @@ public class InternalSchemaInitializer extends Thread {
             return false;
         }
         optionalStatsTbl = db.getTable(StatisticConstants.PARTITION_STATISTIC_TBL_NAME);
+        if (!optionalStatsTbl.isPresent()) {
+            return false;
+        }
+
+        optionalStatsTbl = db.getTable(StreamLoadAuditLoader.AUDIT_LOG_TABLE);
         if (!optionalStatsTbl.isPresent()) {
             return false;
         }

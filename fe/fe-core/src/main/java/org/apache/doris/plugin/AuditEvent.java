@@ -60,6 +60,10 @@ public class AuditEvent {
     public long timestamp = -1;
 
     // cs info
+    @AuditField(value = "ConnectionId", colName = "connection_id")
+    public long connectionId = -1;
+    @AuditField(value = "QueryFrom", colName = "query_from")
+    public String queryFrom = "";
     @AuditField(value = "Client", colName = "client_ip")
     public String clientIp = "";
     @AuditField(value = "User", colName = "user")
@@ -72,6 +76,8 @@ public class AuditEvent {
     public String ctl = "";
     @AuditField(value = "Db", colName = "db")
     public String db = "";
+    @AuditField(value = "TblInfo", colName = "tbl_info")
+    public String tblInfo = "";
 
     // query state
     @AuditField(value = "State", colName = "state")
@@ -88,6 +94,10 @@ public class AuditEvent {
     public long cpuTimeMs = -1;
     @AuditField(value = "PeakMemoryBytes", colName = "peak_memory_bytes")
     public long peakMemoryBytes = -1;
+    @AuditField(value = "LoadBytes", colName = "load_bytes")
+    public long loadBytes = -1;
+    @AuditField(value = "loadRows", colName = "load_rows")
+    public long loadRows = -1;
     @AuditField(value = "ScanBytes", colName = "scan_bytes")
     public long scanBytes = -1;
     @AuditField(value = "ScanRows", colName = "scan_rows")
@@ -177,6 +187,11 @@ public class AuditEvent {
 
         public AuditEventBuilder setCloudCluster(String cloudClusterName) {
             auditEvent.cloudClusterName = cloudClusterName;
+            return this;
+        }
+
+        public AuditEventBuilder setTblInfo(String tblInfo) {
+            auditEvent.tblInfo = tblInfo;
             return this;
         }
 
@@ -292,6 +307,26 @@ public class AuditEvent {
 
         public AuditEventBuilder setCommandType(String commandType) {
             auditEvent.commandType = commandType;
+            return this;
+        }
+
+        public AuditEventBuilder setConnectionId(long connectionId) {
+            auditEvent.connectionId = connectionId;
+            return this;
+        }
+
+        public AuditEventBuilder setLoadBytes(long loadBytes) {
+            auditEvent.loadBytes = loadBytes;
+            return this;
+        }
+
+        public AuditEventBuilder setLoadRows(long loadRows) {
+            auditEvent.loadRows = loadRows;
+            return this;
+        }
+
+        public AuditEventBuilder setQueryFrom(String queryFrom) {
+            auditEvent.queryFrom = queryFrom;
             return this;
         }
 

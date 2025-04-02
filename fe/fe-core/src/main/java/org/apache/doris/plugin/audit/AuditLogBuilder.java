@@ -53,9 +53,36 @@ public class AuditLogBuilder extends Plugin implements AuditPlugin {
 
     private final Set<String> loadAnnotationSet;
 
-    private static final String[] STREAM_LOAD_ANNONATION_NAMES = {"Label", "Db", "Table", "User", "ClientIp",
-            "Status", "Message", "Url", "TotalRows", "LoadedRows", "FilteredRows", "UnselectedRows",
-            "LoadBytes", "StartTime", "FinishTime"};
+    private static final String[] STREAM_LOAD_ANNONATION_NAMES = {
+            StreamLoadAuditEvent.TXN_ID,
+            StreamLoadAuditEvent.LABEL,
+            StreamLoadAuditEvent.COMMENT,
+            StreamLoadAuditEvent.DB,
+            StreamLoadAuditEvent.TABLE,
+            StreamLoadAuditEvent.USER,
+            StreamLoadAuditEvent.CLIENT_IP,
+            StreamLoadAuditEvent.TWO_PHASE_COMMIT,
+            StreamLoadAuditEvent.GROUP_COMMIT,
+            StreamLoadAuditEvent.STATUS,
+            StreamLoadAuditEvent.MESSAGE,
+            StreamLoadAuditEvent.NUMBER_TOTAL_ROWS,
+            StreamLoadAuditEvent.NUMBER_LOADED_ROWS,
+            StreamLoadAuditEvent.NUMBER_FILTERED_ROWS,
+            StreamLoadAuditEvent.NUMBER_UNSELECTED_ROWS,
+            StreamLoadAuditEvent.CPU_COST_MS,
+            StreamLoadAuditEvent.PEAK_USED_MEMORY_BYTES,
+            StreamLoadAuditEvent.LOAD_BYTES,
+            StreamLoadAuditEvent.START_TIME,
+            StreamLoadAuditEvent.LOAD_TIME_MS,
+            StreamLoadAuditEvent.BEGIN_TXN_TIME_MS,
+            StreamLoadAuditEvent.STREAM_LOAD_PUT_TIME_MS,
+            StreamLoadAuditEvent.READ_DATA_TIME_MS,
+            StreamLoadAuditEvent.WRITE_DATA_TIME_MS,
+            StreamLoadAuditEvent.RECEIVE_DATA_TIME_MS,
+            StreamLoadAuditEvent.COMMIT_AND_PUBLISH_TIME_MS,
+            StreamLoadAuditEvent.ERROR_URL,
+            StreamLoadAuditEvent.EXISTING_JOB_STATUS,
+    };
 
     private final Set<String> streamLoadAnnotationSet;
 

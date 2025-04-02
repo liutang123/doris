@@ -59,6 +59,7 @@ import org.apache.doris.nereids.trees.plans.commands.info.ColumnDefinition;
 import org.apache.doris.nereids.trees.plans.commands.info.TableNameInfo;
 import org.apache.doris.qe.AuditLogHelper;
 import org.apache.doris.qe.ConnectContext;
+import org.apache.doris.qe.OriginStatement;
 import org.apache.doris.qe.QueryState.MysqlStateType;
 import org.apache.doris.qe.StmtExecutor;
 import org.apache.doris.thrift.TCell;
@@ -350,7 +351,9 @@ public class MTMVTask extends AbstractTask {
                 .from(mtmv, mtmv.getMvPartitionInfo().getPartitionType() != MTMVPartitionType.SELF_MANAGE
                         ? refreshPartitionNames : Sets.newHashSet(), tableWithPartKey);
         try {
-            executor = new StmtExecutor(ctx, new LogicalPlanAdapter(command, ctx.getStatementContext()));
+            LogicalPlanAdapter parsedStmt = new LogicalPlanAdapter(command, ctx.getStatementContext());
+            parsedStmt.setOrigStmt(new OriginStatement(getDummyStmt(refreshPartitionNames), 0));
+            executor = new StmtExecutor(ctx, parsedStmt);
             ctx.setExecutor(executor);
             ctx.setQueryId(queryId);
             ctx.getState().setNereids(true);

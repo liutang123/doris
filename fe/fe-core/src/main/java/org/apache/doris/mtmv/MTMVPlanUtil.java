@@ -105,6 +105,7 @@ public class MTMVPlanUtil {
             ctx.changeDefaultCatalog(parentContext.getDefaultCatalog());
             ctx.setDatabase(parentContext.getDatabase());
         }
+        ctx.setQueryFrom(ConnectContext.QueryFrom.INTERNAL_MTMV);
         return ctx;
     }
 

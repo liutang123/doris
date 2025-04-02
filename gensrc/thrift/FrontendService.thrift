@@ -416,6 +416,8 @@ struct TQueryStatistics {
     9: optional i64 shuffle_send_rows
     10: optional i64 scan_bytes_from_local_storage
     11: optional i64 scan_bytes_from_remote_storage
+    1000: optional i64 load_rows
+    1001: optional i64 load_bytes
 }
 
 struct TReportWorkloadRuntimeStatusParams {

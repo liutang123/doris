@@ -18,13 +18,16 @@
 package org.apache.doris.httpv2.rest;
 
 import org.apache.doris.analysis.StatementBase;
+import org.apache.doris.analysis.StmtType;
 import org.apache.doris.catalog.Database;
 import org.apache.doris.catalog.Env;
 import org.apache.doris.catalog.Table;
 import org.apache.doris.catalog.TableIf;
+import org.apache.doris.cluster.ClusterNamespace;
 import org.apache.doris.common.Config;
 import org.apache.doris.common.DorisHttpException;
 import org.apache.doris.common.MetaNotFoundException;
+import org.apache.doris.common.util.DebugUtil;
 import org.apache.doris.common.util.NetUtils;
 import org.apache.doris.httpv2.entity.ResponseEntityBuilder;
 import org.apache.doris.httpv2.rest.manager.HttpUtils;
@@ -46,9 +49,11 @@ import org.apache.doris.nereids.trees.plans.logical.LogicalSubQueryAlias;
 import org.apache.doris.nereids.util.RelationUtil;
 import org.apache.doris.planner.PlanFragment;
 import org.apache.doris.planner.ScanNode;
+import org.apache.doris.plugin.AuditEvent;
 import org.apache.doris.qe.ConnectContext;
 import org.apache.doris.qe.GlobalVariable;
 import org.apache.doris.qe.SessionVariable;
+import org.apache.doris.service.FrontendOptions;
 import org.apache.doris.thrift.TDataSink;
 import org.apache.doris.thrift.TDataSinkType;
 import org.apache.doris.thrift.TMemoryScratchSink;
@@ -103,7 +108,6 @@ public class TableQueryPlanAction extends RestBaseController {
         executeCheckPassword(request, response);
         // just allocate 2 slot for top holder map
         Map<String, Object> resultMap = new HashMap<>(4);
-
         try {
             String postContent = HttpUtils.getBody(request);
             // may be these common validate logic should be moved to one base class
@@ -188,24 +192,24 @@ public class TableQueryPlanAction extends RestBaseController {
             StatementBase query = stmts.get(0);
             if (!(query instanceof LogicalPlanAdapter)) {
                 throw new DorisHttpException(HttpResponseStatus.BAD_REQUEST,
-                        "Select statement needed, but found [" + sql + " ]");
+                    "Select statement needed, but found [" + sql + " ]");
             }
             LogicalPlan parsedPlan = ((LogicalPlanAdapter) query).getLogicalPlan();
             // only process select semantic
             if (parsedPlan instanceof Command) {
                 throw new DorisHttpException(HttpResponseStatus.BAD_REQUEST,
-                        "Select statement needed, but found [" + sql + " ]");
+                    "Select statement needed, but found [" + sql + " ]");
             }
 
             if (!parsedPlan.collectToList(LogicalSubQueryAlias.class::isInstance).isEmpty()) {
                 throw new DorisHttpException(HttpResponseStatus.BAD_REQUEST,
-                        "Select statement must not embed another statement");
+                    "Select statement must not embed another statement");
             }
 
             List<UnboundRelation> unboundRelations = parsedPlan.collectToList(UnboundRelation.class::isInstance);
             if (unboundRelations.size() != 1) {
                 throw new DorisHttpException(HttpResponseStatus.BAD_REQUEST,
-                        "Select statement must have only one table");
+                    "Select statement must have only one table");
             }
 
             // check consistent http requested resource with sql referenced
@@ -214,7 +218,7 @@ public class TableQueryPlanAction extends RestBaseController {
                     unboundRelations.get(0).getNameParts());
             if (tableQualifier.size() != 3) {
                 throw new DorisHttpException(HttpResponseStatus.BAD_REQUEST,
-                        "can't find table " + String.join(",", tableQualifier));
+                    "can't find table " + String.join(",", tableQualifier));
             }
             String dbName = tableQualifier.get(1);
             String tableName = tableQualifier.get(2);
@@ -222,17 +226,17 @@ public class TableQueryPlanAction extends RestBaseController {
             if (GlobalVariable.lowerCaseTableNames == 0) {
                 if (!(dbName.equals(requestDb) && tableName.equals(requestTable))) {
                     throw new DorisHttpException(HttpResponseStatus.BAD_REQUEST,
-                            "requested database and table must consistent with sql: request [ "
-                                    + requestDb + "." + requestTable + "]" + "and sql [" + dbName
-                                    + "." + tableName + "]");
+                        "requested database and table must consistent with sql: request [ "
+                            + requestDb + "." + requestTable + "]" + "and sql [" + dbName
+                            + "." + tableName + "]");
                 }
             } else {
                 if (!(dbName.equalsIgnoreCase(requestDb)
                         && tableName.equalsIgnoreCase(requestTable))) {
                     throw new DorisHttpException(HttpResponseStatus.BAD_REQUEST,
-                            "requested database and table must consistent with sql: request [ "
-                                    + requestDb + "." + requestTable + "]" + "and sql [" + dbName
-                                    + "." + tableName + "]");
+                        "requested database and table must consistent with sql: request [ "
+                            + requestDb + "." + requestTable + "]" + "and sql [" + dbName
+                            + "." + tableName + "]");
                 }
             }
             NereidsPlanner nereidsPlanner = new NereidsPlanner(context.getStatementContext());
@@ -242,14 +246,14 @@ public class TableQueryPlanAction extends RestBaseController {
                     || planTreeNode instanceof LogicalFilter || planTreeNode instanceof LogicalProject
                     || planTreeNode instanceof LogicalResultSink || planTreeNode instanceof LogicalEmptyRelation)) {
                 throw new DorisHttpException(HttpResponseStatus.BAD_REQUEST,
-                        "only support single table filter-prune-scan, but found [ " + sql + "]");
+                    "only support single table filter-prune-scan, but found [ " + sql + "]");
             }
             NereidsPlanner planner = new NereidsPlanner(context.getStatementContext());
             try {
                 planner.plan(query, context.getSessionVariable().toThrift());
             } catch (Exception ex) {
                 throw new DorisHttpException(HttpResponseStatus.BAD_REQUEST,
-                        "only support single table filter-prune-scan, but found [ " + sql + "]");
+                    "only support single table filter-prune-scan, but found [ " + sql + "]");
             }
 
             // acquire ScanNode to obtain pruned tablet
@@ -257,7 +261,7 @@ public class TableQueryPlanAction extends RestBaseController {
             List<ScanNode> scanNodes = planner.getScanNodes();
             if (scanNodes.size() > 1) {
                 throw new DorisHttpException(HttpResponseStatus.INTERNAL_SERVER_ERROR,
-                        "Planner should plan just only one ScanNode but found [ " + scanNodes.size() + "]");
+                    "Planner should plan just only one ScanNode but found [ " + scanNodes.size() + "]");
             }
             List<TScanRangeLocations> scanRangeLocations = scanNodes.size() == 1
                     ? scanNodes.get(0).getScanRangeLocations(0) : new ArrayList<>();
@@ -265,7 +269,7 @@ public class TableQueryPlanAction extends RestBaseController {
             List<PlanFragment> fragments = planner.getFragments();
             if (fragments.size() != 1) {
                 throw new DorisHttpException(HttpResponseStatus.INTERNAL_SERVER_ERROR,
-                        "Planner should plan just only one PlanFragment but found [ " + fragments.size() + "]");
+                    "Planner should plan just only one PlanFragment but found [ " + fragments.size() + "]");
             }
 
             TQueryPlanInfo tQueryPlanInfo = new TQueryPlanInfo();
@@ -304,17 +308,43 @@ public class TableQueryPlanAction extends RestBaseController {
                 opaquedQueryPlan = Base64.getEncoder().encodeToString(queryPlanStream);
             } catch (TException e) {
                 throw new DorisHttpException(HttpResponseStatus.INTERNAL_SERVER_ERROR,
-                        "TSerializer failed to serialize PlanFragment, reason [ " + e.getMessage() + " ]");
+                    "TSerializer failed to serialize PlanFragment, reason [ " + e.getMessage() + " ]");
             }
             result.put("partitions", tabletRoutings);
             result.put("opaqued_query_plan", opaquedQueryPlan);
             result.put("status", 200);
+            audit(sql, requestDb, requestTable, DebugUtil.printId(tQueryPlanInfo.query_id));
         } finally {
             if (needSetParallelResultSinkToFalse) {
                 sessionVariable.setParallelResultSink(false);
             }
         }
+    }
 
+    private void audit(String sql, String db, String table, String queryID) {
+        try {
+            ConnectContext ctx = ConnectContext.get();
+            AuditEvent.AuditEventBuilder auditEventBuilder = ctx.getAuditEventBuilder();
+            auditEventBuilder.reset();
+            auditEventBuilder
+                    .setTimestamp(System.currentTimeMillis())
+                    .setClientIp(ctx.getRemoteIP())
+                    .setUser(ClusterNamespace.getNameFromFullName(ctx.getQualifiedUser()))
+                    .setEventType(AuditEvent.EventType.AFTER_QUERY)
+                    .setCtl(ctx.getCurrentCatalog().getName())
+                    .setDb(db)
+                    .setTblInfo("internal." + db + "." + table)
+                    .setQueryId(queryID)
+                    .setIsQuery(true)
+                    .setFeIp(FrontendOptions.getLocalHostAddress())
+                    .setStmt(sql)
+                    .setQueryFrom(ConnectContext.QueryFrom.CLIENT.name())
+                    .setStmtType(StmtType.SELECT.name());
+            AuditEvent event = auditEventBuilder.build();
+            Env.getCurrentEnv().getWorkloadRuntimeStatusMgr().submitFinishQueryToAudit(event);
+        } catch (Exception e) {
+            LOG.warn("audit log error for external", e);
+        }
     }
 
     /**

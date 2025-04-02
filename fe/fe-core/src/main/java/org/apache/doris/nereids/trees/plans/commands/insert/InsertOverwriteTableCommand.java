@@ -386,4 +386,8 @@ public class InsertOverwriteTableCommand extends Command implements NeedAuditEnc
     public boolean needAuditEncryption() {
         return logicalQuery.anyMatch(node -> node instanceof TVFRelation);
     }
+
+    public LogicalPlan getLogicalQuery() {
+        return logicalQuery;
+    }
 }

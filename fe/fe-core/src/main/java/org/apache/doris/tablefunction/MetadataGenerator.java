@@ -859,6 +859,9 @@ public class MetadataGenerator {
             } else {
                 trow.addToColumnValue(new TCell().setStringVal(""));
             }
+
+            trow.addToColumnValue(new TCell().setStringVal(queryInfo.getTableInfo()));
+
             trow.addToColumnValue(new TCell().setStringVal(selfNode));
 
             long queueStartTime = queryInfo.getQueueStartTime();
@@ -877,6 +880,8 @@ public class MetadataGenerator {
 
             String queueMsg = queryInfo.getQueueStatus();
             trow.addToColumnValue(new TCell().setStringVal(queueMsg));
+
+            trow.addToColumnValue(new TCell().setStringVal(queryInfo.getStmtType()));
 
             trow.addToColumnValue(new TCell().setStringVal(queryInfo.getSql()));
             dataBatch.add(trow);
@@ -1004,12 +1009,19 @@ public class MetadataGenerator {
         }
         List<TRow> dataBatch = Lists.newArrayList();
         TFetchSchemaTableDataResult result = new TFetchSchemaTableDataResult();
-        List<Table> tables;
+        List<Table> tables = Lists.newLinkedList();
         try {
-            tables = Env.getCurrentEnv().getCatalogMgr()
-                    .getCatalogOrAnalysisException(InternalCatalog.INTERNAL_CATALOG_NAME)
-                    .getDbOrAnalysisException(dbName).getTables();
-        } catch (AnalysisException e) {
+            List<String> dnNames = Lists.newArrayList(dbName);
+            if ("*".equals(dbName) || "".equals(dbName)) {
+                dnNames = Env.getCurrentEnv().getCatalogMgr()
+                    .getCatalogOrAnalysisException(InternalCatalog.INTERNAL_CATALOG_NAME).getDbNames();
+            }
+            for (String name : dnNames) {
+                tables.addAll(Env.getCurrentEnv().getCatalogMgr()
+                        .getCatalogOrAnalysisException(InternalCatalog.INTERNAL_CATALOG_NAME)
+                        .getDbOrAnalysisException(name).getTables());
+            }
+        } catch (Exception e) {
             LOG.warn(e.getMessage());
             return errorResult(e.getMessage());
         }

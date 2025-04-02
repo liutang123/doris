@@ -68,6 +68,7 @@
 #include "runtime/define_primitive_type.h"
 #include "runtime/fragment_mgr.h"
 #include "runtime/types.h"
+#include "schema_scanner/schema_stream_load_scanner.h"
 #include "util/string_util.h"
 #include "util/types.h"
 #include "vec/columns/column.h"
@@ -265,6 +266,8 @@ std::unique_ptr<SchemaScanner> SchemaScanner::create(TSchemaTableType::type type
         return SchemaTabletsScanner::create_unique();
     case TSchemaTableType::SCH_VIEW_DEPENDENCY:
         return SchemaViewDependencyScanner::create_unique();
+    case TSchemaTableType::SCH_STREAM_LOAD:
+        return SchemaStreamLoadScanner::create_unique();
     default:
         return SchemaDummyScanner::create_unique();
         break;

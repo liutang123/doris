@@ -84,6 +84,11 @@ Status StreamLoadExecutor::execute_plan_fragment(std::shared_ptr<StreamLoadConte
         ctx->number_filtered_rows = state->num_rows_load_filtered();
         ctx->number_unselected_rows = state->num_rows_load_unselected();
         ctx->loaded_bytes = state->num_bytes_load_total();
+        auto query_ctx = state->get_query_ctx();
+        if(query_ctx != nullptr && query_ctx->get_query_statistics() != nullptr) {
+            ctx->cpu_cost_nanos = query_ctx->get_query_statistics()->get_cpu_nanos();
+            ctx->peak_used_memory_bytes = query_ctx->get_query_statistics()->get_max_peak_memory_bytes();
+        }
         int64_t num_selected_rows = ctx->number_total_rows - ctx->number_unselected_rows;
         ctx->error_url = to_load_error_http_path(state->get_error_log_file_path());
         if (status->ok() && !ctx->group_commit && num_selected_rows > 0 &&
@@ -120,8 +125,15 @@ Status StreamLoadExecutor::execute_plan_fragment(std::shared_ptr<StreamLoadConte
             }
         }
         ctx->write_data_cost_nanos = MonotonicNanos() - ctx->start_write_data_nanos;
+        // if user cancel stream load. alse need record
+        if (status->is<CANCELLED>() && status->to_string().rfind("cancelled: sender is gone") != std::string::npos) {
+            ctx->status = *status;
+            ctx->load_cost_millis = UnixMillis() - ctx->start_millis;
+            std::string str = ctx->to_json();
+            LOG(INFO) << "User cancel stream load. " << status->to_string();
+            ctx->save_stream_load_record(str);
+        }
         ctx->promise.set_value(*status);
-
         if (!status->ok() && ctx->body_sink != nullptr) {
             // In some cases, the load execution is exited early.
             // For example, when max_filter_ratio is 0 and illegal data is encountered

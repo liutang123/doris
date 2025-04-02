@@ -554,6 +554,8 @@ public class SchemaTable extends Table {
                                     .column("TASK_CPU_TIME_MS", ScalarType.createType(PrimitiveType.BIGINT))
                                     .column("SCAN_ROWS", ScalarType.createType(PrimitiveType.BIGINT))
                                     .column("SCAN_BYTES", ScalarType.createType(PrimitiveType.BIGINT))
+                                    .column("LOAD_ROWS", ScalarType.createType(PrimitiveType.BIGINT))
+                                    .column("LOAD_BYTES", ScalarType.createType(PrimitiveType.BIGINT))
                                     .column("BE_PEAK_MEMORY_BYTES", ScalarType.createType(PrimitiveType.BIGINT))
                                     .column("CURRENT_USED_MEMORY_BYTES", ScalarType.createType(PrimitiveType.BIGINT))
                                     .column("SHUFFLE_SEND_BYTES", ScalarType.createType(PrimitiveType.BIGINT))
@@ -566,10 +568,12 @@ public class SchemaTable extends Table {
                             .column("QUERY_TIME_MS", ScalarType.createType(PrimitiveType.BIGINT))
                             .column("WORKLOAD_GROUP_ID", ScalarType.createType(PrimitiveType.BIGINT))
                             .column("DATABASE", ScalarType.createVarchar(256))
+                            .column("TABLE_INFO", ScalarType.createStringType())
                             .column("FRONTEND_INSTANCE", ScalarType.createVarchar(256))
                             .column("QUEUE_START_TIME", ScalarType.createVarchar(256))
                             .column("QUEUE_END_TIME", ScalarType.createVarchar(256))
                             .column("QUERY_STATUS", ScalarType.createVarchar(256))
+                            .column("STMT_TYPE", ScalarType.createVarchar(20))
                             .column("SQL", ScalarType.createStringType())
                             .build()))
             .put("workload_groups", new SchemaTable(SystemIdGenerator.getNextId(), "workload_groups", TableType.SCHEMA,
@@ -737,6 +741,18 @@ public class SchemaTable extends Table {
                             .column("REF_NAME", ScalarType.createVarchar(NAME_CHAR_LEN))
                             .column("REF_TYPE", ScalarType.createVarchar(NAME_CHAR_LEN))
                             .build()))
+            .put("stream_load",
+                    new SchemaTable(SystemIdGenerator.getNextId(), "stream_load", TableType.SCHEMA,
+                            builder().column("BE_ID", ScalarType.createType(PrimitiveType.BIGINT))
+                                    .column("QUERY_ID", ScalarType.createVarchar(256))
+                                    .column("TXN_ID", ScalarType.createType(PrimitiveType.BIGINT))
+                                    .column("LABEL", ScalarType.createVarchar(4096))
+                                    .column("DATABASE", ScalarType.createVarchar(4096))
+                                    .column("TABLE", ScalarType.createVarchar(4096))
+                                    .column("USER", ScalarType.createVarchar(256))
+                                    .column("CLIENT_IP", ScalarType.createVarchar(256))
+                                    .column("START_TIME", ScalarType.createType(PrimitiveType.BIGINT))
+                                    .build()))
             .build();
 
     private boolean fetchAllFe = false;

@@ -42,7 +42,9 @@ public:
               max_peak_memory_bytes(0),
               current_used_memory_bytes(0),
               shuffle_send_bytes(0),
-              shuffle_send_rows(0) {}
+              shuffle_send_rows(0),
+              load_rows(0),
+              load_bytes(0) {}
     virtual ~QueryStatistics();
 
     void merge(const QueryStatistics& other);
@@ -56,6 +58,10 @@ public:
     void add_shuffle_send_bytes(int64_t delta_bytes) { shuffle_send_bytes += delta_bytes; }
 
     void add_shuffle_send_rows(int64_t delta_rows) { shuffle_send_rows += delta_rows; }
+
+    void add_load_rows(int64_t delta_load_rows) { load_rows += delta_load_rows; }
+
+    void add_load_bytes(int64_t delta_load_bytes) { load_bytes += delta_load_bytes; }
 
     void add_scan_bytes_from_local_storage(int64_t scan_bytes_from_local_storage) {
         _scan_bytes_from_local_storage += scan_bytes_from_local_storage;
@@ -83,6 +89,10 @@ public:
     int64_t get_scan_rows() { return scan_rows; }
     int64_t get_scan_bytes() { return scan_bytes; }
     int64_t get_current_used_memory_bytes() { return current_used_memory_bytes; }
+    int64_t get_cpu_nanos() { return cpu_nanos; }
+    int64_t get_max_peak_memory_bytes() { return max_peak_memory_bytes; }
+    int64_t get_load_rows() { return load_rows; }
+    int64_t get_load_bytes() { return load_bytes; }
 
 private:
     std::atomic<int64_t> scan_rows;
@@ -101,6 +111,10 @@ private:
 
     std::atomic<int64_t> shuffle_send_bytes;
     std::atomic<int64_t> shuffle_send_rows;
+
+    // if query cotains load for example insert into select
+    std::atomic<int64_t> load_rows;
+    std::atomic<int64_t> load_bytes;
 };
 using QueryStatisticsPtr = std::shared_ptr<QueryStatistics>;
 // It is used for collecting sub plan query statistics in DataStreamRecvr.

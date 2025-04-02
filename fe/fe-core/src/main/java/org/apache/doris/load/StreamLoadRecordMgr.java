@@ -33,6 +33,7 @@ import org.apache.doris.persist.gson.GsonUtils;
 import org.apache.doris.plugin.AuditEvent;
 import org.apache.doris.plugin.AuditEvent.EventType;
 import org.apache.doris.plugin.audit.StreamLoadAuditEvent;
+import org.apache.doris.plugin.audit.StreamLoadAuditLoader;
 import org.apache.doris.qe.ConnectContext;
 import org.apache.doris.system.Backend;
 import org.apache.doris.thrift.BackendService;
@@ -270,30 +271,46 @@ public class StreamLoadRecordMgr extends MasterDaemon {
                     String finishTime = TimeUtils.longToTimeString(streamLoadItem.getFinishTime(),
                             TimeUtils.getDatetimeMsFormatWithTimeZone());
                     if (LOG.isDebugEnabled()) {
-                        LOG.debug("receive stream load record info from backend: {}."
-                                        + " label: {}, db: {}, tbl: {}, user: {}, user_ip: {},"
-                                        + " status: {}, message: {}, error_url: {},"
-                                        + " total_rows: {}, loaded_rows: {}, filtered_rows: {}, unselected_rows: {},"
-                                        + " load_bytes: {}, start_time: {}, finish_time: {}.",
-                                backend.getHost(), streamLoadItem.getLabel(), streamLoadItem.getDb(),
-                                streamLoadItem.getTbl(), streamLoadItem.getUser(), streamLoadItem.getUserIp(),
-                                streamLoadItem.getStatus(), streamLoadItem.getMessage(), streamLoadItem.getUrl(),
-                                streamLoadItem.getTotalRows(), streamLoadItem.getLoadedRows(),
-                                streamLoadItem.getFilteredRows(), streamLoadItem.getUnselectedRows(),
-                                streamLoadItem.getLoadBytes(), startTime, finishTime);
+                        LOG.debug("receive stream load record info from backend: {}. record: {}",
+                                backend.getHost(), streamLoadItem);
+                    }
+
+                    if (StreamLoadAuditLoader.AUDIT_LOG_TABLE.equals(streamLoadItem.getTbl())) {
+                        // skip stream load audit log, because dead loop
+                        continue;
                     }
 
                     AuditEvent auditEvent =
                             new StreamLoadAuditEvent.AuditEventBuilder().setEventType(EventType.STREAM_LOAD_FINISH)
-                                    .setLabel(streamLoadItem.getLabel()).setDb(streamLoadItem.getDb())
-                                    .setTable(streamLoadItem.getTbl()).setUser(streamLoadItem.getUser())
-                                    .setClientIp(streamLoadItem.getUserIp()).setStatus(streamLoadItem.getStatus())
-                                    .setMessage(streamLoadItem.getMessage()).setUrl(streamLoadItem.getUrl())
+                                    .setLoadId(streamLoadItem.getLoadId())
+                                    .setTxnId(streamLoadItem.getTxnId())
+                                    .setLabel(streamLoadItem.getLabel())
+                                    .setComment(streamLoadItem.getComment())
+                                    .setDb(streamLoadItem.getDb())
+                                    .setTable(streamLoadItem.getTbl())
+                                    .setUser(streamLoadItem.getUser())
+                                    .setClientIp(streamLoadItem.getUserIp())
+                                    .setStatus(streamLoadItem.getStatus())
+                                    .setMessage(streamLoadItem.getMessage())
+                                    .setUrl(streamLoadItem.getUrl())
                                     .setTotalRows(streamLoadItem.getTotalRows())
                                     .setLoadedRows(streamLoadItem.getLoadedRows())
                                     .setFilteredRows(streamLoadItem.getFilteredRows())
                                     .setUnselectedRows(streamLoadItem.getUnselectedRows())
-                                    .setLoadBytes(streamLoadItem.getLoadBytes()).setStartTime(startTime)
+                                    .setCpuCostMs(streamLoadItem.getCpuCostMs())
+                                    .setPeakUsedMemoryBytes(streamLoadItem.getPeakUsedMemoryBytes())
+                                    .setLoadBytes(streamLoadItem.getLoadBytes())
+                                    .setLoadTimeMs(streamLoadItem.getLoadTimeMs())
+                                    .setBeginTxnTimeMs(streamLoadItem.getBeginTxnTimeMs())
+                                    .setReadDataTimeMs(streamLoadItem.getReadDataTimeMs())
+                                    .setReceiveDataTimeMs(streamLoadItem.getReceiveDataTimeMs())
+                                    .setWriteDataTimeMs(streamLoadItem.getWriteDataTimeMs())
+                                    .setStreamLoadPutTimeMs(streamLoadItem.getStreamLoadPutTimeMs())
+                                    .setCommitAndPublishTimeMs(streamLoadItem.getCommitAndPublishTimeMs())
+                                    .setTwoPhaseCommit(streamLoadItem.isTwoPhaseCommit())
+                                    .setGroupCommit(streamLoadItem.isGroupCommit())
+                                    .setExistingJobStatus(streamLoadItem.getExistingJobStatus())
+                                    .setStartTime(startTime)
                                     .setFinishTime(finishTime).build();
                     Env.getCurrentEnv().getAuditEventProcessor().handleAuditEvent(auditEvent);
                     if (entry.getValue().getFinishTime() > lastStreamLoadTime) {

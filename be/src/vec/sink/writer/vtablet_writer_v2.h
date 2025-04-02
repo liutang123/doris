@@ -154,6 +154,8 @@ private:
 
     std::shared_ptr<MemTracker> _mem_tracker;
 
+    std::shared_ptr<QueryStatistics> _write_statistics = nullptr;
+
     TDataSink _t_sink;
     ObjectPool* _pool = nullptr;
 

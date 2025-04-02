@@ -17,6 +17,7 @@
 
 package org.apache.doris.qe;
 
+import org.apache.doris.analysis.StmtType;
 import org.apache.doris.catalog.Env;
 import org.apache.doris.common.Config;
 import org.apache.doris.common.Status;
@@ -368,7 +369,18 @@ public final class QeProcessorImpl implements QeProcessor {
             if (coord.getQueueToken() != null) {
                 return coord.getQueueToken().getQueueMsg();
             }
-            return "";
+            return "RUNNING";
+        }
+
+        public String getStmtType() {
+            if (connectContext.getExecutor() == null) {
+                return StmtType.SELECT.name();
+            }
+            return AuditLogHelper.getStmtType(connectContext.getExecutor().getParsedStmt());
+        }
+
+        public String getTableInfo() {
+            return AuditLogHelper.getTableInfo(connectContext, null, false);
         }
     }
 }

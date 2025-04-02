@@ -117,6 +117,20 @@ struct TStreamLoadRecord {
     17: required i64 start_time
     18: required i64 finish_time
     19: optional string comment
+    1000: required i64 cpu_cost_ms 
+    1001: required i64 peak_used_memory_bytes
+    1002: required i64 load_time_ms
+    1003: required i64 txn_id
+    1004: optional bool two_phase_commit
+    1005: optional bool group_commit
+    1006: optional string existing_job_status
+    1007: required i64 begin_txn_time_ms
+    1008: required i64 stream_load_put_time_ms
+    1009: required i64 read_data_time_ms
+    1010: required i64 write_data_time_ms
+    1011: required i64 receive_data_time_ms
+    1012: required i64 commit_and_publish_time_ms
+    1013: required string load_id
 }
 
 struct TStreamLoadRecordResult {

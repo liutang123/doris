@@ -138,6 +138,8 @@ PipelineFragmentContext::~PipelineFragmentContext() {
             _call_back(_tasks[i].front()->runtime_state(), &st);
         }
     }
+     _query_ctx.reset();
+    _tasks.clear();
     for (auto& runtime_states : _task_runtime_states) {
         for (auto& runtime_state : runtime_states) {
             runtime_state.reset();

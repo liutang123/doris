@@ -242,6 +242,7 @@ public class MysqlConnectProcessor extends ConnectProcessor {
             LOG.debug("handle command {}", command);
         }
         ctx.setCommand(command);
+        ctx.setQueryFrom(ConnectContext.QueryFrom.CLIENT);
         ctx.setStartTime();
 
         switch (command) {

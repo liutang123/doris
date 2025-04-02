@@ -112,6 +112,13 @@ public class ConnectContext {
         ARROW_FLIGHT_SQL
     }
 
+    public enum QueryFrom {
+        CLIENT,
+        INTERNAL_MTMV,
+        INTERNAL_STATISTIC,
+        UNKNOWN
+    }
+
     protected volatile ConnectType connectType;
     // set this id before analyze
     protected volatile long stmtId;
@@ -254,6 +261,8 @@ public class ConnectContext {
     @Getter
     @Setter
     private ByteBuffer prepareExecuteBuffer;
+
+    private QueryFrom queryFrom = QueryFrom.UNKNOWN;
 
     private MysqlHandshakePacket mysqlHandshakePacket;
 
@@ -1424,5 +1433,13 @@ public class ConnectContext {
 
     public byte[] getAuthPluginData() {
         return mysqlHandshakePacket == null ? null : mysqlHandshakePacket.getAuthPluginData();
+    }
+
+    public QueryFrom getQueryFrom() {
+        return queryFrom;
+    }
+
+    public void setQueryFrom(QueryFrom queryFrom) {
+        this.queryFrom = queryFrom;
     }
 }

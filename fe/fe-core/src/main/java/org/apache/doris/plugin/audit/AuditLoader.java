@@ -17,7 +17,9 @@
 
 package org.apache.doris.plugin.audit;
 
+import org.apache.doris.analysis.ColumnDef;
 import org.apache.doris.catalog.Env;
+import org.apache.doris.catalog.InternalSchema;
 import org.apache.doris.common.util.DigitalVersion;
 import org.apache.doris.common.util.TimeUtils;
 import org.apache.doris.plugin.AuditEvent;
@@ -37,6 +39,7 @@ import org.apache.logging.log4j.Logger;
 import java.io.IOException;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /*
  * This plugin will load audit log to specified doris table at specified interval
@@ -67,12 +70,21 @@ public class AuditLoader extends Plugin implements AuditPlugin {
     private volatile boolean isClosed = false;
     private volatile boolean isInit = false;
 
-    private final PluginInfo pluginInfo;
+    private PluginInfo pluginInfo;
+
+    private String table = AUDIT_LOG_TABLE;
+    private String columns = InternalSchema.AUDIT_SCHEMA.stream().map(ColumnDef::getName)
+            .collect(Collectors.joining(","));
 
     public AuditLoader() {
         pluginInfo = new PluginInfo(PluginMgr.BUILTIN_PLUGIN_PREFIX + "AuditLoader", PluginType.AUDIT,
                 "builtin audit loader, to load audit log to internal table", DigitalVersion.fromString("2.1.0"),
                 DigitalVersion.fromString("1.8.31"), AuditLoader.class.getName(), null, null);
+    }
+
+    public AuditLoader(String table, String columns)  {
+        this.table = table;
+        this.columns = columns;
     }
 
     public PluginInfo getPluginInfo() {
@@ -92,7 +104,7 @@ public class AuditLoader extends Plugin implements AuditPlugin {
             // and it will not be too large because the audit log will flush if num in queue is larger than
             // GlobalVariable.audit_plugin_max_batch_bytes.
             this.auditEventQueue = Queues.newLinkedBlockingDeque(100000);
-            this.streamLoader = new AuditStreamLoader();
+            this.streamLoader = new AuditStreamLoader(table, columns);
             this.loadThread = new Thread(new LoadWorker(), "audit loader thread");
             this.loadThread.start();
 
@@ -145,18 +157,23 @@ public class AuditLoader extends Plugin implements AuditPlugin {
         ++auditLogNum;
     }
 
-    private void fillLogBuffer(AuditEvent event, StringBuilder logBuffer) {
+    protected void fillLogBuffer(AuditEvent event, StringBuilder logBuffer) {
         // should be same order as InternalSchema.AUDIT_SCHEMA
         logBuffer.append(event.queryId).append(AUDIT_TABLE_COL_SEPARATOR);
         logBuffer.append(TimeUtils.longToTimeStringWithms(event.timestamp)).append(AUDIT_TABLE_COL_SEPARATOR);
         logBuffer.append(event.clientIp).append(AUDIT_TABLE_COL_SEPARATOR);
+        logBuffer.append(event.connectionId).append(AUDIT_TABLE_COL_SEPARATOR);
+        logBuffer.append(event.queryFrom).append(AUDIT_TABLE_COL_SEPARATOR);
         logBuffer.append(event.user).append(AUDIT_TABLE_COL_SEPARATOR);
         logBuffer.append(event.ctl).append(AUDIT_TABLE_COL_SEPARATOR);
         logBuffer.append(event.db).append(AUDIT_TABLE_COL_SEPARATOR);
+        logBuffer.append(event.tblInfo).append(AUDIT_TABLE_COL_SEPARATOR);
         logBuffer.append(event.state).append(AUDIT_TABLE_COL_SEPARATOR);
         logBuffer.append(event.errorCode).append(AUDIT_TABLE_COL_SEPARATOR);
         logBuffer.append(event.errorMessage).append(AUDIT_TABLE_COL_SEPARATOR);
         logBuffer.append(event.queryTime).append(AUDIT_TABLE_COL_SEPARATOR);
+        logBuffer.append(event.loadBytes).append(AUDIT_TABLE_COL_SEPARATOR);
+        logBuffer.append(event.loadRows).append(AUDIT_TABLE_COL_SEPARATOR);
         logBuffer.append(event.scanBytes).append(AUDIT_TABLE_COL_SEPARATOR);
         logBuffer.append(event.scanRows).append(AUDIT_TABLE_COL_SEPARATOR);
         logBuffer.append(event.returnRows).append(AUDIT_TABLE_COL_SEPARATOR);

@@ -22,6 +22,7 @@ import org.apache.doris.analysis.ColumnNullableType;
 import org.apache.doris.analysis.TypeDef;
 import org.apache.doris.common.UserException;
 import org.apache.doris.plugin.audit.AuditLoader;
+import org.apache.doris.plugin.audit.StreamLoadAuditLoader;
 import org.apache.doris.statistics.StatisticConstants;
 
 import com.google.common.collect.Lists;
@@ -36,6 +37,7 @@ public class InternalSchema {
     public static final List<ColumnDef> PARTITION_STATS_SCHEMA;
     public static final List<ColumnDef> HISTO_STATS_SCHEMA;
     public static final List<ColumnDef> AUDIT_SCHEMA;
+    public static final List<ColumnDef> STREAM_LOAD_AUDIT_SCHEMA;
 
     static {
         // table statistics table
@@ -125,15 +127,23 @@ public class InternalSchema {
         AUDIT_SCHEMA.add(new ColumnDef("query_id", TypeDef.createVarchar(48), ColumnNullableType.NULLABLE));
         AUDIT_SCHEMA.add(new ColumnDef("time", TypeDef.createDatetimeV2(3), ColumnNullableType.NULLABLE));
         AUDIT_SCHEMA.add(new ColumnDef("client_ip", TypeDef.createVarchar(128), ColumnNullableType.NULLABLE));
+        AUDIT_SCHEMA.add(
+            new ColumnDef("connection_id", TypeDef.create(PrimitiveType.BIGINT), ColumnNullableType.NULLABLE));
+        AUDIT_SCHEMA.add(new ColumnDef("query_from", TypeDef.createVarchar(128), ColumnNullableType.NULLABLE));
         AUDIT_SCHEMA.add(new ColumnDef("user", TypeDef.createVarchar(128), ColumnNullableType.NULLABLE));
         AUDIT_SCHEMA.add(new ColumnDef("catalog", TypeDef.createVarchar(128), ColumnNullableType.NULLABLE));
         AUDIT_SCHEMA.add(new ColumnDef("db", TypeDef.createVarchar(128), ColumnNullableType.NULLABLE));
+        AUDIT_SCHEMA.add(new ColumnDef("tbl_info", TypeDef.create(PrimitiveType.STRING), true));
         AUDIT_SCHEMA.add(new ColumnDef("state", TypeDef.createVarchar(128), ColumnNullableType.NULLABLE));
         AUDIT_SCHEMA.add(new ColumnDef("error_code", TypeDef.create(PrimitiveType.INT), ColumnNullableType.NULLABLE));
         AUDIT_SCHEMA
                 .add(new ColumnDef("error_message", TypeDef.create(PrimitiveType.STRING), ColumnNullableType.NULLABLE));
         AUDIT_SCHEMA
                 .add(new ColumnDef("query_time", TypeDef.create(PrimitiveType.BIGINT), ColumnNullableType.NULLABLE));
+        AUDIT_SCHEMA
+                .add(new ColumnDef("load_bytes", TypeDef.create(PrimitiveType.BIGINT), ColumnNullableType.NULLABLE));
+        AUDIT_SCHEMA
+                .add(new ColumnDef("load_rows", TypeDef.create(PrimitiveType.BIGINT), ColumnNullableType.NULLABLE));
         AUDIT_SCHEMA
                 .add(new ColumnDef("scan_bytes", TypeDef.create(PrimitiveType.BIGINT), ColumnNullableType.NULLABLE));
         AUDIT_SCHEMA.add(new ColumnDef("scan_rows", TypeDef.create(PrimitiveType.BIGINT), ColumnNullableType.NULLABLE));
@@ -169,6 +179,70 @@ public class InternalSchema {
                 new ColumnDef("compute_group", TypeDef.create(PrimitiveType.STRING), ColumnNullableType.NULLABLE));
         // Keep stmt as last column. So that in fe.audit.log, it will be easier to get sql string
         AUDIT_SCHEMA.add(new ColumnDef("stmt", TypeDef.create(PrimitiveType.STRING), ColumnNullableType.NULLABLE));
+
+        // stream load audit table
+        // audit table
+        STREAM_LOAD_AUDIT_SCHEMA = new ArrayList<>();
+        STREAM_LOAD_AUDIT_SCHEMA.add(
+            new ColumnDef("load_id", TypeDef.createVarchar(400), ColumnNullableType.NULLABLE));
+        STREAM_LOAD_AUDIT_SCHEMA.add(
+            new ColumnDef("txn_id", TypeDef.create(PrimitiveType.BIGINT), ColumnNullableType.NULLABLE));
+        STREAM_LOAD_AUDIT_SCHEMA.add(
+            new ColumnDef("label", TypeDef.createVarchar(400), ColumnNullableType.NULLABLE));
+        STREAM_LOAD_AUDIT_SCHEMA.add(
+            new ColumnDef("comment", TypeDef.createVarchar(200), ColumnNullableType.NULLABLE));
+        STREAM_LOAD_AUDIT_SCHEMA.add(
+            new ColumnDef("db", TypeDef.createVarchar(200), ColumnNullableType.NULLABLE));
+        STREAM_LOAD_AUDIT_SCHEMA.add(
+            new ColumnDef("tbl", TypeDef.createVarchar(200), ColumnNullableType.NULLABLE));
+        STREAM_LOAD_AUDIT_SCHEMA.add(
+            new ColumnDef("user", TypeDef.createVarchar(200), ColumnNullableType.NULLABLE));
+        STREAM_LOAD_AUDIT_SCHEMA.add(
+            new ColumnDef("client_ip", TypeDef.createVarchar(15), ColumnNullableType.NULLABLE));
+        STREAM_LOAD_AUDIT_SCHEMA.add(
+            new ColumnDef("two_phase_commit", TypeDef.create(PrimitiveType.BOOLEAN), ColumnNullableType.NULLABLE));
+        STREAM_LOAD_AUDIT_SCHEMA.add(
+            new ColumnDef("group_commit", TypeDef.create(PrimitiveType.BOOLEAN), ColumnNullableType.NULLABLE));
+        STREAM_LOAD_AUDIT_SCHEMA.add(
+            new ColumnDef("status", TypeDef.createVarchar(30), ColumnNullableType.NULLABLE));
+        STREAM_LOAD_AUDIT_SCHEMA.add(
+            new ColumnDef("message", TypeDef.create(PrimitiveType.STRING), ColumnNullableType.NULLABLE));
+        STREAM_LOAD_AUDIT_SCHEMA.add(
+            new ColumnDef("total_rows", TypeDef.create(PrimitiveType.BIGINT), ColumnNullableType.NULLABLE));
+        STREAM_LOAD_AUDIT_SCHEMA.add(
+            new ColumnDef("loaded_rows", TypeDef.create(PrimitiveType.BIGINT), ColumnNullableType.NULLABLE));
+        STREAM_LOAD_AUDIT_SCHEMA.add(
+            new ColumnDef("filtered_rows", TypeDef.create(PrimitiveType.BIGINT), ColumnNullableType.NULLABLE));
+        STREAM_LOAD_AUDIT_SCHEMA.add(
+            new ColumnDef("unselected_rows", TypeDef.create(PrimitiveType.BIGINT), ColumnNullableType.NULLABLE));
+        STREAM_LOAD_AUDIT_SCHEMA.add(
+            new ColumnDef("cpu_cost_ms", TypeDef.create(PrimitiveType.BIGINT), ColumnNullableType.NULLABLE));
+        STREAM_LOAD_AUDIT_SCHEMA.add(
+            new ColumnDef("peak_used_memory_bytes", TypeDef.create(PrimitiveType.BIGINT), ColumnNullableType.NULLABLE));
+        STREAM_LOAD_AUDIT_SCHEMA.add(
+            new ColumnDef("load_bytes", TypeDef.create(PrimitiveType.BIGINT), ColumnNullableType.NULLABLE));
+        STREAM_LOAD_AUDIT_SCHEMA.add(
+            new ColumnDef("start_time",  TypeDef.createDatetimeV2(3), ColumnNullableType.NULLABLE));
+        STREAM_LOAD_AUDIT_SCHEMA.add(
+            new ColumnDef("load_time_ms", TypeDef.create(PrimitiveType.BIGINT), ColumnNullableType.NULLABLE));
+        STREAM_LOAD_AUDIT_SCHEMA.add(
+            new ColumnDef("begin_txn_time_ms", TypeDef.create(PrimitiveType.BIGINT), ColumnNullableType.NULLABLE));
+        STREAM_LOAD_AUDIT_SCHEMA.add(
+            new ColumnDef("stream_load_put_time_ms", TypeDef.create(PrimitiveType.BIGINT),
+                ColumnNullableType.NULLABLE));
+        STREAM_LOAD_AUDIT_SCHEMA.add(
+            new ColumnDef("read_data_time_ms", TypeDef.create(PrimitiveType.BIGINT), ColumnNullableType.NULLABLE));
+        STREAM_LOAD_AUDIT_SCHEMA.add(
+            new ColumnDef("write_data_time_ms", TypeDef.create(PrimitiveType.BIGINT), ColumnNullableType.NULLABLE));
+        STREAM_LOAD_AUDIT_SCHEMA.add(
+            new ColumnDef("receive_data_time_ms", TypeDef.create(PrimitiveType.BIGINT), ColumnNullableType.NULLABLE));
+        STREAM_LOAD_AUDIT_SCHEMA.add(
+            new ColumnDef("commit_and_publish_time_ms", TypeDef.create(PrimitiveType.BIGINT),
+                ColumnNullableType.NULLABLE));
+        STREAM_LOAD_AUDIT_SCHEMA.add(
+            new ColumnDef("error_url", TypeDef.createVarchar(200), ColumnNullableType.NULLABLE));
+        STREAM_LOAD_AUDIT_SCHEMA.add(
+            new ColumnDef("existing_job_status", TypeDef.createVarchar(10), ColumnNullableType.NULLABLE));
     }
 
     // Get copied schema for statistic table
@@ -187,6 +261,9 @@ public class InternalSchema {
                 break;
             case AuditLoader.AUDIT_LOG_TABLE:
                 schema = AUDIT_SCHEMA;
+                break;
+            case StreamLoadAuditLoader.AUDIT_LOG_TABLE:
+                schema = STREAM_LOAD_AUDIT_SCHEMA;
                 break;
             default:
                 throw new UserException("Unknown internal table name: " + tblName);

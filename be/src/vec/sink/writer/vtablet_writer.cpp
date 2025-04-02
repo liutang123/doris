@@ -66,6 +66,7 @@
 #include "runtime/memory/memory_reclamation.h"
 #include "runtime/query_context.h"
 #include "runtime/runtime_state.h"
+#include "runtime/query_context.h"
 #include "runtime/thread_context.h"
 #include "service/backend_options.h"
 #include "util/debug_points.h"
@@ -1244,6 +1245,8 @@ Status VTabletWriter::_init(RuntimeState* state, RuntimeProfile* profile) {
     // profile must add to state's object pool
     _mem_tracker =
             std::make_shared<MemTracker>("OlapTableSink:" + std::to_string(state->load_job_id()));
+    _write_statistics = std::make_shared<QueryStatistics>();
+    _state->get_query_ctx()->register_query_statistics(_write_statistics);
     SCOPED_TIMER(profile->total_time_counter());
     SCOPED_CONSUME_MEM_TRACKER(_mem_tracker.get());
 
@@ -1785,6 +1788,8 @@ Status VTabletWriter::write(RuntimeState* state, doris::vectorized::Block& input
     // the real 'num_rows_load_total' will be set when sink being closed.
     _state->update_num_rows_load_total(rows);
     _state->update_num_bytes_load_total(bytes);
+    _write_statistics->add_load_rows(rows);
+    _write_statistics->add_load_bytes(bytes);
     DorisMetrics::instance()->load_rows->increment(rows);
     DorisMetrics::instance()->load_bytes->increment(bytes);
 

@@ -29,6 +29,7 @@ import org.apache.doris.plugin.PluginInfo.PluginType;
 import org.apache.doris.plugin.PluginLoader.PluginStatus;
 import org.apache.doris.plugin.audit.AuditLoader;
 import org.apache.doris.plugin.audit.AuditLogBuilder;
+import org.apache.doris.plugin.audit.StreamLoadAuditLoader;
 import org.apache.doris.plugin.dialect.HttpDialectConverterPlugin;
 
 import com.google.common.base.Strings;
@@ -125,6 +126,12 @@ public class PluginMgr implements Writable {
         HttpDialectConverterPlugin httpDialectConverterPlugin = new HttpDialectConverterPlugin();
         if (!registerBuiltinPlugin(httpDialectConverterPlugin.getPluginInfo(), httpDialectConverterPlugin)) {
             LOG.warn("failed to register http dialect converter plugin");
+        }
+
+        // StreamLoadAuditLoader: log stream load audit log to internal table
+        StreamLoadAuditLoader streamLoadAuditLoader = new StreamLoadAuditLoader();
+        if (!registerBuiltinPlugin(streamLoadAuditLoader.getPluginInfo(), streamLoadAuditLoader)) {
+            LOG.warn("failed to register stream load audit log builder");
         }
 
         // other builtin plugins

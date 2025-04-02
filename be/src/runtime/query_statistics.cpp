@@ -32,6 +32,8 @@ void QueryStatistics::merge(const QueryStatistics& other) {
     cpu_nanos += other.cpu_nanos;
     shuffle_send_bytes += other.shuffle_send_bytes;
     shuffle_send_rows += other.shuffle_send_rows;
+    load_rows += other.load_rows.load(std::memory_order_relaxed);
+    load_bytes += other.load_bytes.load(std::memory_order_relaxed);
     _scan_bytes_from_local_storage += other._scan_bytes_from_local_storage;
     _scan_bytes_from_remote_storage += other._scan_bytes_from_remote_storage;
 
@@ -62,6 +64,8 @@ void QueryStatistics::to_thrift(TQueryStatistics* statistics) const {
     statistics->__set_scan_bytes(scan_bytes);
     statistics->__set_scan_rows(scan_rows);
     statistics->__set_cpu_ms(cpu_nanos / NANOS_PER_MILLIS);
+    statistics->__set_load_bytes(load_bytes.load(std::memory_order_relaxed));
+    statistics->__set_load_rows(load_rows.load(std::memory_order_relaxed));
     statistics->__set_returned_rows(returned_rows);
     statistics->__set_max_peak_memory_bytes(max_peak_memory_bytes);
     statistics->__set_current_used_memory_bytes(current_used_memory_bytes);

@@ -34,12 +34,16 @@ import org.apache.doris.datasource.CatalogIf;
 import org.apache.doris.datasource.InternalCatalog;
 import org.apache.doris.metric.MetricRepo;
 import org.apache.doris.mysql.MysqlCommand;
+import org.apache.doris.nereids.CascadesContext;
+import org.apache.doris.nereids.StatementContext;
 import org.apache.doris.nereids.analyzer.UnboundOneRowRelation;
 import org.apache.doris.nereids.analyzer.UnboundTableSink;
 import org.apache.doris.nereids.glue.LogicalPlanAdapter;
+import org.apache.doris.nereids.properties.PhysicalProperties;
 import org.apache.doris.nereids.trees.plans.Plan;
 import org.apache.doris.nereids.trees.plans.commands.NeedAuditEncryption;
 import org.apache.doris.nereids.trees.plans.commands.insert.InsertIntoTableCommand;
+import org.apache.doris.nereids.trees.plans.commands.insert.InsertOverwriteTableCommand;
 import org.apache.doris.nereids.trees.plans.logical.LogicalInlineTable;
 import org.apache.doris.nereids.trees.plans.logical.LogicalPlan;
 import org.apache.doris.nereids.trees.plans.logical.LogicalUnion;
@@ -49,6 +53,7 @@ import org.apache.doris.plugin.AuditEvent.EventType;
 import org.apache.doris.qe.QueryState.MysqlStateType;
 import org.apache.doris.service.FrontendOptions;
 
+import com.google.common.base.Joiner;
 import com.google.common.base.Strings;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.logging.log4j.LogManager;
@@ -59,6 +64,7 @@ import java.nio.CharBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CodingErrorAction;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -200,11 +206,13 @@ public class AuditLogHelper {
         auditEventBuilder
                 .setTimestamp(ctx.getStartTime())
                 .setClientIp(ctx.getClientIP())
+                .setConnectionId(ctx.getConnectionId())
                 .setUser(ClusterNamespace.getNameFromFullName(ctx.getQualifiedUser()))
                 .setSqlHash(ctx.getSqlHash())
                 .setEventType(EventType.AFTER_QUERY)
                 .setCtl(catalog == null ? InternalCatalog.INTERNAL_CATALOG_NAME : catalog.getName())
                 .setDb(ClusterNamespace.getNameFromFullName(ctx.getDatabase()))
+                .setTblInfo(getTableInfo(ctx, parsedStmt, false))
                 .setState(ctx.getState().toString())
                 .setErrorCode(ctx.getState().getErrorCode() == null ? 0 : ctx.getState().getErrorCode().getCode())
                 .setErrorMessage((ctx.getState().getErrorMessage() == null ? "" :
@@ -297,6 +305,8 @@ public class AuditLogHelper {
         boolean isAnalysisErr = ctx.getState().getStateType() == MysqlStateType.ERR
                 && ctx.getState().getErrType() == QueryState.ErrType.ANALYSIS_ERR;
         String encryptSql = isAnalysisErr ? ctx.getState().getErrorMessage() : origStmt;
+        auditEventBuilder.setQueryFrom(ctx.getQueryFrom().name());
+
         // We put origin query stmt at the end of audit log, for parsing the log more convenient.
         if (parsedStmt instanceof LogicalPlanAdapter) {
             LogicalPlan logicalPlan = ((LogicalPlanAdapter) parsedStmt).getLogicalPlan();
@@ -319,6 +329,7 @@ public class AuditLogHelper {
                     auditEventBuilder.setErrorCode(proxyStatusCode);
                     auditEventBuilder.setErrorMessage(ctx.executor.getProxyErrMsg());
                 }
+                auditEventBuilder.setTblInfo(getTableInfo(ctx, parsedStmt, true));
             }
         }
         if (ctx.getCommand() == MysqlCommand.COM_STMT_PREPARE && ctx.getState().getErrorCode() == null) {
@@ -331,7 +342,7 @@ public class AuditLogHelper {
         }
     }
 
-    private static String getStmtType(StatementBase stmt) {
+    public static String getStmtType(StatementBase stmt) {
         if (stmt == null) {
             return StmtType.OTHER.name();
         }
@@ -343,6 +354,37 @@ public class AuditLogHelper {
         } else {
             return stmt.stmtType().name();
         }
+    }
+
+    public static String getTableInfo(ConnectContext ctx, StatementBase parsedStmt, boolean needCollect) {
+        List<String> tableInfo = new ArrayList<>();
+        try {
+            StatementContext statementContext = ctx.getStatementContext();
+            if (needCollect && parsedStmt instanceof LogicalPlanAdapter) {
+                LogicalPlan plan = ((LogicalPlanAdapter) parsedStmt).getLogicalPlan();
+                LogicalPlan queryPlan = plan;
+                if (plan instanceof InsertIntoTableCommand) {
+                    queryPlan = ((InsertIntoTableCommand) plan).getLogicalQuery();
+                }
+                if (plan instanceof InsertOverwriteTableCommand) {
+                    queryPlan = ((InsertOverwriteTableCommand) plan).getLogicalQuery();
+                }
+                CascadesContext cascadesContext = CascadesContext.initContext(
+                        statementContext, queryPlan, PhysicalProperties.GATHER);
+                cascadesContext.newTableCollector().collect();
+            }
+            if (statementContext != null) {
+                for (List<String> namePart : statementContext.getInsertTargetTables().keySet()) {
+                    tableInfo.add(Joiner.on(".").join(namePart));
+                }
+                for (List<String> namePart : statementContext.getTables().keySet()) {
+                    tableInfo.add(Joiner.on(".").join(namePart));
+                }
+            }
+        } catch (Exception e) {
+            LOG.warn("get table info failed", e);
+        }
+        return Joiner.on(",").join(tableInfo);
     }
 }
 
