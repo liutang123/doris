@@ -45,7 +45,9 @@
 #include "olap/utils.h"
 #include "util/coding.h"
 #include "util/crc32c.h"
+#include "util/jsonb_writer.h"
 
+using doris::JsonbWriter;
 using std::filesystem::path;
 using doris::DataDir;
 using doris::OlapMeta;
@@ -301,6 +303,10 @@ Status get_segment_footer(doris::io::FileReader* file_reader, SegmentFooterPB* f
 }
 
 void print_column(const ColumnMetaPB& column_pb, doris::io::FileReaderSPtr file_reader) {
+    static std::string page_num_str = "page_num";
+    static std::string start_str = "start";
+    static std::string end_str = "end";
+    static std::string size_str = "size";
     if (column_pb.has_compression()) {
         std::cout << "  compression: " << column_pb.compression();
     }
@@ -316,6 +322,19 @@ void print_column(const ColumnMetaPB& column_pb, doris::io::FileReaderSPtr file_
             cout << "ordinal index: " << std::endl;
             if (ordinal_index.root_page().is_root_data_page()) {
                 auto& root_page = ordinal_index.root_page().root_page();
+//                JsonbWriter json_writer;
+//                json_writer.writeStartObject();
+//                std::string page_num_str = "page_num";
+//                json_writer.writeKey(page_num_str.c_str(), page_num_str.size());
+//                json_writer.writeInt(1);
+//                json_writer.writeKey(start_str.c_str(), start_str.size());
+//                json_writer.writeInt(root_page.offset());
+//                json_writer.writeKey(end_str.c_str(), end_str.size());
+//                json_writer.writeInt(root_page.offset() + root_page.size());
+//                json_writer.writeKey(size_str.c_str(), size_str.size());
+//                json_writer.writeInt(root_page.size());
+//                json_writer.writeEndObject();
+
                 std::cout << "{\"page_num:\": 1, \"start\": " << std::to_string(root_page.offset())
                 << ", \"end\": " << std::to_string(root_page.offset() + root_page.size())
                 << ", \"size\": " << std::to_string(root_page.size()) << "}";
@@ -363,7 +382,6 @@ void print_column(const ColumnMetaPB& column_pb, doris::io::FileReaderSPtr file_
                     }
                 }
             }
-
             break;
         }
         case doris::segment_v2::ZONE_MAP_INDEX: {
@@ -375,7 +393,7 @@ void print_column(const ColumnMetaPB& column_pb, doris::io::FileReaderSPtr file_
                 std::cout << "parse zone map index err" << status.to_string() << std::endl;
             } else {
                 std::cout << "zone map index: " << std::endl;
-                reader.show_info();
+                std::cout << reader.show_info() << std::endl;
             }
             break;
         }
@@ -389,7 +407,7 @@ void print_column(const ColumnMetaPB& column_pb, doris::io::FileReaderSPtr file_
                     std::cout << "parse bitmap index dict err" << status.to_string() << std::endl;
                 } else {
                     std::cout << "bitmap map index dct column: " << std::endl;
-                    reader.show_info();
+                    std::cout << reader.show_info() << std::endl;
                 }
             }
             {
@@ -400,7 +418,7 @@ void print_column(const ColumnMetaPB& column_pb, doris::io::FileReaderSPtr file_
                     std::cout << "parse bitmap value err" << status.to_string() << std::endl;
                 } else {
                     std::cout << "bitmap map index bitmap column: " << std::endl;
-                    reader.show_info();
+                    std::cout << reader.show_info() << std::endl;
                 }
             }
             break;
@@ -414,7 +432,7 @@ void print_column(const ColumnMetaPB& column_pb, doris::io::FileReaderSPtr file_
                 std::cout << "parse bloom filter value err" << status.to_string() << std::endl;
             } else {
                 std::cout << "bloom filter index: " << std::endl;
-                reader.show_info();
+                std::cout << reader.show_info() << std::endl;
             }
             break;
         }
