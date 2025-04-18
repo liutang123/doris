@@ -38,6 +38,7 @@
 #include "olap/options.h"
 #include "olap/rowset/segment_v2/binary_plain_page.h"
 #include "olap/rowset/segment_v2/column_reader.h"
+#include "olap/rowset/segment_v2/indexed_column_reader.h"
 #include "olap/tablet_meta.h"
 #include "olap/tablet_meta_manager.h"
 #include "olap/utils.h"
@@ -56,6 +57,7 @@ using doris::segment_v2::SegmentFooterPB;
 using doris::segment_v2::ColumnReader;
 using doris::segment_v2::PageHandle;
 using doris::segment_v2::PagePointer;
+using doris::segment_v2::ColumnMetaPB;
 using doris::segment_v2::ColumnReaderOptions;
 using doris::segment_v2::ColumnIteratorOptions;
 using doris::segment_v2::PageFooterPB;
@@ -72,6 +74,7 @@ DEFINE_string(json_meta_path, "", "absolute json meta file path");
 DEFINE_string(pb_meta_path, "", "pb meta file path");
 DEFINE_string(tablet_file, "", "file to save a set of tablets");
 DEFINE_string(file, "", "segment file path");
+DEFINE_bool(show_column, false, "show column meta if config to true");
 
 std::string get_usage(const std::string& progname) {
     std::stringstream ss;
@@ -293,7 +296,92 @@ Status get_segment_footer(doris::io::FileReader* file_reader, SegmentFooterPB* f
     return Status::OK();
 }
 
-void show_segment_footer(const std::string& file_name) {
+void print_column(const ColumnMetaPB& column_pb, doris::io::FileReaderSPtr file_reader) {
+    if (column_pb.has_compression()) {
+        std::cout << "  compression: " << column_pb.compression();
+    }
+    if (column_pb.has_encoding()) {
+        std::cout << "  encoding: " << column_pb.encoding();
+    }
+    std::cout << "  type: " << column_pb.type() << std::endl;
+    for (int i = 0; i < column_pb.indexes_size(); i++) {
+        auto& index_meta = column_pb.indexes(i);
+        switch (index_meta.type()) {
+        case doris::segment_v2::ORDINAL_INDEX:
+            break;
+        case doris::segment_v2::ZONE_MAP_INDEX: {
+            auto& zone_map = index_meta.zone_map_index();
+            auto& zone_map_page = zone_map.page_zone_maps();
+            doris::segment_v2::IndexedColumnReader reader(file_reader, zone_map_page);
+            auto status = reader.load(false, false);
+            if (!status.ok()) {
+                std::cout << "parse zone map index err" << status.to_string() << std::endl;
+            } else {
+                std::cout << "zone map index: " << std::endl;
+                reader.show_info();
+            }
+            break;
+        }
+        case doris::segment_v2::BITMAP_INDEX: {
+            auto& bitmap = index_meta.bitmap_index();
+            {
+                auto& dict_index_pb =  bitmap.dict_column();
+                doris::segment_v2::IndexedColumnReader reader(file_reader, dict_index_pb);
+                auto status = reader.load(false, false);
+                if (!status.ok()) {
+                    std::cout << "parse bitmap index dict err" << status.to_string() << std::endl;
+                } else {
+                    std::cout << "bitmap map index dct column: " << std::endl;
+                    reader.show_info();
+                }
+            }
+            {
+                auto& bitmap_index_pb =  bitmap.bitmap_column();
+                doris::segment_v2::IndexedColumnReader reader(file_reader, bitmap_index_pb);
+                auto status = reader.load(false, false);
+                if (!status.ok()) {
+                    std::cout << "parse bitmap value err" << status.to_string() << std::endl;
+                } else {
+                    std::cout << "bitmap map index bitmap column: " << std::endl;
+                    reader.show_info();
+                }
+            }
+            break;
+        }
+        case doris::segment_v2::BLOOM_FILTER_INDEX: {
+            auto& bloom_fileter = index_meta.bloom_filter_index();
+            auto& bloom_filter_pb = bloom_fileter.bloom_filter();
+            doris::segment_v2::IndexedColumnReader reader(file_reader, bloom_filter_pb);
+            auto status = reader.load(false, false);
+            if (!status.ok()) {
+                std::cout << "parse bloom filter value err" << status.to_string() << std::endl;
+            } else {
+                std::cout << "bloom filter index: " << std::endl;
+                reader.show_info();
+            }
+            break;
+        }
+        default:
+            break;
+        }
+    }
+    if (column_pb.children_columns_size() > 0) {
+        for (int i = 0; i < column_pb.children_columns_size(); ++i) {
+            auto& child = column_pb.children_columns(i);
+            std::cout << "child column: " << std::to_string(i) << std::endl;
+            print_column(child, file_reader);
+        }
+    }
+    if (column_pb.sparse_columns_size() > 0) {
+        for (int i = 0; i < column_pb.sparse_columns_size(); ++i) {
+            auto& sparse = column_pb.sparse_columns(i);
+            std::cout << "sparse column: " << std::to_string(i) << std::endl;
+            print_column(sparse, file_reader);
+        }
+    }
+}
+
+void show_segment_footer(const std::string& file_name, const bool show_column) {
     doris::io::FileReaderSPtr file_reader;
     Status status = doris::io::global_local_filesystem()->open_file(file_name, &file_reader);
     if (!status.ok()) {
@@ -315,8 +403,18 @@ void show_segment_footer(const std::string& file_name) {
         return;
     }
     std::cout << json_footer << std::endl;
+
+    if (show_column) {
+        for (uint32_t ordinal = 0; ordinal < footer.columns().size(); ++ordinal) {
+            const auto& column_pb = footer.columns(ordinal);
+            std::cout << "column: " << std::to_string(ordinal) << std::endl;
+            print_column(column_pb, file_reader);
+        }
+    }
     return;
 }
+
+
 
 int main(int argc, char** argv) {
     std::string usage = get_usage(argv[0]);
@@ -341,7 +439,7 @@ int main(int argc, char** argv) {
             std::cout << "no file flag for show dict" << std::endl;
             return -1;
         }
-        show_segment_footer(FLAGS_file);
+        show_segment_footer(FLAGS_file, FLAGS_show_column);
     } else {
         // operations that need root path should be written here
         std::set<std::string> valid_operations = {"get_meta", "load_meta", "delete_meta"};

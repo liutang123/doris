@@ -55,6 +55,8 @@ public:
 
     Status load(bool use_page_cache, bool kept_in_memory);
 
+    std::string show_info();
+
     // read a page specified by `pp' from `file' into `handle'
     Status read_page(const PagePointer& pp, PageHandle* handle, Slice* body, PageFooterPB* footer,
                      PageTypePB type, BlockCompressionCodec* codec, bool pre_decode) const;

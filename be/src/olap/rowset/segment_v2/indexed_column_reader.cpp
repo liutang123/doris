@@ -142,6 +142,46 @@ Status IndexedColumnReader::read_page(const PagePointer& pp, PageHandle* handle,
 
 IndexedColumnReader::~IndexedColumnReader() = default;
 
+std::string IndexedColumnReader::show_info() {
+    uint64_t column_start = 0;
+    uint64_t  column_end = 0;
+    std::string index = "unknown";
+    uint32_t page_count = 1;
+    if (_meta.has_ordinal_index_meta()) {
+        index = "ordinal";
+        if (!_meta.ordinal_index_meta().is_root_data_page()) {
+            page_count = _ordinal_index_reader.count();
+            DCHECK(page_count > 0);
+            auto& first_page_pointer = _ordinal_index_reader.get_value(0);
+            column_start = first_page_pointer.offset;
+            auto& last_page_pointer = _ordinal_index_reader.get_value(page_count - 1);
+            column_end = last_page_pointer.offset + last_page_pointer.size;
+        } else {
+            column_start = _sole_data_page.offset;
+            column_end = _sole_data_page.offset + _sole_data_page.size;
+        }
+
+
+    } else if (_meta.has_value_index_meta()) {
+        index = "value";
+        if (!_meta.value_index_meta().is_root_data_page()) {
+            page_count = _value_index_reader.count();
+            DCHECK(page_count > 0);
+            auto& first_page_pointer = _value_index_reader.get_value(0);
+            column_start = first_page_pointer.offset;
+            auto& last_page_pointer = _value_index_reader.get_value(page_count - 1);
+            column_end = last_page_pointer.offset + last_page_pointer.size;
+        } else {
+            column_start = _sole_data_page.offset;
+            column_end = _sole_data_page.offset + _sole_data_page.size;
+        }
+    }
+    auto column_size = column_end = column_start;
+    return "{\"index\": \"" + index + "\", \"page_count\": " + std::to_string(page_count) +
+           ", \"start\": " + std::to_string(column_start)+ ", \"end\": " +
+           std::to_string(column_end) + "\"size\": " + std::to_string(column_size) + "}";
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 
 Status IndexedColumnIterator::_read_data_page(const PagePointer& pp) {
