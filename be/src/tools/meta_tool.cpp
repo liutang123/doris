@@ -319,7 +319,7 @@ void print_column(const ColumnMetaPB& column_pb, doris::io::FileReaderSPtr file_
         switch (index_meta.type()) {
         case doris::segment_v2::ORDINAL_INDEX: {
             auto& ordinal_index = index_meta.ordinal_index();
-            cout << "ordinal index: " << std::endl;
+            std::cout << "ordinal index: " << std::endl;
             if (ordinal_index.root_page().is_root_data_page()) {
                 auto& root_page = ordinal_index.root_page().root_page();
 //                JsonbWriter json_writer;
