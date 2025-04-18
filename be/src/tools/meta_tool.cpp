@@ -39,6 +39,7 @@
 #include "olap/rowset/segment_v2/binary_plain_page.h"
 #include "olap/rowset/segment_v2/column_reader.h"
 #include "olap/rowset/segment_v2/indexed_column_reader.h"
+#include "olap/rowset/segment_v2/page_io.h"
 #include "olap/tablet_meta.h"
 #include "olap/tablet_meta_manager.h"
 #include "olap/utils.h"
@@ -48,6 +49,7 @@
 using std::filesystem::path;
 using doris::DataDir;
 using doris::OlapMeta;
+using doris::OlapReaderStatistics;
 using doris::Status;
 using doris::TabletMeta;
 using doris::TabletMetaManager;
@@ -61,6 +63,8 @@ using doris::segment_v2::ColumnMetaPB;
 using doris::segment_v2::ColumnReaderOptions;
 using doris::segment_v2::ColumnIteratorOptions;
 using doris::segment_v2::PageFooterPB;
+using doris::segment_v2::PageReadOptions;
+using doris::segment_v2::PageTypePB;
 using doris::io::FileReaderSPtr;
 
 const std::string HEADER_PREFIX = "tabletmeta_";
@@ -307,8 +311,61 @@ void print_column(const ColumnMetaPB& column_pb, doris::io::FileReaderSPtr file_
     for (int i = 0; i < column_pb.indexes_size(); i++) {
         auto& index_meta = column_pb.indexes(i);
         switch (index_meta.type()) {
-        case doris::segment_v2::ORDINAL_INDEX:
+        case doris::segment_v2::ORDINAL_INDEX: {
+            auto& ordinal_index = index_meta.ordinal_index();
+            cout << "ordinal index: " << std::endl;
+            if (ordinal_index.root_page().is_root_data_page()) {
+                auto& root_page = ordinal_index.root_page().root_page();
+                std::cout << "{\"page_num:\": 1, \"start\": " << std::to_string(root_page.offset())
+                << ", \"end\": " << std::to_string(root_page.offset() + root_page.size())
+                << ", \"size\": " << std::to_string(root_page.size()) << "}";
+            } else {
+                OlapReaderStatistics tmp_stats;
+                PageReadOptions opts {
+                        .use_page_cache = false,
+                        .kept_in_memory = false,
+                        .type = PageTypePB::INDEX_PAGE,
+                        .file_reader = file_reader.get(),
+                        .page_pointer = PagePointer(ordinal_index.root_page().root_page()),
+                        // ordinal index page uses NO_COMPRESSION right now
+                        .codec = nullptr,
+                        .stats = &tmp_stats,
+                        .io_ctx = doris::io::IOContext {.is_index_data = true},
+                };
+
+                // read index page
+                PageHandle page_handle;
+                Slice body;
+                PageFooterPB footer;
+                auto status = doris::segment_v2::PageIO::read_and_decompress_page(
+                        opts, &page_handle, &body, &footer);
+                if (!status.ok()) {
+                    std::cout << "parse ordinal index err" << status.to_string() << std::endl;
+                } else {
+                    doris::segment_v2::IndexPageReader reader;
+                    status = reader.parse(body, footer.index_page_footer());
+                    if (!status.ok()) {
+                        std::cout << "parse ordinal index index page err" << status.to_string()
+                                  << std::endl;
+
+                    } else {
+                        auto page_count = reader.count();
+                        auto& first_page_pointer = reader.get_value(0);
+                        auto column_start = first_page_pointer.offset;
+                        auto& last_page_pointer = reader.get_value(page_count - 1);
+                        auto column_end = last_page_pointer.offset + last_page_pointer.size;
+
+                        std::cout << "{\"page_num:\": " << std::to_string(page_count) <<
+                                ", \"start\": " << std::to_string(column_start)
+                                  << ", \"end\": " << std::to_string(column_end)
+                                  << ", \"size\": " << std::to_string(column_end - column_start)
+                                  << "}";
+                    }
+                }
+            }
+
             break;
+        }
         case doris::segment_v2::ZONE_MAP_INDEX: {
             auto& zone_map = index_meta.zone_map_index();
             auto& zone_map_page = zone_map.page_zone_maps();
@@ -368,14 +425,16 @@ void print_column(const ColumnMetaPB& column_pb, doris::io::FileReaderSPtr file_
     if (column_pb.children_columns_size() > 0) {
         for (int i = 0; i < column_pb.children_columns_size(); ++i) {
             auto& child = column_pb.children_columns(i);
-            std::cout << "child column: " << std::to_string(i) << std::endl;
+            std::cout << "child column: " << std::to_string(i) << ", ros: " <<
+                    std::to_string(child.num_rows()) << std::endl;
             print_column(child, file_reader);
         }
     }
     if (column_pb.sparse_columns_size() > 0) {
         for (int i = 0; i < column_pb.sparse_columns_size(); ++i) {
             auto& sparse = column_pb.sparse_columns(i);
-            std::cout << "sparse column: " << std::to_string(i) << std::endl;
+            std::cout << "sparse column: " << std::to_string(i) << ", rows:" <<
+                    std::to_string(sparse.num_rows()) << std::endl;
             print_column(sparse, file_reader);
         }
     }
