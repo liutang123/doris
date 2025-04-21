@@ -436,12 +436,12 @@ int S3Accessor::delete_files(const std::vector<std::string>& paths) {
     std::vector<std::string> keys;
     keys.reserve(paths.size());
     for (auto&& path : paths) {
-        LOG_INFO("delete file").tag("uri", to_uri(path));
-        keys.emplace_back(get_key(path));
+        if (delete_file(path) != 0) {
+            return -1;
+        }
     }
 
-    return obj_client_->delete_objects(conf_.bucket, std::move(keys), {.executor = worker_pool})
-            .ret;
+    return 0;
 }
 
 int S3Accessor::delete_file(const std::string& path) {
