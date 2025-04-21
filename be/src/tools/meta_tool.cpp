@@ -27,6 +27,9 @@
 #include <string>
 
 #include "common/status.h"
+#include "runtime/exec_env.h"
+#include "runtime/memory/thread_mem_tracker_mgr.h"
+#include "runtime/thread_context.h"
 #include "gutil/strings/numbers.h"
 #include "gutil/strings/split.h"
 #include "gutil/strings/substitute.h"
@@ -482,6 +485,15 @@ void show_segment_footer(const std::string& file_name, const bool show_column) {
     std::cout << json_footer << std::endl;
 
     if (show_column) {
+        ///// for passing code check.
+        doris::ThreadLocalHandle::create_thread_local_if_not_exits();
+        doris::ExecEnv::GetInstance()->init_mem_tracker();
+        doris::thread_context()->thread_mem_tracker_mgr->init();
+        auto mem_tracker = doris::MemTrackerLimiter::create_shared(
+                doris::MemTrackerLimiter::Type::GLOBAL, "META_TOOL");
+        doris::thread_context()->thread_mem_tracker_mgr->attach_limiter_tracker(mem_tracker);
+        doris::MemInfo::init();
+        /////
         for (uint32_t ordinal = 0; ordinal < footer.columns().size(); ++ordinal) {
             const auto& column_pb = footer.columns(ordinal);
             std::cout << "column: " << std::to_string(ordinal) << std::endl;
@@ -490,8 +502,6 @@ void show_segment_footer(const std::string& file_name, const bool show_column) {
     }
     return;
 }
-
-
 
 int main(int argc, char** argv) {
     std::string usage = get_usage(argv[0]);
