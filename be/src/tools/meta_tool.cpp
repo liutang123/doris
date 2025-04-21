@@ -486,6 +486,9 @@ void show_segment_footer(const std::string& file_name, const bool show_column) {
 
     if (show_column) {
         ///// for passing code check.
+        std::string conf = std::string(getenv("DORIS_HOME")) + "/conf/be.conf";
+        auto inited = doris::config::init(conf.c_str(), false);
+        std::cout << "Init config " << inited << std::endl;
         doris::ThreadLocalHandle::create_thread_local_if_not_exits();
         doris::ExecEnv::GetInstance()->init_mem_tracker();
         doris::thread_context()->thread_mem_tracker_mgr->init();
@@ -500,7 +503,6 @@ void show_segment_footer(const std::string& file_name, const bool show_column) {
             print_column(column_pb, file_reader);
         }
     }
-    return;
 }
 
 int main(int argc, char** argv) {
