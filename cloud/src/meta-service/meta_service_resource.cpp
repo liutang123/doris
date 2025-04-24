@@ -2101,10 +2101,14 @@ void handle_add_cluster(const std::string& instance_id, const ClusterInfo& clust
     msg = r.second;
 }
 
-void handle_drop_cluster(const std::string& instance_id, const ClusterInfo& cluster,
+void handle_drop_cluster(const std::string& instance_id, const AlterClusterRequest* request,
                          std::shared_ptr<ResourceManager> resource_mgr, std::string& msg,
                          MetaServiceCode& code) {
-    auto r = resource_mgr->drop_cluster(instance_id, cluster);
+    bool safe_drop_on_sql_cluster = request->has_safe_drop_on_sql_cluster()
+            ? request->safe_drop_on_sql_cluster() : true;
+    ClusterInfo cluster;
+    cluster.cluster.CopyFrom(request->cluster());
+    auto r = resource_mgr->drop_cluster(instance_id, cluster, safe_drop_on_sql_cluster);
     code = r.first;
     msg = r.second;
 }
@@ -2549,7 +2553,7 @@ void MetaServiceImpl::alter_cluster(google::protobuf::RpcController* controller,
         handle_add_cluster(instance_id, cluster, resource_mgr(), msg, code);
         break;
     case AlterClusterRequest::DROP_CLUSTER:
-        handle_drop_cluster(instance_id, cluster, resource_mgr(), msg, code);
+        handle_drop_cluster(instance_id, request, resource_mgr(), msg, code);
         break;
     case AlterClusterRequest::UPDATE_CLUSTER_MYSQL_USER_NAME:
         handle_update_cluster_mySQL_username(instance_id, cluster, resource_mgr(), msg, code);
