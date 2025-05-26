@@ -191,7 +191,7 @@ show_git_log_message() {
   SKIP_LINE_NUM=0
   git log -5 --skip=$SKIP_LINE_NUM --date=format:'[%Y-%m-%d %H:%M:%S]' --pretty=format:"%ad [%an] %s"
   echo "..."
-  SKIP_LINE_NUM=$(git log --oneline | egrep -c -w "^[^[:space:]]+\s+\[Tencent\]")
+  SKIP_LINE_NUM=$(git log --oneline | egrep -c "^[^[:space:]]+\s+\[Tencent\]")
   git log -10 --skip=$SKIP_LINE_NUM --date=format:'[%Y-%m-%d %H:%M:%S]' --pretty=format:"%ad [%an] %s"
 }
 
