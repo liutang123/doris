@@ -44,7 +44,7 @@ public class CommonUserProperties implements Writable, GsonPostProcessable {
 
     // The max connections allowed for a user on one FE
     @SerializedName(value = "mc", alternate = {"maxConn"})
-    private long maxConn = 100;
+    private long maxConn = 200;
     // The maximum total number of query instances that the user is allowed to send from this FE
     @SerializedName(value = "mqi", alternate = {"maxQueryInstances"})
     private long maxQueryInstances = -1;
