@@ -20,6 +20,7 @@ package org.apache.doris.mysql.privilege;
 import org.apache.doris.analysis.AlterRoleStmt;
 import org.apache.doris.analysis.AlterUserStmt;
 import org.apache.doris.analysis.AlterUserStmt.OpType;
+import org.apache.doris.analysis.Analyzer;
 import org.apache.doris.analysis.CreateRoleStmt;
 import org.apache.doris.analysis.CreateUserStmt;
 import org.apache.doris.analysis.DropRoleStmt;
@@ -36,6 +37,8 @@ import org.apache.doris.analysis.SetUserPropertyStmt;
 import org.apache.doris.analysis.TablePattern;
 import org.apache.doris.analysis.UserIdentity;
 import org.apache.doris.analysis.WorkloadGroupPattern;
+import org.apache.doris.catalog.AccessPrivilege;
+import org.apache.doris.catalog.AccessPrivilegeWithCols;
 import org.apache.doris.catalog.DatabaseIf;
 import org.apache.doris.catalog.Env;
 import org.apache.doris.catalog.InfoSchemaDb;
@@ -84,6 +87,7 @@ import org.apache.logging.log4j.Logger;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -96,8 +100,6 @@ import java.util.stream.Collectors;
 
 
 public class Auth implements Writable {
-    private static final Logger LOG = LogManager.getLogger(Auth.class);
-
     // root user's role is operator.
     // each Doris system has only one root user.
     public static final String ROOT_USER = "root";
@@ -105,7 +107,7 @@ public class Auth implements Writable {
     // unknown user does not have any privilege, this is just to be compatible with old version.
     public static final String UNKNOWN_USER = "unknown";
     public static final String DEFAULT_CATALOG = InternalCatalog.INTERNAL_CATALOG_NAME;
-
+    private static final Logger LOG = LogManager.getLogger(Auth.class);
     // There is no concurrency control logic inside roleManager,userManager,userRoleManage and rpropertyMgr,
     // and it is completely managed by Auth.
     // Therefore, their methods cannot be directly called outside, and should be called indirectly through Auth.
@@ -122,6 +124,10 @@ public class Auth implements Writable {
 
     private ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
+    public Auth() {
+        initUser();
+    }
+
     private void readLock() {
         lock.readLock().lock();
     }
@@ -136,14 +142,6 @@ public class Auth implements Writable {
 
     private void writeUnlock() {
         lock.writeLock().unlock();
-    }
-
-    public enum PrivLevel {
-        GLOBAL, CATALOG, DATABASE, TABLE, RESOURCE, WORKLOAD_GROUP, CLUSTER, STAGE, STORAGE_VAULT
-    }
-
-    public Auth() {
-        initUser();
     }
 
     public LdapInfo getLdapInfo() {
@@ -470,7 +468,7 @@ public class Auth implements Writable {
     public void createUser(CreateUserStmt stmt) throws DdlException {
         createUserInternal(stmt.getUserIdent(), stmt.getQualifiedRole(),
                 stmt.getPassword(), stmt.isIfNotExist(), stmt.getPasswordOptions(),
-                stmt.getComment(), stmt.getUserId(), false);
+                stmt.getComment(), stmt.getUserId(), false, stmt.getAnalyzer());
     }
 
     public void replayCreateUser(PrivInfo privInfo) {
@@ -485,6 +483,13 @@ public class Auth implements Writable {
     private void createUserInternal(UserIdentity userIdent, String roleName, byte[] password,
             boolean ignoreIfExists, PasswordOptions passwordOptions, String comment, String userId, boolean isReplay)
             throws DdlException {
+        createUserInternal(userIdent, roleName, password, ignoreIfExists, passwordOptions, comment, userId, isReplay,
+                null);
+    }
+
+    private void createUserInternal(UserIdentity userIdent, String roleName, byte[] password,
+            boolean ignoreIfExists, PasswordOptions passwordOptions, String comment, String userId, boolean isReplay,
+            Analyzer analyzer) throws DdlException {
         writeLock();
         try {
             // check if role exist
@@ -538,6 +543,30 @@ public class Auth implements Writable {
                 Env.getCurrentEnv().getEditLog().logCreateUser(privInfo);
             }
             LOG.info("finished to create user: {}, is replay: {}", userIdent, isReplay);
+
+            // Tencent
+            if (!isReplay) {
+                Pair<String, String> info = Env.getCurrentEnv().getStorageVaultMgr().getDefaultStorageVault();
+                if (info != null && analyzer != null && Config.auto_grant_default_vault_to_new_user) {
+                    String defaultVaultName = info.first;
+                    List<AccessPrivilegeWithCols> privs = new ArrayList<>();
+                    privs.add(new AccessPrivilegeWithCols(AccessPrivilege.USAGE_PRIV));
+                    GrantStmt grant = new GrantStmt(userIdent, null,
+                            new ResourcePattern(defaultVaultName, ResourceTypeEnum.STORAGE_VAULT),
+                            privs, ResourceTypeEnum.STORAGE_VAULT);
+                    try {
+                        grant.analyze(analyzer);
+                        Env.getCurrentEnv().getAuth().grant(grant);
+                        LOG.info(String.format("Grant default vault %s USAGE_PRIV to new user: %s", defaultVaultName,
+                                userIdent));
+                    } catch (UserException e) {
+                        LOG.warn("Grant default vault USAGE_PRIV to new user fail", e);
+                    } catch (Exception e) {
+                        LOG.warn("Catch unexpected exception when Grant default vault USAGE_PRIV to new user", e);
+                    }
+                }
+            }
+
         } finally {
             writeUnlock();
         }
@@ -793,7 +822,6 @@ public class Auth implements Writable {
             writeUnlock();
         }
     }
-
 
     // return true if user ident exist
     public boolean doesUserExist(UserIdentity userIdent) {
@@ -1303,8 +1331,8 @@ public class Auth implements Writable {
     }
 
     public void getAuthInfoCopied(List<User> users, List<Role> roles, List<UserProperty> userProperties,
-                                  Map<String, Set<UserIdentity>> roleToUsers,
-                                  Map<UserIdentity, PasswordPolicy> policyMap) {
+            Map<String, Set<UserIdentity>> roleToUsers,
+            Map<UserIdentity, PasswordPolicy> policyMap) {
         readLock();
         try {
             // get all users' auth info
@@ -1647,7 +1675,6 @@ public class Auth implements Writable {
         }
         return colPrivMap;
     }
-
 
     private ResourcePrivTable getUserResourcePrivTable(UserIdentity userIdentity) {
         ResourcePrivTable table = new ResourcePrivTable();
@@ -2175,7 +2202,6 @@ public class Auth implements Writable {
         }
         return cluster;
     }
-    // ====== END CLOUD ======
 
     // for mysql.user table
     public List<List<String>> getAllUserInfo() {
@@ -2268,5 +2294,10 @@ public class Auth implements Writable {
             readUnlock();
         }
         return userInfos;
+    }
+    // ====== END CLOUD ======
+
+    public enum PrivLevel {
+        GLOBAL, CATALOG, DATABASE, TABLE, RESOURCE, WORKLOAD_GROUP, CLUSTER, STAGE, STORAGE_VAULT
     }
 }

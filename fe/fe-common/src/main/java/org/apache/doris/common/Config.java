@@ -3433,4 +3433,8 @@ public class Config extends ConfigBase {
 
     @ConfField(mutable = true, description = {"是否允许禁用 tencent cosn FileSystem 的 Cache"})
     public static boolean allow_disable_cosn_fs_cache = false;
+
+    @ConfField(mutable = true, description = {"是否允许自动为新创建的用户授予默认vault使用权限，需要执行创建用户命令的用户具有"
+            + "默认vault的grant权限"})
+    public static boolean auto_grant_default_vault_to_new_user = true;
 }
