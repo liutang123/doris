@@ -145,6 +145,14 @@ public class CreateStorageVaultStmt extends DdlStmt implements NotFallbackInPars
             properties.remove(SHARD_NUM);
         }
         setAsDefault = Boolean.parseBoolean(properties.getOrDefault(SET_AS_DEFAULT, "false"));
+
+        if (setAsDefault) {
+            // Tencent
+            if (!Env.getCurrentEnv().getAccessManager().checkGlobalPriv(ConnectContext.get(), PrivPredicate.OPERATOR)) {
+                throw new AnalysisException("Only root can set default storage vault.");
+            }
+        }
+
         setStorageVaultType(StorageVault.StorageVaultType.fromString(type));
 
         if (vaultType == StorageVault.StorageVaultType.S3

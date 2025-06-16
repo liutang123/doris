@@ -44,6 +44,11 @@ public class UnsetDefaultStorageVaultStmt extends DdlStmt implements NotFallback
             }
         }
 
+        // Tencent
+        if (!Env.getCurrentEnv().getAccessManager().checkGlobalPriv(ConnectContext.get(), PrivPredicate.OPERATOR)) {
+            throw new AnalysisException("Only root can unset default storage vault.");
+        }
+
         // check auth
         if (!Env.getCurrentEnv().getAccessManager().checkGlobalPriv(ConnectContext.get(), PrivPredicate.ADMIN)) {
             ErrorReport.reportAnalysisException(ErrorCode.ERR_SPECIFIC_ACCESS_DENIED_ERROR, "ADMIN");
