@@ -231,6 +231,19 @@ public abstract class StorageVault {
                 // There is no `use_path_style` field in old version, think `use_path_style` false
                 builder.setUsePathStyle(false);
             }
+            if (builder.hasAk()) {
+                String ak = builder.getAk();
+                if (!Strings.isNullOrEmpty(ak)) {
+                    int newLen = (int) (ak.length() * 0.2);
+                    if (newLen > 5) {
+                        newLen = 5;
+                    }
+                    if (newLen < 1 && ak.length() != 1) {
+                        newLen = 1;
+                    }
+                    builder.setAk(ak.substring(0, newLen) + "***");
+                }
+            }
             row.add(printer.shortDebugString(builder));
         }
         row.add("false");
