@@ -18,6 +18,13 @@
 package org.apache.doris.nereids.util;
 
 import org.apache.doris.catalog.TableIf;
+import org.apache.doris.nereids.CascadesContext;
+import org.apache.doris.nereids.StatementContext;
+import org.apache.doris.nereids.jobs.executor.Rewriter;
+import org.apache.doris.nereids.jobs.rewrite.RewriteJob;
+import org.apache.doris.nereids.parser.NereidsParser;
+import org.apache.doris.nereids.properties.PhysicalProperties;
+import org.apache.doris.nereids.rules.analysis.CollectOneLevelRelation;
 import org.apache.doris.nereids.trees.expressions.ComparisonPredicate;
 import org.apache.doris.nereids.trees.expressions.Expression;
 import org.apache.doris.nereids.trees.expressions.NamedExpression;
@@ -35,6 +42,8 @@ import org.apache.doris.nereids.trees.plans.logical.LogicalLimit;
 import org.apache.doris.nereids.trees.plans.logical.LogicalPlan;
 import org.apache.doris.nereids.trees.plans.logical.LogicalProject;
 import org.apache.doris.nereids.trees.plans.visitor.DefaultPlanVisitor;
+import org.apache.doris.qe.ConnectContext;
+import org.apache.doris.qe.OriginStatement;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableList.Builder;
@@ -308,7 +317,7 @@ public class PlanUtils {
 
         @Override
         public Void visitLogicalCTEAnchor(LogicalCTEAnchor<? extends Plan, ? extends Plan> cteAnchor,
-                OutermostPlanFinderContext ctx) {
+                                          OutermostPlanFinderContext ctx) {
             if (ctx.found) {
                 return null;
             }
@@ -317,8 +326,21 @@ public class PlanUtils {
 
         @Override
         public Void visitLogicalCTEProducer(LogicalCTEProducer<? extends Plan> cteProducer,
-                OutermostPlanFinderContext ctx) {
+                                            OutermostPlanFinderContext ctx) {
             return null;
         }
+    }
+
+    /**
+     * table collect
+     */
+    public static Map<List<String>, TableIf> tableCollect(String sql, ConnectContext connectContext) {
+        ImmutableList<RewriteJob> rewriteJobs = ImmutableList.of(Rewriter.topDown(new CollectOneLevelRelation()));
+        StatementContext statementContext = new StatementContext(connectContext, new OriginStatement(sql, 0));
+        connectContext.setStatementContext(statementContext);
+        CascadesContext cascadesContext = CascadesContext.initContext(
+                statementContext, new NereidsParser().parseSingle(sql), PhysicalProperties.GATHER);
+        Rewriter.getCteChildrenRewriter(cascadesContext, rewriteJobs).execute();
+        return statementContext.getTables();
     }
 }
