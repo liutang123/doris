@@ -2281,7 +2281,7 @@ public class OlapTable extends Table implements MTMVRelatedTableIf, GsonPostProc
     }
 
     public void checkChangeReplicaAllocation() throws DdlException {
-        if (isColocateTable()) {
+        if (Config.force_olap_table_replication_allocation.isEmpty() && isColocateTable()) {
             throw new DdlException("Cannot change replication allocation of colocate table.");
         }
     }
