@@ -7,7 +7,8 @@
 # define region: you can change here
 #
 doris_dir_name="doris"
-coscli_cmd="/data/coscli-linux"
+# default config file is $HOME/.cos.yaml
+coscli_cmd="/data/coscli-linux" 
 cos_backup_subdir="cdw_doris_backup"
 log_file="log_package_and_deploy_to_cos.log"
 bucket="derenli-1301087413"
@@ -19,6 +20,10 @@ upgrade_script_file="upgrade_doris_from_cos.sh"
 cos_bucket="cos://${bucket}" 
 download_cos_url="https://${bucket}.cos.ap-${region}.myqcloud.com/${doris_release_package_dir}"
 download_debug_doris_be_cos_url="https://${bucket}.cos.ap-${region}.myqcloud.com/${doris_be_debug_package_dir}"
+
+# default bucket
+coscli_cmd_conf="$HOME/.release_cos.yaml"
+cos_release_bucket="cos://cdwch-cos-apps-cq-1305504398"
 #
 ################################################################################################################################
 
@@ -35,7 +40,60 @@ log() {
   echo "$@"
 }
 
+usage(){
+  echo "USAGE: $0 region"
+  echo " e.g.: \"$0 bj"
+  echo " e.g.: \"$0 gz"
+  echo " e.g.: \"$0 sh"
+  echo " e.g.: \"$0 nj"
+  echo " e.g.: \"$0 hk"
+  echo " e.g.: \"$0 cq"
+  echo " e.g.: \"$0 sg"
+  echo " e.g.: \"$0 cd"
+}
+
 init() {
+  # You can specify the target release region for the upload through the parameter, default for chongqing
+  if [ $# -ne 0 ] && [ $# -ne 1 ] ; then
+    usage $@
+    exit 1;
+  fi
+
+  cos_release_bucket="cos://cdwch-cos-apps-cq-1305504398"
+  if [ $# -eq 1 ] ; then
+    case $1 in
+      bj|beijing)
+      region="bj"
+      ;;
+      gz|guangzhou)
+      region="gz"
+      ;;
+      sh|shanghai)
+      region="sh"
+      ;;
+      hk|hongkong)
+      region="hk"
+      ;;
+      nj|nanjing)
+      region="nj"
+      ;;
+      cq|chongqing)
+      region="cq"
+      ;;
+      sg|singapore|xinjiapo)
+      region="sg"
+      ;;
+      cd|chengdu)
+      region="cd"
+      ;;
+      *)
+      usage $@
+      exit 1
+      ;;
+    esac
+    cos_release_bucket="cos://cdwch-cos-apps-${region}-1305504398"
+  fi
+
   local doris_dir="${workDir}/${doris_dir_name}"
   if [ ! -d "${doris_dir}" ]; then
     log "[ERROR] ${doris_dir} is not exist, please build and deploy first."
@@ -70,6 +128,44 @@ init() {
   log "[INFO] sha512 file for doris tar package is ${doris_tar_sha}"
   log "[INFO] upgrade script file for doris is ${upgrade_script_file}"
   log "[INFO] cos bucket is ${cos_bucket}"
+}
+
+get_release_cos_bucket_subdir() {
+  local version_string=$(echo $doris_tar | egrep -o "[0-9]\.[0-9]+" | head -1)
+  # decide the dir according to new version
+  local cos_subdir=""
+  case ${version_string} in
+    0.15)
+        cos_subdir="0.15.0"
+        ;;
+    1.0)
+        cos_subdir="1.0.1"
+        ;;
+    1.1)
+        cos_subdir="1.1.0"
+        ;;
+    1.2)
+        cos_subdir="1.2.0"
+        ;;
+    2.0)
+        cos_subdir="2.0"
+        ;;
+    2.1)
+        cos_subdir="2.1"
+        ;;
+    3.0)
+        cos_subdir="3.0"
+        ;;
+    3.1)
+        cos_subdir="3.1"
+        ;;
+    *)
+        error_on_rollback "Cannot figure out the cos subdir for unknown ${version_string}!"
+        exit 1
+        ;;
+  esac
+  cos_subdir="doris/${cos_subdir}"
+  echo ${cos_subdir}
 }
 
 package_and_deploy_to_cos() {
@@ -114,6 +210,16 @@ package_and_deploy_to_cos() {
     if [ $? -ne 0 ]; then
       log "[ERROR] upload ${doris_tar_path} to ${cos_bucket_url}/${doris_tar} failed!"
       exit 1
+    fi
+
+    # upload to release cos bucket
+    if [ -e ${coscli_cmd_conf} ]; then
+      local doris_dir=$(get_release_cos_bucket_subdir)
+      ${coscli_cmd} -c ${coscli_cmd_conf} cp ${doris_tar_path} ${cos_release_bucket}/${doris_dir}/${doris_tar}
+      if [ $? -ne 0 ]; then
+        log "[ERROR] upload ${doris_tar_path} to ${cos_release_bucket}/${doris_dir}/${doris_tar} failed!"
+        exit 1
+      fi
     fi
 
     # upload upgrade script 
