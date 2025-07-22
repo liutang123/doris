@@ -19,7 +19,6 @@ package org.apache.doris.resource.workloadgroup;
 
 import org.apache.doris.catalog.Env;
 import org.apache.doris.common.AnalysisException;
-import org.apache.doris.common.Config;
 import org.apache.doris.common.DdlException;
 import org.apache.doris.common.FeConstants;
 import org.apache.doris.common.FeNameFormat;
@@ -136,7 +135,7 @@ public class WorkloadGroup implements Writable, GsonPostProcessable {
     private int maxQueueSize = 0;
     private int queueTimeout = 0;
 
-    private int cpuHardLimit = -1;
+    private int cpuHardLimit = 0;
 
     WorkloadGroup(long id, String name, Map<String, String> properties) {
         this(id, name, properties, 0);
@@ -594,14 +593,6 @@ public class WorkloadGroup implements Writable, GsonPostProcessable {
         String memOvercommitStr = properties.get(ENABLE_MEMORY_OVERCOMMIT);
         if (memOvercommitStr != null) {
             tWorkloadGroupInfo.setEnableMemoryOvercommit(Boolean.valueOf(memOvercommitStr));
-        }
-        // enable_cpu_hard_limit = true, using cpu hard limit
-        // enable_cpu_hard_limit = false, using cpu soft limit
-        tWorkloadGroupInfo.setEnableCpuHardLimit(Config.enable_cpu_hard_limit);
-
-        if (Config.enable_cpu_hard_limit && !(cpuHardLimit >= 1 && cpuHardLimit <= 100) && -1 != cpuHardLimit) {
-            LOG.warn("enable_cpu_hard_limit=true but cpuHardLimit value not illegal,"
-                    + "id=" + id + ",name=" + name);
         }
 
         String scanThreadNumStr = properties.get(SCAN_THREAD_NUM);
