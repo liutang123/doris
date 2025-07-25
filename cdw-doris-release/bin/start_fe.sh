@@ -217,9 +217,19 @@ export CLASSPATH="${DORIS_HOME}/conf:${CLASSPATH}:${DORIS_HOME}/lib/fe"
 pidfile="${PID_DIR}/fe.pid"
 
 if [[ -f "${pidfile}" ]] && [[ "${OPT_VERSION}" == "" ]]; then
-    if kill -0 "$(cat "${pidfile}")" >/dev/null 2>&1; then
-        echo "Frontend running as process $(cat "${pidfile}"). Stop it first."
-        exit 0
+    origin_pid=$(cat $pidfile)
+    if kill -0 "$origin_pid" >/dev/null 2>&1; then
+        echo "find proc $origin_pid"
+        command=$(ps -p "$origin_pid" -o command= 2>/dev/null)
+        target_pattern="java.* org.apache.doris.DorisFE"
+        if [ -z "$command" ]; then
+            log "Can not found command for pid $origin_pid, maybe it is a LWP id"
+        elif [[ "$command" =~ $target_pattern ]]; then
+            echo "Frontend running as process $origin_pid.  Stop it first."
+            exit 1
+        else
+            echo "find proc but its command is not DorisFE"
+        fi
     fi
 fi
 

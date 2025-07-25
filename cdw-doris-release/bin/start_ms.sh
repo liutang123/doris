@@ -92,13 +92,24 @@ elif [[ ${RUN_METASERVICE} -eq 1 ]] && [[ ${RUN_RECYCLYER} -eq 1 ]]; then
     role='MetaService and Recycler'
 fi
 
-pidfile="${PID_DIR}/doris_cloud.pid"
+process=doris_cloud
+pidfile="${DORIS_HOME}/bin/${process}.pid"
 if [[ ${RUN_VERSION} -eq 0 ]] && [[ -f "${pidfile}" ]]; then
     pid=$(cat "${pidfile}")
     if [[ "${pid}" != "" ]]; then
         if kill -0 "$(cat "${pidfile}")" >/dev/null 2>&1; then
-            echo "pid file existed, ${role} have already started, pid=${pid}"
-            exit 1
+            echo "find proc ${pid}"
+            command=$(ps -p "$pid" -o command= 2>/dev/null)
+            if [ -z "$command" ]; then
+                echo "Can not found command for pid $pid, maybe it is a LWP id"
+                rm "${pidfile}"
+            elif [[ "$command" =~ $process ]]; then
+                echo "pid file existed, ${role} have already started, pid=${pid}"
+                exit 1
+            else
+                echo "find proc but its command is not $process"
+                rm "${pidfile}"
+            fi
         fi
     fi
     echo "pid file existed but process not alive, remove it, pid=${pid}"

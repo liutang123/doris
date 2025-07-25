@@ -84,8 +84,18 @@ if [[ ${RUN_VERSION} -eq 0 ]] && [[ -f "${DORIS_HOME}/bin/${process}.pid" ]]; th
     pid=$(cat "${DORIS_HOME}/bin/${process}.pid")
     if [[ "${pid}" != "" ]]; then
         if kill -0 "$(cat "${DORIS_HOME}/bin/${process}.pid")" >/dev/null 2>&1; then
-            echo "pid file existed, ${role} have already started, pid=${pid}"
-            exit 1
+            echo "find proc ${pid}"
+            command=$(ps -p "$pid" -o command= 2>/dev/null)
+            if [ -z "$command" ]; then
+                echo "Can not found command for pid $pid, maybe it is a LWP id"
+                rm "${DORIS_HOME}/bin/${process}.pid"
+            elif [[ "$command" =~ $process ]]; then
+                echo "pid file existed, ${role} have already started, pid=${pid}"
+                exit 1
+            else
+                echo "find proc but its command is not $process"
+                rm "${DORIS_HOME}/bin/${process}.pid"
+            fi
         fi
     fi
     echo "pid file existed but process not alive, remove it, pid=${pid}"

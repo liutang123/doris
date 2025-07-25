@@ -284,10 +284,23 @@ fi
 pidfile="${PID_DIR}/be.pid"
 
 if [[ -f "${pidfile}" ]]; then
-    if kill -0 "$(cat "${pidfile}")" >/dev/null 2>&1; then
-        echo "Backend is already running as process $(cat "${pidfile}"), stop it first"
-        exit 0
+    origin_pid=$(cat $pidfile)
+    if kill -0 "$origin_pid" >/dev/null 2>&1; then
+        log "find proc $origin_pid"
+        command=$(ps -p "$origin_pid" -o command= 2>/dev/null)
+        target_pattern="doris_be"
+        if [ -z "$command" ]; then
+            log "Can not found command for pid $origin_pid, maybe it is a LWP id"
+            rm "${pidfile}"
+        elif [[ "$command" =~ $target_pattern ]]; then
+            log "Backend running as process $origin_pid.  Stop it first."
+            exit 1
+        else
+            log "find proc but its command is not doris_be"
+            rm "${pidfile}"
+        fi
     else
+        log "pid file existed but process not alive, remove it, pid=${origin_pid}"
         rm "${pidfile}"
     fi
 fi
