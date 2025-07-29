@@ -399,7 +399,11 @@ public class StmtExecutor {
             if (coord != null) {
                 taskState = coord.queryStatus.getErrorCode().name();
             } else {
-                taskState = context.getState().toString();
+                if (isForwardToMaster()) {
+                    taskState = getProxyStatus();
+                } else {
+                    taskState = context.getState().toString();
+                }
             }
         }
         builder.taskState(taskState);
