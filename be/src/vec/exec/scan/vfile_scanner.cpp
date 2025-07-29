@@ -61,6 +61,8 @@
 #include "vec/exec/format/table/max_compute_jni_reader.h"
 #include "vec/exec/format/table/paimon_jni_reader.h"
 #include "vec/exec/format/table/paimon_reader.h"
+#include "vec/exec/format/table/setats_jni_reader.h"
+#include "vec/exec/format/table/setats_reader.h"
 #include "vec/exec/format/table/transactional_hive_reader.h"
 #include "vec/exec/format/table/trino_connector_jni_reader.h"
 #include "vec/exec/format/wal/wal_reader.h"
@@ -779,6 +781,13 @@ Status VFileScanner::_get_next_reader() {
                                                                      _profile, range);
                 init_status = ((TrinoConnectorJniReader*)(_cur_reader.get()))
                                       ->init_reader(_colname_to_value_range);
+            } else if (range.__isset.table_format_params &&
+                       range.table_format_params.table_format_type == "setats") {
+                _cur_reader = SetatsJniReader::create_unique(*_params,
+                                                             range.table_format_params.setats_params,
+                                                             _file_slot_descs, _state, _profile);
+                init_status = ((SetatsJniReader*)_cur_reader.get())
+                                      ->init_reader(_colname_to_value_range);
             }
             break;
         }
@@ -824,6 +833,19 @@ Status VFileScanner::_get_next_reader() {
                                                            *_params);
                 RETURN_IF_ERROR(paimon_reader->init_row_filters(range, _io_ctx.get()));
                 _cur_reader = std::move(paimon_reader);
+            } else if (range.__isset.table_format_params &&
+                       range.table_format_params.table_format_type == "setats") {
+                std::vector<std::string> place_holder;
+                init_status = parquet_reader->init_reader(
+                        _file_col_names, place_holder, _colname_to_value_range,
+                        _push_down_conjuncts, _real_tuple_desc, _default_val_row_desc.get(),
+                        _col_name_to_slot_id, &_not_single_slot_filter_conjuncts,
+                        &_slot_id_to_filter_conjuncts);
+                std::unique_ptr<SetatsParquetReader> setats_reader =
+                        SetatsParquetReader::create_unique(std::move(parquet_reader), _profile,
+                                                           _state);
+                RETURN_IF_ERROR(setats_reader->init_row_filters(range, _io_ctx.get()));
+                _cur_reader = std::move(setats_reader);
             } else {
                 bool hive_parquet_use_column_names = true;
 

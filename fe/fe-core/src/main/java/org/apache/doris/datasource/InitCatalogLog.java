@@ -41,6 +41,7 @@ public class InitCatalogLog implements Writable {
         MAX_COMPUTE,
         HUDI,
         LAKESOUL,
+        SETATS,
         TEST,
         TRINO_CONNECTOR,
         UNKNOWN;

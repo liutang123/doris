@@ -66,6 +66,8 @@ import org.apache.doris.datasource.maxcompute.source.MaxComputeScanNode;
 import org.apache.doris.datasource.odbc.source.OdbcScanNode;
 import org.apache.doris.datasource.paimon.PaimonExternalTable;
 import org.apache.doris.datasource.paimon.source.PaimonScanNode;
+import org.apache.doris.datasource.setats.SetatsExternalTable;
+import org.apache.doris.datasource.setats.source.SetatsScanNode;
 import org.apache.doris.datasource.trinoconnector.TrinoConnectorExternalTable;
 import org.apache.doris.datasource.trinoconnector.source.TrinoConnectorScanNode;
 import org.apache.doris.nereids.exceptions.AnalysisException;
@@ -587,6 +589,8 @@ public class PhysicalPlanTranslator extends DefaultPlanVisitor<PlanFragment, Pla
                     fileScan.getSelectedPartitions(), false, sv);
         } else if (table instanceof LakeSoulExternalTable) {
             scanNode = new LakeSoulScanNode(context.nextPlanNodeId(), tupleDescriptor, false, sv);
+        } else if (table instanceof SetatsExternalTable) {
+            scanNode = new SetatsScanNode(context.nextPlanNodeId(), tupleDescriptor, false, sv);
         } else {
             throw new RuntimeException("do not support table type " + table.getType());
         }

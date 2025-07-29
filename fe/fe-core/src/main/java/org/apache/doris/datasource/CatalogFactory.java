@@ -35,6 +35,7 @@ import org.apache.doris.datasource.jdbc.JdbcExternalCatalog;
 import org.apache.doris.datasource.lakesoul.LakeSoulExternalCatalog;
 import org.apache.doris.datasource.maxcompute.MaxComputeExternalCatalog;
 import org.apache.doris.datasource.paimon.PaimonExternalCatalogFactory;
+import org.apache.doris.datasource.setats.SetatsExternalCatalogFactory;
 import org.apache.doris.datasource.test.TestExternalCatalog;
 import org.apache.doris.datasource.trinoconnector.TrinoConnectorExternalCatalogFactory;
 
@@ -134,6 +135,9 @@ public class CatalogFactory {
                 break;
             case "trino-connector":
                 catalog = TrinoConnectorExternalCatalogFactory.createCatalog(catalogId, name, resource, props, comment);
+                break;
+            case "setats":
+                catalog = SetatsExternalCatalogFactory.createCatalog(catalogId, name, resource, props, comment);
                 break;
             case "max_compute":
                 catalog = new MaxComputeExternalCatalog(catalogId, name, resource, props, comment);

@@ -36,6 +36,8 @@ import org.apache.doris.datasource.maxcompute.MaxComputeMetadataCacheMgr;
 import org.apache.doris.datasource.metacache.MetaCache;
 import org.apache.doris.datasource.paimon.PaimonMetadataCache;
 import org.apache.doris.datasource.paimon.PaimonMetadataCacheMgr;
+import org.apache.doris.datasource.setats.SetatsMetadataCache;
+import org.apache.doris.datasource.setats.SetatsMetadataCacheMgr;
 import org.apache.doris.fs.FileSystemCache;
 import org.apache.doris.nereids.exceptions.NotSupportedException;
 
@@ -98,6 +100,7 @@ public class ExternalMetaCacheMgr {
     private final IcebergMetadataCacheMgr icebergMetadataCacheMgr;
     private final MaxComputeMetadataCacheMgr maxComputeMetadataCacheMgr;
     private final PaimonMetadataCacheMgr paimonMetadataCacheMgr;
+    private final SetatsMetadataCacheMgr setatsMetadataCacheMgr;
 
     public ExternalMetaCacheMgr(boolean isCheckpointCatalog) {
         rowCountRefreshExecutor = newThreadPool(isCheckpointCatalog,
@@ -129,6 +132,7 @@ public class ExternalMetaCacheMgr {
         icebergMetadataCacheMgr = new IcebergMetadataCacheMgr(commonRefreshExecutor);
         maxComputeMetadataCacheMgr = new MaxComputeMetadataCacheMgr();
         paimonMetadataCacheMgr = new PaimonMetadataCacheMgr(commonRefreshExecutor);
+        setatsMetadataCacheMgr = new SetatsMetadataCacheMgr(commonRefreshExecutor);
     }
 
     private ExecutorService newThreadPool(boolean isCheckpointCatalog, int numThread, int queueSize,
@@ -209,6 +213,10 @@ public class ExternalMetaCacheMgr {
         return maxComputeMetadataCacheMgr.getMaxComputeMetadataCache(catalogId);
     }
 
+    public SetatsMetadataCache getSetatsMetadataCache() {
+        return setatsMetadataCacheMgr.getSetatsMetadataCache();
+    }
+
     public FileSystemCache getFsCache() {
         return fsCache;
     }
@@ -248,6 +256,7 @@ public class ExternalMetaCacheMgr {
         icebergMetadataCacheMgr.invalidateTableCache(catalogId, dbName, tblName);
         maxComputeMetadataCacheMgr.invalidateTableCache(catalogId, dbName, tblName);
         paimonMetadataCacheMgr.invalidateTableCache(catalogId, dbName, tblName);
+        setatsMetadataCacheMgr.invalidateTableCache(catalogId, dbName, tblName);
         if (LOG.isDebugEnabled()) {
             LOG.debug("invalid table cache for {}.{} in catalog {}", dbName, tblName, catalogId);
         }
@@ -269,6 +278,7 @@ public class ExternalMetaCacheMgr {
         icebergMetadataCacheMgr.invalidateDbCache(catalogId, dbName);
         maxComputeMetadataCacheMgr.invalidateDbCache(catalogId, dbName);
         paimonMetadataCacheMgr.invalidateDbCache(catalogId, dbName);
+        setatsMetadataCacheMgr.invalidateDbCache(catalogId, dbName);
         if (LOG.isDebugEnabled()) {
             LOG.debug("invalid db cache for {} in catalog {}", dbName, catalogId);
         }
@@ -286,6 +296,7 @@ public class ExternalMetaCacheMgr {
         icebergMetadataCacheMgr.invalidateCatalogCache(catalogId);
         maxComputeMetadataCacheMgr.invalidateCatalogCache(catalogId);
         paimonMetadataCacheMgr.invalidateCatalogCache(catalogId);
+        setatsMetadataCacheMgr.invalidateCatalogCache(catalogId);
         if (LOG.isDebugEnabled()) {
             LOG.debug("invalid catalog cache for {}", catalogId);
         }

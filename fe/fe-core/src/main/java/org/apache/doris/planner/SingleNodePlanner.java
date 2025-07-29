@@ -73,6 +73,7 @@ import org.apache.doris.datasource.lakesoul.source.LakeSoulScanNode;
 import org.apache.doris.datasource.maxcompute.source.MaxComputeScanNode;
 import org.apache.doris.datasource.odbc.source.OdbcScanNode;
 import org.apache.doris.datasource.paimon.source.PaimonScanNode;
+import org.apache.doris.datasource.setats.source.SetatsScanNode;
 import org.apache.doris.datasource.trinoconnector.source.TrinoConnectorScanNode;
 import org.apache.doris.qe.ConnectContext;
 import org.apache.doris.qe.SessionVariable;
@@ -1990,6 +1991,9 @@ public class SingleNodePlanner {
                 break;
             case TRINO_CONNECTOR_EXTERNAL_TABLE:
                 scanNode = new TrinoConnectorScanNode(ctx.getNextNodeId(), tblRef.getDesc(), true, sv);
+                break;
+            case SETATS_EXTERNAL_TABLE:
+                scanNode = new SetatsScanNode(ctx.getNextNodeId(), tblRef.getDesc(), true, sv);
                 break;
             case MAX_COMPUTE_EXTERNAL_TABLE:
                 scanNode = new MaxComputeScanNode(ctx.getNextNodeId(), tblRef.getDesc(), true, sv);

@@ -53,6 +53,7 @@ public class DeriveFactory {
             case ICEBERG_SCAN_NODE:
             case LAKESOUL_SCAN_NODE:
             case PAIMON_SCAN_NODE:
+            case SETATS_SCAN_NODE:
             case INTERSECT_NODE:
             case SCHEMA_SCAN_NODE:
             case STREAM_LOAD_SCAN_NODE:

@@ -694,6 +694,12 @@ under the License.
         </dependency>
 
         <dependency>
+            <groupId>com.tencent.oceanus</groupId>
+            <artifactId>setats-uber-shaded</artifactId>
+            <version>${setats.version}</version>
+        </dependency>
+
+        <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>glue</artifactId>
             <version>${awssdk.version}</version>

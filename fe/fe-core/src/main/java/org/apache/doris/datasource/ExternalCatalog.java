@@ -56,6 +56,7 @@ import org.apache.doris.datasource.metacache.MetaCache;
 import org.apache.doris.datasource.operations.ExternalMetadataOps;
 import org.apache.doris.datasource.paimon.PaimonExternalDatabase;
 import org.apache.doris.datasource.property.PropertyConverter;
+import org.apache.doris.datasource.setats.SetatsExternalDatabase;
 import org.apache.doris.datasource.test.TestExternalCatalog;
 import org.apache.doris.datasource.test.TestExternalDatabase;
 import org.apache.doris.datasource.trinoconnector.TrinoConnectorExternalDatabase;
@@ -951,6 +952,8 @@ public abstract class ExternalCatalog
                 return new PaimonExternalDatabase(this, dbId, localDbName, remoteDbName);
             case TRINO_CONNECTOR:
                 return new TrinoConnectorExternalDatabase(this, dbId, localDbName, remoteDbName);
+            case SETATS:
+                return new SetatsExternalDatabase(this, dbId, localDbName, remoteDbName);
             default:
                 break;
         }

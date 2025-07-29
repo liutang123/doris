@@ -205,6 +205,7 @@ fi
 # instead of jars in hadoop libs, such as avro
 preload_jars=("preload-extensions")
 preload_jars+=("java-udf")
+preload_jars+=("setats-scanner")
 
 DORIS_PRELOAD_JAR=
 for preload_jar_dir in "${preload_jars[@]}"; do

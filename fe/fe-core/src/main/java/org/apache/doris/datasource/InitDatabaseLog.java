@@ -41,6 +41,7 @@ public class InitDatabaseLog implements Writable {
         HUDI,
         PAIMON,
         LAKESOUL,
+        SETATS,
         TEST,
         INFO_SCHEMA_DB,
         TRINO_CONNECTOR,

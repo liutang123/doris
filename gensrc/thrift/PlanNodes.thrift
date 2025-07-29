@@ -354,6 +354,14 @@ struct TTrinoConnectorFileDesc {
     11: optional string trino_connector_trascation_handle
 }
 
+struct TSetatsFileDesc {
+    1: optional string serialized_table
+    2: optional string setats_split
+    3: optional string setats_column_names
+    4: optional string setats_predicate
+    5: optional binary deletion_vector
+}
+
 struct TMaxComputeFileDesc {
     1: optional string partition_spec // deprecated 
     2: optional string session_id 
@@ -405,6 +413,7 @@ struct TTableFormatFileDesc {
     6: optional TMaxComputeFileDesc max_compute_params
     7: optional TTrinoConnectorFileDesc trino_connector_params
     8: optional TLakeSoulFileDesc lakesoul_params
+    9: optional TSetatsFileDesc setats_params
 }
 
 enum TTextSerdeType {
@@ -1246,9 +1255,9 @@ enum TMinMaxRuntimeFilterType {
 
 struct TTopnFilterDesc {
   // topn node id
-  1: required i32 source_node_id 
+  1: required i32 source_node_id
   2: required bool is_asc
-  3: required bool null_first 
+  3: required bool null_first
   // scan node id -> expr on scan node
   4: required map<Types.TPlanNodeId, Exprs.TExpr> target_node_id_to_target_expr
 }
@@ -1306,7 +1315,7 @@ struct TRuntimeFilterDesc {
   15: optional bool null_aware;
 
   16: optional bool sync_filter_size; // Deprecated
-  
+
   17: optional bool build_bf_exactly;
 }
 

@@ -33,6 +33,7 @@ public enum StatisticalType {
     HIVE_SCAN_NODE,
     ICEBERG_SCAN_NODE,
     PAIMON_SCAN_NODE,
+    SETATS_SCAN_NODE,
     HUDI_SCAN_NODE,
     TVF_SCAN_NODE,
     INTERSECT_NODE,

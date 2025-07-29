@@ -166,6 +166,8 @@ import org.apache.doris.datasource.paimon.PaimonExternalDatabase;
 import org.apache.doris.datasource.paimon.PaimonExternalTable;
 import org.apache.doris.datasource.paimon.PaimonFileExternalCatalog;
 import org.apache.doris.datasource.paimon.PaimonHMSExternalCatalog;
+import org.apache.doris.datasource.setats.SetatsHMSExternalCatalog;
+import org.apache.doris.datasource.setats.SetatsHadoopExternalCatalog;
 import org.apache.doris.datasource.test.TestExternalCatalog;
 import org.apache.doris.datasource.test.TestExternalDatabase;
 import org.apache.doris.datasource.test.TestExternalTable;
@@ -425,6 +427,8 @@ public class GsonUtils {
                 .registerSubtype(MaxComputeExternalCatalog.class, MaxComputeExternalCatalog.class.getSimpleName())
                 .registerSubtype(
                             TrinoConnectorExternalCatalog.class, TrinoConnectorExternalCatalog.class.getSimpleName())
+                .registerSubtype(SetatsHadoopExternalCatalog.class, SetatsHadoopExternalCatalog.class.getSimpleName())
+                .registerSubtype(SetatsHMSExternalCatalog.class, SetatsHMSExternalCatalog.class.getSimpleName())
                 .registerSubtype(LakeSoulExternalCatalog.class, LakeSoulExternalCatalog.class.getSimpleName())
                 .registerSubtype(TestExternalCatalog.class, TestExternalCatalog.class.getSimpleName())
                 .registerSubtype(PaimonDLFExternalCatalog.class, PaimonDLFExternalCatalog.class.getSimpleName());

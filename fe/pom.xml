@@ -366,6 +366,7 @@ under the License.
         <aircompressor.version>0.27</aircompressor.version>
         <!-- paimon -->
         <paimon.version>1.0.1</paimon.version>
+        <setats.version>0.5-SNAPSHOT</setats.version>
         <disruptor.version>3.4.4</disruptor.version>
         <!-- arrow flight sql -->
         <arrow.vector.classifier>shade-format-flatbuffers</arrow.vector.classifier>
