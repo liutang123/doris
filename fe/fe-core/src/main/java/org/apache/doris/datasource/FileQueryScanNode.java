@@ -72,7 +72,6 @@ import lombok.Getter;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -518,17 +517,23 @@ public abstract class FileQueryScanNode extends FileScanNode {
         TFileRangeDesc rangeDesc = new TFileRangeDesc();
         rangeDesc.setStartOffset(fileSplit.getStart());
         rangeDesc.setSize(fileSplit.getLength());
-        // fileSize only be used when format is orc or parquet and TFileType is broker
-        // When TFileType is other type, it is not necessary
-        rangeDesc.setFileSize(fileSplit.getFileLength());
+        rangeDesc.setFileType(fileSplit.getLocationType());
+        if (rangeDesc.getFileType() == TFileType.FILE_BROKER) {
+            // fileSize only be used when format is orc or parquet and TFileType is broker
+            // When TFileType is other type, it is not necessary
+            rangeDesc.setFileSize(fileSplit.getFileLength());
+        } else {
+            rangeDesc.unsetFileSize();
+        }
         rangeDesc.setColumnsFromPath(columnsFromPath);
         rangeDesc.setColumnsFromPathKeys(columnsFromPathKeys);
 
-        rangeDesc.setFileType(fileSplit.getLocationType());
-        rangeDesc.setPath(fileSplit.getPath().toStorageLocation().toString());
+
+        // rangeDesc.setPath(fileSplit.getPath().toStorageLocation().toString());
+        rangeDesc.setPath(fileSplit.getPath().get());
         if (fileSplit.getLocationType() == TFileType.FILE_HDFS) {
-            URI fileUri = fileSplit.getPath().getPath().toUri();
-            rangeDesc.setFsName(fileUri.getScheme() + "://" + fileUri.getAuthority());
+            // TODO llj this logic use StringBuilder, it is not efficient
+            rangeDesc.setFsName(fileSplit.getPath().getSchemeStr() + "://" + fileSplit.getPath().getAuthority());
         }
         rangeDesc.setModificationTime(fileSplit.getModificationTime());
         return rangeDesc;

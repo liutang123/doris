@@ -3437,4 +3437,7 @@ public class Config extends ConfigBase {
     @ConfField(mutable = true, description = {"是否允许自动为新创建的用户授予默认vault使用权限，需要执行创建用户命令的用户具有"
             + "默认vault的grant权限"})
     public static boolean auto_grant_default_vault_to_new_user = true;
+
+    @ConfField(mutable = true, description = {"是否禁用外部扫描时对路径进行标准化，默认false"})
+    public static boolean tc_disable_normalize_hdfs_path_in_external_scan = false;
 }

@@ -18,6 +18,7 @@
 package org.apache.doris.common.util;
 
 import org.apache.doris.catalog.HdfsResource;
+import org.apache.doris.common.Config;
 import org.apache.doris.common.FeConstants;
 import org.apache.doris.common.Pair;
 import org.apache.doris.datasource.ExternalCatalog;
@@ -56,6 +57,7 @@ public class LocationPath {
     private static final String STANDARD_HDFS_PREFIX = "hdfs://";
     private static final String EMPTY_HDFS_PREFIX = "hdfs:///";
     private static final String BROKEN_HDFS_PREFIX = "hdfs:/";
+    private final String schemeStr;
     private final Scheme scheme;
     private final String location;
     private final boolean isBindBroker;
@@ -101,8 +103,8 @@ public class LocationPath {
             String defaultFS = props.getOrDefault(HdfsResource.HADOOP_FS_NAME, "");
             tmpLocation = defaultFS + originLocation;
         }
-        String scheme = parseScheme(tmpLocation).toLowerCase();
-        switch (scheme) {
+        schemeStr = parseScheme(tmpLocation).toLowerCase();
+        switch (schemeStr) {
             case "":
                 this.scheme = Scheme.NOSCHEME;
                 break;
@@ -112,7 +114,9 @@ public class LocationPath {
                 String host = props.get(HdfsResource.DSF_NAMESERVICES);
                 boolean enableOssRootPolicy = props.getOrDefault(ExternalCatalog.OOS_ROOT_POLICY, "false")
                         .equals("true");
-                tmpLocation = convertPath ? normalizedHdfsPath(tmpLocation, host, enableOssRootPolicy) : tmpLocation;
+
+                tmpLocation = convertPath && !Config.tc_disable_normalize_hdfs_path_in_external_scan
+                        ? normalizedHdfsPath(tmpLocation, host, enableOssRootPolicy) : tmpLocation;
                 break;
             case FeConstants.FS_PREFIX_S3:
                 this.scheme = Scheme.S3;
@@ -290,6 +294,28 @@ public class LocationPath {
         return scheme;
     }
 
+    public String getSchemeStr() {
+        return schemeStr;
+    }
+
+    public String getAuthority() {
+        int withNoScheme = 0;
+        // parse uri scheme, if any
+        int colon = location.indexOf(':');
+        int slash = location.indexOf('/');
+
+        if ((colon != -1) && ((slash == -1) || (colon < slash))) {     // has a scheme
+            withNoScheme = colon + 1;
+        }
+
+        if (location.startsWith("//", withNoScheme) && (location.length() - withNoScheme > 2)) {       // has authority
+            int nextSlash = location.indexOf('/', withNoScheme + 2);
+            int authEnd = nextSlash > 0 ? nextSlash : location.length();
+            return location.substring(withNoScheme + 2, authEnd);
+        }
+        return "";
+    }
+
     public String get() {
         return location;
     }
@@ -304,16 +330,17 @@ public class LocationPath {
 
     private static String parseScheme(String finalLocation) {
         String scheme = "";
-        String[] schemeSplit = finalLocation.split(SCHEME_DELIM);
-        if (schemeSplit.length > 1) {
-            scheme = schemeSplit[0];
+        // we use `indexOf` to avoid `split`, because split will treat `://` as a pattern, it is not efficient.
+        int index = finalLocation.indexOf(SCHEME_DELIM);
+        if (index > 0) {
+            // if index == 0 , it means the location is like "://xxx"
+            scheme = finalLocation.substring(0, index);
         } else {
-            schemeSplit = finalLocation.split(NONSTANDARD_SCHEME_DELIM);
-            if (schemeSplit.length > 1) {
-                scheme = schemeSplit[0];
+            index = finalLocation.indexOf(NONSTANDARD_SCHEME_DELIM);
+            if (index > 0) {
+                scheme = finalLocation.substring(0, index);
             }
         }
-
         // if not get scheme, need consider /path/to/local to no scheme
         if (scheme.isEmpty()) {
             try {

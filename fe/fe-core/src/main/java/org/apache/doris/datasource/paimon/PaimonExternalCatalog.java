@@ -169,6 +169,13 @@ public abstract class PaimonExternalCatalog extends ExternalCatalog {
         Map<String, String> properties = catalogProperty.getHadoopProperties();
         Map<String, String> options = Maps.newHashMap();
         options.put(PaimonProperties.WAREHOUSE, properties.get(PaimonProperties.WAREHOUSE));
+        options.put("cache.expiration-interval", "7200s");
+        // max num of cached partitions of a Paimon catalog
+        options.put("cache.partition.max-num", "1000");
+        // max size of cached manifest files, 10m means cache all since files usually no more than 8m
+        options.put("cache.manifest.small-file-threshold", "10m");
+        // max size of memory manifest cache uses
+        options.put("cache.manifest.small-file-memory", "1g");
         setPaimonCatalogOptions(properties, options);
         setPaimonExtraOptions(properties, options);
         return options;

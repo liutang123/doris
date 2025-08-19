@@ -23,6 +23,7 @@ import org.apache.doris.common.DdlException;
 import org.apache.doris.common.MetaNotFoundException;
 import org.apache.doris.common.UserException;
 import org.apache.doris.common.util.FileFormatUtils;
+import org.apache.doris.common.util.LazyCompute;
 import org.apache.doris.common.util.LocationPath;
 import org.apache.doris.datasource.FileQueryScanNode;
 import org.apache.doris.datasource.FileSplitter;
@@ -61,6 +62,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 public class PaimonScanNode extends FileQueryScanNode {
@@ -101,6 +103,7 @@ public class PaimonScanNode extends FileQueryScanNode {
     private static final Logger LOG = LogManager.getLogger(PaimonScanNode.class);
     private PaimonSource source = null;
     private List<Predicate> predicates;
+    private final LazyCompute<String> predicateStr = LazyCompute.of(() -> encodeObjectToString(predicates));
     private int rawFileSplitNum = 0;
     private int paimonSplitNum = 0;
     private List<SplitStat> splitStats = new ArrayList<>();
@@ -154,6 +157,18 @@ public class PaimonScanNode extends FileQueryScanNode {
         }
     }
 
+
+    private final LazyCompute<Map<String, String>> paimonOptionsMap = LazyCompute.of(
+            () -> ((PaimonExternalCatalog) source.getCatalog()).getPaimonOptionsMap());
+
+    private final LazyCompute<Map<String, String>> hadoopConf = LazyCompute.of(
+            () -> source.getCatalog().getCatalogProperty().getHadoopProperties());
+
+    private LazyCompute<String> paimonColumnNames = LazyCompute.of(
+            () -> source.getDesc().getSlots().stream().map(slot -> slot.getColumn().getName())
+                    .collect(Collectors.joining(","))
+    );
+
     @Override
     protected Optional<String> getSerializedTable() {
         return Optional.of(serializedTable);
@@ -182,18 +197,31 @@ public class PaimonScanNode extends FileQueryScanNode {
         }
 
         fileDesc.setFileFormat(fileFormat);
-        fileDesc.setPaimonPredicate(encodeObjectToString(predicates));
-        fileDesc.setPaimonColumnNames(source.getDesc().getSlots().stream().map(slot -> slot.getColumn().getName())
-                .collect(Collectors.joining(",")));
-        fileDesc.setDbName(((PaimonExternalTable) source.getTargetTable()).getDbName());
-        fileDesc.setPaimonOptions(((PaimonExternalCatalog) source.getCatalog()).getPaimonOptionsMap());
-        fileDesc.setTableName(source.getTargetTable().getName());
-        fileDesc.setCtlId(source.getCatalog().getId());
-        fileDesc.setDbId(((PaimonExternalTable) source.getTargetTable()).getDbId());
-        fileDesc.setTblId(source.getTargetTable().getId());
-        fileDesc.setLastUpdateTime(source.getTargetTable().getUpdateTime());
-        // The hadoop conf should be same with PaimonExternalCatalog.createCatalog()#getConfiguration()
-        fileDesc.setHadoopConf(source.getCatalog().getCatalogProperty().getHadoopProperties());
+        if (rangeDesc.getFormatType() == TFileFormatType.FORMAT_JNI) {
+            // TODO llj can be set to common
+            fileDesc.setPaimonPredicate(predicateStr.get());
+            fileDesc.setPaimonColumnNames(paimonColumnNames.get());
+            fileDesc.setDbName(((PaimonExternalTable) source.getTargetTable()).getDbName());
+            fileDesc.setTableName(source.getTargetTable().getName());
+            fileDesc.setPaimonOptions(paimonOptionsMap.get());
+            fileDesc.setCtlId(source.getCatalog().getId());
+            fileDesc.setDbId(((PaimonExternalTable) source.getTargetTable()).getDbId());
+            fileDesc.setTblId(source.getTargetTable().getId());
+            fileDesc.setLastUpdateTime(source.getTargetTable().getUpdateTime());
+            // The hadoop conf should be same with PaimonExternalCatalog.createCatalog()#getConfiguration()
+            fileDesc.setHadoopConf(hadoopConf.get());
+        } else {
+            fileDesc.unsetPaimonPredicate();
+            fileDesc.unsetPaimonColumnNames();
+            fileDesc.unsetDbName();
+            fileDesc.unsetTableName();
+            fileDesc.unsetPaimonOptions();
+            fileDesc.unsetCtlId();
+            fileDesc.unsetDbId();
+            fileDesc.unsetTblId();
+            fileDesc.unsetLastUpdateTime();
+            fileDesc.unsetHadoopConf();
+        }
         Optional<DeletionFile> optDeletionFile = paimonSplit.getDeletionFile();
         if (optDeletionFile.isPresent()) {
             DeletionFile deletionFile = optDeletionFile.get();
@@ -201,7 +229,7 @@ public class PaimonScanNode extends FileQueryScanNode {
             // convert the deletion file uri to make sure FileReader can read it in be
             LocationPath locationPath = new LocationPath(deletionFile.path(),
                     source.getCatalog().getProperties());
-            String path = locationPath.toStorageLocation().toString();
+            String path = locationPath.get();
             tDeletionFile.setPath(path);
             tDeletionFile.setOffset(deletionFile.offset());
             tDeletionFile.setLength(deletionFile.length());
@@ -216,13 +244,14 @@ public class PaimonScanNode extends FileQueryScanNode {
         boolean forceJniScanner = sessionVariable.isForceJniScanner();
         SessionVariable.IgnoreSplitType ignoreSplitType = SessionVariable.IgnoreSplitType
                 .valueOf(sessionVariable.getIgnoreSplitType());
-        List<Split> splits = new ArrayList<>();
 
         List<org.apache.paimon.table.source.Split> paimonSplits = getPaimonSplitFromAPI();
+        List<Split> splits = new ArrayList<>(paimonSplits.size());
         boolean applyCountPushdown = getPushDownAggNoGroupingOp() == TPushAggOp.COUNT;
         // Just for counting the number of selected partitions for this paimon table
         Set<BinaryRow> selectedPartitionValues = Sets.newHashSet();
         long realFileSplitSize = getRealFileSplitSize(0);
+        // TODO llj convertToRawFiles is not efficient
         for (org.apache.paimon.table.source.Split split : paimonSplits) {
             SplitStat splitStat = new SplitStat();
             splitStat.setRowCount(split.rowCount());
@@ -336,8 +365,17 @@ public class PaimonScanNode extends FileQueryScanNode {
         }
     }
 
+    private AtomicReference<String> fileFormatFromTblProps = new AtomicReference<>();
+
+    private String getFileFormatFromTblProps() {
+        if (fileFormatFromTblProps.get() == null) {
+            fileFormatFromTblProps.set(source.getFileFormatFromTableProperties());
+        }
+        return fileFormatFromTblProps.get();
+    }
+
     private String getFileFormat(String path) {
-        return FileFormatUtils.getFileFormatBySuffix(path).orElse(source.getFileFormatFromTableProperties());
+        return FileFormatUtils.getFileFormatBySuffix(path).orElseGet(this::getFileFormatFromTblProps);
     }
 
     @VisibleForTesting
