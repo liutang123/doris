@@ -1330,6 +1330,18 @@ public class Auth implements Writable {
         return userAuthInfos;
     }
 
+    public User getCopiedUserByIdentity(UserIdentity userIdent) {
+        // We don't consider ldap, because we just manage password for doris native user.
+        // if (isLdapAuthEnabled())
+        readLock();
+        try {
+            User user = userManager.getUserByUserIdentity(userIdent);
+            return null == user ? null : user.clone();
+        } finally {
+            readUnlock();
+        }
+    }
+
     public void getAuthInfoCopied(List<User> users, List<Role> roles, List<UserProperty> userProperties,
             Map<String, Set<UserIdentity>> roleToUsers,
             Map<UserIdentity, PasswordPolicy> policyMap) {

@@ -332,6 +332,10 @@ public class ConnectContext {
         return threadLocalInfo.get();
     }
 
+    public static ConnectContext getIfExists() {
+        return threadLocalInfo.getIfExists();
+    }
+
     public static void remove() {
         threadLocalInfo.remove();
     }
