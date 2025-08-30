@@ -915,6 +915,21 @@ public class BackupHandler extends MasterDaemon implements Writable {
         return backupJob.getSnapshot();
     }
 
+    public byte[] getGlobalSnapshot(String labelName) {
+        BackupJob backupJob;
+        localSnapshotsLock.readLock().lock();
+        try {
+            backupJob = localSnapshots.get(labelName);
+        } finally {
+            localSnapshotsLock.readLock().unlock();
+        }
+
+        if (backupJob == null) {
+            return null;
+        }
+        return backupJob.getGlobalSnapshot();
+    }
+
     public static BackupHandler read(DataInput in) throws IOException {
         BackupHandler backupHandler = new BackupHandler();
         backupHandler.readFields(in);

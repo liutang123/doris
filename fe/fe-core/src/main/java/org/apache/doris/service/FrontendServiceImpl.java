@@ -179,6 +179,8 @@ import org.apache.doris.thrift.TGetColumnInfoRequest;
 import org.apache.doris.thrift.TGetColumnInfoResult;
 import org.apache.doris.thrift.TGetDbsParams;
 import org.apache.doris.thrift.TGetDbsResult;
+import org.apache.doris.thrift.TGetGlobalSnapshotRequest;
+import org.apache.doris.thrift.TGetGlobalSnapshotResult;
 import org.apache.doris.thrift.TGetMasterTokenRequest;
 import org.apache.doris.thrift.TGetMasterTokenResult;
 import org.apache.doris.thrift.TGetMetaDB;
@@ -2988,6 +2990,80 @@ public class FrontendServiceImpl implements FrontendService.Iface {
         List<TBinlog> binlogs = statusBinlogPair.second;
         if (binlogs != null) {
             result.setBinlogs(binlogs);
+        }
+        return result;
+    }
+
+    // getGlobalSnapshot
+    public TGetGlobalSnapshotResult getGlobalSnapshot(TGetGlobalSnapshotRequest request) throws TException {
+        LOG.info("receive get global snapshot info request: {}", request);
+        String clientAddr = getClientAddrAsString();
+
+        TGetGlobalSnapshotResult result = new TGetGlobalSnapshotResult();
+        TStatus status = new TStatus(TStatusCode.OK);
+        result.setStatus(status);
+
+        if (!Env.getCurrentEnv().isMaster()) {
+            status.setStatusCode(TStatusCode.NOT_MASTER);
+            status.addToErrorMsgs(NOT_MASTER_ERR_MSG);
+            result.setMasterAddress(getMasterAddress());
+            LOG.error("failed to get getGlobalSnapshot: {}", NOT_MASTER_ERR_MSG);
+            return result;
+        }
+
+        try {
+            result = getGlobalSnapshotImpl(request, clientAddr);
+        } catch (UserException e) {
+            LOG.warn("failed to get global snapshot info: {}", e.getMessage());
+            status.setStatusCode(TStatusCode.ANALYSIS_ERROR);
+            status.addToErrorMsgs(e.getMessage());
+        } catch (Throwable e) {
+            LOG.warn("catch unknown result.", e);
+            status.setStatusCode(TStatusCode.INTERNAL_ERROR);
+            status.addToErrorMsgs(Strings.nullToEmpty(e.getMessage()));
+            return result;
+        }
+
+        return result;
+    }
+
+    // getGlobalSnapshotImpl
+    private TGetGlobalSnapshotResult getGlobalSnapshotImpl(TGetGlobalSnapshotRequest request, String clientIp)
+            throws UserException, IOException {
+
+        if (!request.isSetUser()) {
+            throw new UserException("user is not set");
+        }
+        if (!request.isSetPasswd()) {
+            throw new UserException("passwd is not set");
+        }
+
+        if (!request.isSetSnapshotName()) {
+            throw new UserException("snapshot_name is not set");
+        }
+        if (!request.isSetSnapshotType()) {
+            throw new UserException("snapshot_type is not set");
+        } else if (request.getSnapshotType() != TSnapshotType.LOCAL) {
+            throw new UserException("snapshot_type is not LOCAL");
+        }
+
+        LOG.info("get snapshot info, user: {}, snapshot_name: {}, snapshot_type: {}",
+                request.getUser(), request.getSnapshotName(), request.getSnapshotType());
+
+        if (Strings.isNullOrEmpty(request.getToken())) {
+            checkPassword(request.getUser(), request.getPasswd(), clientIp);
+        }
+
+        // Step 3: get snapshot
+        String label = request.getSnapshotName();
+        TGetGlobalSnapshotResult result = new TGetGlobalSnapshotResult();
+        result.setStatus(new TStatus(TStatusCode.OK));
+        byte[] globalSnapshot = Env.getCurrentEnv().getBackupHandler().getGlobalSnapshot(label);
+        if (globalSnapshot == null) {
+            result.getStatus().setStatusCode(TStatusCode.SNAPSHOT_NOT_EXIST);
+            result.getStatus().addToErrorMsgs(String.format("global snapshot %s not exist", label));
+        } else {
+            result.setGlobalInfo(globalSnapshot);
         }
         return result;
     }

@@ -1082,8 +1082,8 @@ public class BackupJob extends AbstractJob implements GsonPostProcessable {
 
         // log
         env.getEditLog().logBackupJob(this);
-        LOG.info("finished to save meta the backup job info file to local.[{}], [{}] {}",
-                 localMetaInfoFilePath, localJobInfoFilePath, this);
+        LOG.info("finished to save meta the backup job info file to local.[{}], [{}], [{}], {}",
+                localMetaInfoFilePath, localJobInfoFilePath, localGlobalJobInfoFilePath, this);
     }
 
     private void releaseSnapshots() {
@@ -1246,6 +1246,28 @@ public class BackupJob extends AbstractJob implements GsonPostProcessable {
         File metaInfoFile = new File(localMetaInfoFilePath);
         File jobInfoFile = new File(localJobInfoFilePath);
         return new Snapshot(label, metaInfoFile, jobInfoFile, expiredAt, commitSeq);
+    }
+
+    // read global info bytes from disk, and return the snapshot
+    public synchronized byte[] getGlobalSnapshot() {
+        if (state != BackupJobState.FINISHED || repoId != Repository.KEEP_ON_LOCAL_REPO_ID) {
+            return null;
+        }
+
+        // Avoid loading expired meta.
+        long expiredAt = createTime + timeoutMs;
+        if (System.currentTimeMillis() >= expiredAt) {
+            return null;
+        }
+
+        try {
+            File globalInfoFile = new File(localGlobalJobInfoFilePath);
+            return Files.readAllBytes(globalInfoFile.toPath());
+        } catch (IOException e) {
+            LOG.warn("failed to load global info and job info file, job info file {}: ",
+                    localGlobalJobInfoFilePath, e);
+            return null;
+        }
     }
 
     public synchronized List<String> getInfo() {
