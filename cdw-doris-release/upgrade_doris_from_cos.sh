@@ -14,6 +14,15 @@ hk_cos_bucket_url="https://cdwch-cos-apps-hk-1305504398.cos.ap-hongkong.myqcloud
 cq_cos_bucket_url="https://cdwch-cos-apps-cq-1305504398.cos.ap-chongqing.myqcloud.com"
 sg_cos_bucket_url="https://cdwch-cos-apps-sg-1305504398.cos.ap-singapore.myqcloud.com"
 cd_cos_bucket_url="https://cdwch-cos-apps-cd-1305504398.cos.ap-chengdu.myqcloud.com"
+shadc_cos_bucket_url="https://cdwch-apps-shadc-1305504398.cos.ap-shanghai-adc.myqcloud.com/"
+shfsi_cos_bucket_url="https://cdwch-cos-apps-shjr-1305504398.cos.ap-shanghai-fsi.myqcloud.com/"
+siliconvalley_cos_bucket_url="https://cdwch-cos-apps-us-1305504398.cos.na-siliconvalley.myqcloud.com/"
+bangkok_cos_bucket_url="https://cdwch-cos-apps-th-1305504398.cos.ap-bangkok.myqcloud.com/"
+ashburn_cos_bucket_url="https://cdwch-cos-apps-use-1305504398.cos.na-ashburn.myqcloud.com/"
+tokyo_cos_bucket_url="https://cdwch-cos-apps-jp-1305504398.cos.ap-tokyo.myqcloud.com/"
+jakarta_cos_bucket_url="https://cdwch-cos-apps-jkt-1305504398.cos.ap-jakarta.myqcloud.com/"
+shenzhenfsi_cos_bucket_url="https://cdwch-cos-apps-szjr-1305504398.cos.ap-shenzhen-fsi.myqcloud.com/"
+seoul_cos_bucket_url="https://cdwch-cos-apps-kr-1305504398.cos.ap-seoul.myqcloud.com/"
 #
 ################################################################################################################################
 
@@ -302,9 +311,12 @@ upgrade_doris() {
     3.0)
         cos_subdir="3.0"
         ;;
+    3.1)
+        cos_subdir="3.1"
+        ;;
     *)
-        error_on_rollback "Cannot figure out the cos subdir for unknown ${new_version}!"
-        exit 1
+        log "[WARN] Cannot figure out the cos subdir for unknown ${new_version}, try use ${new_version} as subdir!"
+        cos_subdir=${new_version}
         ;;
   esac
   cos_subdir="doris/${cos_subdir}"
@@ -775,6 +787,33 @@ init() {
     ;;
     cd|chengdu)
     cos_bucket_url=${cd_cos_bucket_url}
+    ;;
+    1305504398.cos.ap|shadc|shanghaiadc)
+    cos_bucket_url=${shadc_cos_bucket_url}
+    ;;
+    shjr|shanghai-fsi)
+    cos_bucket_url=${shfsi_cos_bucket_url}
+    ;;
+    us|siliconvalley)
+    cos_bucket_url=${siliconvalley_cos_bucket_url}
+    ;;
+    th|bangkok)
+    cos_bucket_url=${bangkok_cos_bucket_url}
+    ;;
+    use|ashburn)
+    cos_bucket_url=${ashburn_cos_bucket_url}
+    ;;
+    jp|tokyo)
+    cos_bucket_url=${tokyo_cos_bucket_url}
+    ;;
+    jkt|jakarta)
+    cos_bucket_url=${jakarta_cos_bucket_url}
+    ;;
+    szjr|shenzhen-fsi)
+    cos_bucket_url=${shenzhenfsi_cos_bucket_url}
+    ;;
+    kr|seoul)
+    cos_bucket_url=${seoul_cos_bucket_url}
     ;;
     -r|rollback)
     execute_mode="ROLLBACK"

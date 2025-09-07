@@ -37,8 +37,8 @@ fi
 
 # start docker and pull image
 systemctl start docker
-#docker save -o doris_build_env_old.tar apache/doris:build-env-ldb-toolchain-latest
-#docker pull apache/doris:build-env-ldb-toolchain-latest
+#docker save -o doris_build_env_for-3.0-old.tar apache/doris:build-env-for-3.0
+docker pull apache/doris:build-env-for-3.0
 
 # clean running docker avoid conflict
 #docker rm -f $(docker ps -a -q)
@@ -72,7 +72,7 @@ else
 fi
 
 # build
-docker run -v ${WORK_DIR}/.m2:/root/.m2 -v ${WORK_DIR}/:/root  --name doris-3.x apache/doris:build-env-ldb-toolchain-latest /bin/bash -c /root/build_all.sh
+docker run -v ${WORK_DIR}/.m2:/root/.m2 -v ${WORK_DIR}/:/root  --name doris-3.x apache/doris:build-env-for-3.0 /bin/bash -c /root/build_all.sh
 if [ $? -ne 0 ]; then
   echo "[ERROR] failed to build with docker."
   exit 1
