@@ -670,7 +670,7 @@ Status ParquetReader::_init_row_groups(const bool& is_filter_groups) {
     int64_t row_index = 0;
     for (int32_t row_group_idx = 0; row_group_idx < _total_groups; row_group_idx++) {
         const tparquet::RowGroup& row_group = _t_metadata->row_groups[row_group_idx];
-        if (is_filter_groups && _is_misaligned_range_group(row_group)) {
+        if (is_filter_groups && _is_misaligned_range_group(row_group)) { // row group的中间不在file range则不跳过
             row_index += row_group.num_rows;
             continue;
         }
@@ -808,6 +808,7 @@ Status ParquetReader::_process_page_index(const tparquet::RowGroup& row_group,
     Slice result(col_index_buff.data(), page_index._column_index_size);
     {
         SCOPED_RAW_TIMER(&_statistics.read_page_index_time);
+        // 这里是不是也可以不读这么多？
         RETURN_IF_ERROR(_file_reader->read_at(page_index._column_index_start, result, &bytes_read,
                                               _io_ctx));
     }
@@ -827,24 +828,35 @@ Status ParquetReader::_process_page_index(const tparquet::RowGroup& row_group,
     SCOPED_RAW_TIMER(&_statistics.parse_page_index_time);
     for (auto& read_col : _read_columns) {
         auto conjunct_iter = _colname_to_value_range->find(read_col);
-        if (_colname_to_value_range->end() == conjunct_iter) {
-            continue;
-        }
+
         int parquet_col_id = _file_metadata->schema().get_column(read_col)->physical_column_index;
         if (parquet_col_id < 0) {
             // complex type, not support page index yet.
             continue;
         }
         auto& chunk = row_group.columns[parquet_col_id];
-        if (chunk.column_index_offset == 0 && chunk.column_index_length == 0) {
+
+        if (chunk.offset_index_length == 0) { // 没有 offset index，无法计算行号
+            continue;
+        }
+        tparquet::OffsetIndex offset_index;
+        RETURN_IF_ERROR(page_index.parse_offset_index(chunk, off_index_buff.data(), &offset_index));
+        // 要往下传
+        _col_offsets[parquet_col_id] = offset_index; // 这里非过滤列不解析OffsetIndex，就要解析page header
+
+        if (chunk.column_index_length == 0) { // 没有column index无法过滤
+            continue;
+        }
+        if (_colname_to_value_range->end() == conjunct_iter) { // 不在过滤条件里，同理
             continue;
         }
         tparquet::ColumnIndex column_index;
         RETURN_IF_ERROR(page_index.parse_column_index(chunk, col_index_buff.data(), &column_index));
         const int num_of_pages = column_index.null_pages.size();
-        if (num_of_pages <= 0) {
+        if (num_of_pages <= 0) { // 没有数据，不过滤
             continue;
         }
+
         auto& conjuncts = conjunct_iter->second;
         std::vector<int> skipped_page_range;
         const FieldSchema* col_schema = schema_desc.get_column(read_col);
@@ -853,8 +865,7 @@ Status ParquetReader::_process_page_index(const tparquet::RowGroup& row_group,
         if (skipped_page_range.empty()) {
             continue;
         }
-        tparquet::OffsetIndex offset_index;
-        RETURN_IF_ERROR(page_index.parse_offset_index(chunk, off_index_buff.data(), &offset_index));
+
         for (int page_id : skipped_page_range) {
             RowRange skipped_row_range;
             RETURN_IF_ERROR(page_index.create_skipped_row_range(offset_index, row_group.num_rows,
@@ -862,7 +873,6 @@ Status ParquetReader::_process_page_index(const tparquet::RowGroup& row_group,
             // use the union row range
             skipped_row_ranges.emplace_back(skipped_row_range);
         }
-        _col_offsets[parquet_col_id] = offset_index;
     }
     if (skipped_row_ranges.empty()) {
         read_whole_row_group();
