@@ -999,6 +999,8 @@ DEFINE_mDouble(max_amplified_read_ratio, "0.8");
 DEFINE_mInt32(merged_oss_min_io_size, "1048576");
 DEFINE_mInt32(merged_hdfs_min_io_size, "8192");
 
+DEFINE_mInt64(merged_read_slice_size, "65536");
+
 // OrcReader
 DEFINE_mInt32(orc_natural_read_size_mb, "8");
 DEFINE_mInt64(big_column_size_buffer, "65535");
