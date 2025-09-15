@@ -610,6 +610,7 @@ Status AsyncWriterSink<Writer, Parent>::init(RuntimeState* state, LocalSinkState
     RETURN_IF_ERROR(Base::init(state, info));
     _async_writer_dependency = Dependency::create_shared(_parent->operator_id(), _parent->node_id(),
                                                          "AsyncWriterDependency", true);
+    VLOG_DEBUG << "[Tencent] AsyncWriterSink new Writer";
     _writer.reset(new Writer(info.tsink, _output_vexpr_ctxs, _async_writer_dependency,
                              _finish_dependency));
 

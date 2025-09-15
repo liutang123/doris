@@ -94,7 +94,7 @@ Status ResultFileSinkLocalState::init(RuntimeState* state, LocalSinkStateInfo& i
                 state->fragment_instance_id(), p._buf_size, &_sender, state));
     }
     _sender->set_dependency(state->fragment_instance_id(), _dependency->shared_from_this());
-
+    VLOG_DEBUG << "[Tencent] ResultFileSinkLocalState new Writer";
     // create writer
     _writer.reset(new (std::nothrow) vectorized::VFileResultWriter(
             p._file_opts.get(), p._storage_type, state->fragment_instance_id(), _output_vexpr_ctxs,
@@ -102,6 +102,12 @@ Status ResultFileSinkLocalState::init(RuntimeState* state, LocalSinkStateInfo& i
             _async_writer_dependency, _finish_dependency));
     _writer->set_header_info(p._header_type, p._header);
     return Status::OK();
+}
+
+Status ResultFileSinkLocalState::open(RuntimeState* state) {
+    SCOPED_TIMER(exec_time_counter());
+    SCOPED_TIMER(_open_timer);
+    return Base::open(state);
 }
 
 Status ResultFileSinkLocalState::close(RuntimeState* state, Status exec_status) {

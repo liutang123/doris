@@ -84,6 +84,7 @@ VFileResultWriter::VFileResultWriter(
 Status VFileResultWriter::open(RuntimeState* state, RuntimeProfile* profile) {
     _state = state;
     _init_profile(profile);
+    SCOPED_TIMER(_open_writer_timer);
     // check orc writer version
     if (_file_opts->file_format == TFileFormatType::FORMAT_ORC &&
         _file_opts->orc_writer_version < 1) {
@@ -98,7 +99,9 @@ Status VFileResultWriter::open(RuntimeState* state, RuntimeProfile* profile) {
 
 void VFileResultWriter::_init_profile(RuntimeProfile* parent_profile) {
     RuntimeProfile* profile = parent_profile->create_child("VFileResultWriter", true, true);
+
     _append_row_batch_timer = ADD_TIMER(profile, "AppendBatchTime");
+    _open_writer_timer = ADD_TIMER(profile, "OpenWriterTime");
     _convert_tuple_timer = ADD_CHILD_TIMER(profile, "TupleConvertTime", "AppendBatchTime");
     _file_write_timer = ADD_CHILD_TIMER(profile, "FileWriteTime", "AppendBatchTime");
     _writer_close_timer = ADD_TIMER(profile, "FileWriterCloseTime");
@@ -398,8 +401,10 @@ Status VFileResultWriter::close(Status exec_status) {
         if (_written_rows_counter) {
             COUNTER_SET(_written_rows_counter, _written_rows);
             SCOPED_TIMER(_writer_close_timer);
+            st = _close_file_writer(true);
+        } else {
+            st = _close_file_writer(true);
         }
-        st = _close_file_writer(true);
     }
     return st;
 }

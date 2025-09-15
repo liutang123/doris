@@ -383,6 +383,11 @@ Status ExecEnv::_init(const std::vector<StorePath>& store_paths,
 
     // Make aws-sdk-cpp InitAPI and ShutdownAPI called in the same thread
     S3ClientFactory::instance();
+
+    LOG(INFO) << "[Tencent] getClientConfiguration start";
+    S3ClientFactory::getClientConfiguration();
+    LOG(INFO) << "[Tencent] getClientConfiguration done";
+
     return Status::OK();
 }
 
