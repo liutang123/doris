@@ -349,8 +349,9 @@ DECLARE_mInt32(doris_scanner_min_thread_pool_thread_num);
 // number of batch size to fetch the remote split source
 DECLARE_mInt32(remote_split_source_batch_size);
 // max number of remote scanner thread pool size
-// if equal to -1, value is std::max(512, CpuInfo::num_cores() * 10)
+// if equal to -1, value is CpuInfo::num_cores() * max_remote_scanner_thread_num_per_cpu
 DECLARE_Int32(doris_max_remote_scanner_thread_pool_thread_num);
+DECLARE_Int32(max_remote_scanner_thread_num_per_cpu);
 // number of olap scanner thread pool queue size
 DECLARE_Int32(doris_scanner_thread_pool_queue_size);
 // default thrift client connect timeout(in seconds)

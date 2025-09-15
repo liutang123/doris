@@ -308,6 +308,7 @@ DEFINE_Validator(doris_scanner_thread_pool_thread_num, [](const int config) -> b
 DEFINE_Int32(doris_scanner_min_thread_pool_thread_num, "8");
 DEFINE_Int32(remote_split_source_batch_size, "10240");
 DEFINE_Int32(doris_max_remote_scanner_thread_pool_thread_num, "-1");
+DEFINE_Int32(max_remote_scanner_thread_num_per_cpu, "10");
 // number of olap scanner thread pool queue size
 DEFINE_Int32(doris_scanner_thread_pool_queue_size, "102400");
 // default thrift client connect timeout(in seconds)
