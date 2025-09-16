@@ -2493,8 +2493,16 @@ public class PhysicalPlanTranslator extends DefaultPlanVisitor<PlanFragment, Pla
     private void updateScanSlotsMaterialization(ScanNode scanNode,
             Set<SlotId> requiredSlotIdSet, Set<SlotId> requiredByProjectSlotIdSet,
             PlanTranslatorContext context) {
-        // TODO: use smallest slot if do not need any slot in upper node
         SlotDescriptor smallest = scanNode.getTupleDesc().getSlots().get(0);
+        for (SlotDescriptor slot : scanNode.getTupleDesc().getSlots()) {
+            if (slot.getType().isInvalid() || !slot.getType().isScalarType()) {
+                continue;
+            }
+            if (slot.getType().getPrimitiveType().getSlotSize() < smallest.getType().getPrimitiveType()
+                    .getSlotSize()) {
+                smallest = slot;
+            }
+        }
         scanNode.getTupleDesc().getSlots().removeIf(s -> !requiredSlotIdSet.contains(s.getId()));
         if (scanNode.getTupleDesc().getSlots().isEmpty()) {
             scanNode.getTupleDesc().getSlots().add(smallest);
