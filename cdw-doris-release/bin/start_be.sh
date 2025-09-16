@@ -84,6 +84,10 @@ while read -r line; do
     fi
 done <"${DORIS_HOME}/conf/be.conf"
 
+export aws_log_level=3
+export azure_log_level=3
+export AWS_EC2_METADATA_DISABLED=true
+
 STDOUT_LOGGER="${LOG_DIR}/be.out"
 log() {
     # same datetime format as in fe.log: 2024-06-03 14:54:41,478
@@ -382,12 +386,30 @@ java_version="$(
 
 CUR_DATE=$(date +%Y%m%d-%H%M%S)
 LOG_PATH="-DlogPath=${LOG_DIR}/jni.log"
-COMMON_OPTS="-Dsun.java.command=DorisBE"
+COMMON_OPTS="-Dfile.encoding=UTF-8 -XX:MaxTenuringThreshold=7 -XX:SoftRefLRUPolicyMSPerMB=0 -Djol.skipHotspotSAAttach=true E:time,uptime:filecount=10,filesize=50M -Djavax.security.auth.useSubjectCredsOnly=false -Dsun.security.krb5.debug=true -Dsun.java.command=DorisBE -XX:-CriticalJNINatives -XX:+IgnoreUnrecognizedVMOptions -Darrow.enable_null_check_for_get=false"
 JDBC_OPTS="-DJDBC_MIN_POOL=1 -DJDBC_MAX_POOL=100 -DJDBC_MAX_IDLE_TIME=300000 -DJDBC_MAX_WAIT_TIME=5000"
+ADD_OPENS=" \
+--add-opens=java.base/java.lang=ALL-UNNAMED \
+--add-opens=java.base/java.lang.invoke=ALL-UNNAMED \
+--add-opens=java.base/java.lang.reflect=ALL-UNNAMED \
+--add-opens=java.base/java.io=ALL-UNNAMED \
+--add-opens=java.base/java.net=ALL-UNNAMED \
+--add-opens=java.base/java.nio=ALL-UNNAMED \
+--add-opens=java.base/java.util=ALL-UNNAMED \
+--add-opens=java.base/java.util.concurrent=ALL-UNNAMED \
+--add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED \
+--add-opens=java.base/sun.nio.ch=ALL-UNNAMED \
+--add-opens=java.base/sun.nio.cs=ALL-UNNAMED \
+--add-opens=java.base/sun.security.action=ALL-UNNAMED \
+--add-opens=java.base/sun.util.calendar=ALL-UNNAMED \
+--add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED \
+--add-opens=java.management/sun.management=ALL-UNNAMED \
+"
 if [[ "${java_version}" -eq 17 ]]; then
     if [[ -z ${JAVA_OPTS_FOR_JDK_17} ]]; then
-        JAVA_OPTS_FOR_JDK_17="-Xmx4096m ${LOG_PATH} -Xlog:gc:${LOG_DIR}/be.gc.log.${CUR_DATE} ${COMMON_OPTS} ${JDBC_OPTS} --add-opens=java.base/java.net=ALL-UNNAMED"
+        JAVA_OPTS_FOR_JDK_17="-Xmx4096m"
     fi
+    JAVA_OPTS_FOR_JDK_17="${JAVA_OPTS_FOR_JDK_17} ${LOG_PATH} -Xlog:gc:${LOG_DIR}/be.gc.log.${CUR_DATE} ${COMMON_OPTS} ${JDBC_OPTS} ${ADD_OPENS}"
     final_java_opt="${JAVA_OPTS_FOR_JDK_17}"
 else
     echo "ERROR: The jdk_version is ${java_version}, it must be 17." >>"${LOG_DIR}/be.out"
