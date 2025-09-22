@@ -491,6 +491,9 @@ void add_task_count(const TAgentTaskRequest& task, int n) {
     case TTaskType::ALTER:
     {
         ALTER_count << n;
+        // only count fragment when task is actually starting
+        if (n <= 0) return;
+
         // cloud auto stop need sc jobs, a tablet's sc can also be considered a fragment
         if (n > 0) {
             // only count fragment when task is actually starting
