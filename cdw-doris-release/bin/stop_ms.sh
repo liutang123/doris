@@ -24,12 +24,6 @@ DORIS_HOME="$(
 )"
 export DORIS_HOME
 
-PID_DIR="$(
-    cd "${curdir}"
-    pwd
-)"
-export PID_DIR
-
 while read -r line; do
     envline="$(echo "${line}" |
         sed 's/[[:blank:]]*=[[:blank:]]*/=/g' |
@@ -41,6 +35,11 @@ while read -r line; do
         eval 'export "${envline}"'
     fi
 done <"${DORIS_HOME}/conf/doris_cloud.conf"
+
+if [[ -z ${PID_DIR} ]]; then
+    echo "PID_DIR should be defined firstly, please check your conf, try to infer as LOG_DIR."
+    export PID_DIR="${LOG_DIR}/../pid"
+fi
 
 signum=9
 if [[ "$1" = "--grace" ]]; then

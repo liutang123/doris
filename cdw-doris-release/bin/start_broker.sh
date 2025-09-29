@@ -67,9 +67,23 @@ while read line || [ -n "$line" ]; do
     fi
 done < $BROKER_HOME/conf/apache_hdfs_broker.conf
 
+if [[ -z ${BROKER_LOG_DIR} ]]; then
+    echo "BROKER_LOG_DIR must be defined before starting, please check your conf."
+    exit 1
+fi
+
+if [[ -z ${PID_DIR} ]]; then
+    echo "PID_DIR should be defined before starting, please check your conf, try to infer as BROKER_LOG_DIR."
+    export PID_DIR="${BROKER_LOG_DIR}/../pid"
+fi
+
 # need check and create if the log directory existed before outing message to the log file.
 if [ ! -d $BROKER_LOG_DIR ]; then
     mkdir -p $BROKER_LOG_DIR
+fi
+
+if [[ ! -d "${PID_DIR}" ]]; then
+    mkdir -p "${PID_DIR}"
 fi
 
 # double write log info to file and term

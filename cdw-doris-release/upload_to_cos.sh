@@ -21,9 +21,8 @@ cos_bucket="cos://${bucket}"
 download_cos_url="https://${bucket}.cos.ap-${region}.myqcloud.com/${doris_release_package_dir}"
 download_debug_doris_be_cos_url="https://${bucket}.cos.ap-${region}.myqcloud.com/${doris_be_debug_package_dir}"
 
-# default bucket
+# for release bucket using this conf
 coscli_cmd_conf="$HOME/.release_cos.yaml"
-cos_release_bucket="cos://cdwch-cos-apps-cq-1305504398"
 #
 ################################################################################################################################
 
@@ -59,40 +58,44 @@ init() {
     exit 1;
   fi
 
-  cos_release_bucket="cos://cdwch-cos-apps-cq-1305504398"
   if [ $# -eq 1 ] ; then
     case $1 in
       bj|beijing)
-      region="bj"
+      release_region="bj"
       ;;
       gz|guangzhou)
-      region="gz"
+      release_region="gz"
       ;;
       sh|shanghai)
-      region="sh"
+      release_region="sh"
       ;;
       hk|hongkong)
-      region="hk"
+      release_region="hk"
       ;;
       nj|nanjing)
-      region="nj"
+      release_region="nj"
       ;;
       cq|chongqing)
-      region="cq"
+      release_region="cq"
       ;;
       sg|singapore|xinjiapo)
-      region="sg"
+      release_region="sg"
       ;;
       cd|chengdu)
-      region="cd"
+      release_region="cd"
       ;;
       *)
       usage $@
       exit 1
       ;;
     esac
-    cos_release_bucket="cos://cdwch-cos-apps-${region}-1305504398"
+    release_mode="ONLY_UPLOAD"
+  else
+    release_region="cq"
+    release_mode="ALL"
   fi
+
+  cos_release_bucket="cos://cdwch-cos-apps-${release_region}-1305504398"
 
   local doris_dir="${workDir}/${doris_dir_name}"
   if [ ! -d "${doris_dir}" ]; then
@@ -193,7 +196,7 @@ package_and_deploy_to_cos() {
 
   # upload to cos
   log "[INFO] start to upload the tar package ${doris_tar_path} to cos bucket, it need to a few minutes..."
-  if [ -e ${coscli_cmd} ]; then
+  if [ -e ${coscli_cmd} ] && [ "${release_mode}" = "ALL" ]; then
 
     local cos_bucket_url="${cos_bucket}/${doris_release_package_dir}"
     
@@ -210,16 +213,6 @@ package_and_deploy_to_cos() {
     if [ $? -ne 0 ]; then
       log "[ERROR] upload ${doris_tar_path} to ${cos_bucket_url}/${doris_tar} failed!"
       exit 1
-    fi
-
-    # upload to release cos bucket
-    if [ -e ${coscli_cmd_conf} ]; then
-      local doris_dir=$(get_release_cos_bucket_subdir)
-      ${coscli_cmd} -c ${coscli_cmd_conf} cp ${doris_tar_path} ${cos_release_bucket}/${doris_dir}/${doris_tar}
-      if [ $? -ne 0 ]; then
-        log "[ERROR] upload ${doris_tar_path} to ${cos_release_bucket}/${doris_dir}/${doris_tar} failed!"
-        exit 1
-      fi
     fi
 
     # upload upgrade script 
@@ -253,6 +246,16 @@ package_and_deploy_to_cos() {
       exit 1
     fi
     log "[INFO] upload ${doris_be_without_strip_tar_path} to ${cos_bucket_url} ok"
+  fi
+
+  # upload to release cos bucket
+  if [ -e ${coscli_cmd_conf} ]; then
+    local doris_dir=$(get_release_cos_bucket_subdir)
+    ${coscli_cmd} -c ${coscli_cmd_conf} cp ${doris_tar_path} ${cos_release_bucket}/${doris_dir}/${doris_tar}
+    if [ $? -ne 0 ]; then
+      log "[ERROR] upload ${doris_tar_path} to ${cos_release_bucket}/${doris_dir}/${doris_tar} failed!"
+      exit 1
+    fi
   fi
 
   log "[INFO] success to release doris"
@@ -312,4 +315,8 @@ init $@
 package_and_deploy_to_cos
 show_release_info || true
 show_git_log_message || true
-create_and_push_new_branch || true
+
+if [ "${release_mode}" = "ALL" ]; then
+  create_and_push_new_branch || true
+fi
+

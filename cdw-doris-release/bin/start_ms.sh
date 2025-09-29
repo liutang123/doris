@@ -70,6 +70,24 @@ while read -r line; do
     fi
 done <"${DORIS_HOME}/conf/doris_cloud.conf"
 
+if [[ -z ${LOG_DIR} ]]; then
+    echo "LOG_DIR must be defined before starting, please check your conf."
+    exit 1
+fi
+
+if [[ -z ${PID_DIR} ]]; then
+    echo "PID_DIR should be defined before starting, please check your conf, try to infer as LOG_DIR."
+    export PID_DIR="${LOG_DIR}/../pid"
+fi
+
+if [[ ! -d "${LOG_DIR}" ]]; then
+    mkdir -p "${LOG_DIR}"
+fi
+
+if [[ ! -d "${PID_DIR}" ]]; then
+    mkdir -p "${PID_DIR}"
+fi
+
 STDOUT_LOGGER="${LOG_DIR}/doris_cloud.out"
 log() {
     # same datetime format as in fe.log: 2024-06-03 14:54:41,478
@@ -93,7 +111,7 @@ elif [[ ${RUN_METASERVICE} -eq 1 ]] && [[ ${RUN_RECYCLYER} -eq 1 ]]; then
 fi
 
 process=doris_cloud
-pidfile="${DORIS_HOME}/bin/${process}.pid"
+pidfile="${PID_DIR}/${process}.pid"
 if [[ ${RUN_VERSION} -eq 0 ]] && [[ -f "${pidfile}" ]]; then
     pid=$(cat "${pidfile}")
     if [[ "${pid}" != "" ]]; then
@@ -223,7 +241,6 @@ if [[ "${RUN_VERSION}" -ne 0 ]]; then
     exit 0
 fi
 
-mkdir -p "${DORIS_HOME}/log"
 echo "$(date +'%F %T') start with args: $*"
 if [[ "${RUN_DAEMON}" -eq 1 ]]; then
     # append 10 blank lines to ensure the following tail -n10 works correctly
@@ -247,4 +264,5 @@ else
     "${bin}" "$@"
 fi
 
+echo $! >"${pidfile}"
 # vim: et ts=2 sw=2:

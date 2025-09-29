@@ -108,6 +108,16 @@ if [[ -e "${DORIS_HOME}/bin/palo_env.sh" ]]; then
     source "${DORIS_HOME}/bin/palo_env.sh"
 fi
 
+if [[ -z ${LOG_DIR} ]]; then
+    echo "LOG_DIR must be defined before starting, please check your conf."
+    exit 1
+fi
+
+if [[ -z ${PID_DIR} ]]; then
+    echo "PID_DIR should be defined before starting, please check your conf, try to infer as LOG_DIR."
+    export PID_DIR="${LOG_DIR}/../pid"
+fi
+
 #Due to the machine not being configured with Java home, in this case, when FE cannot start, it is necessary to prompt an error message indicating that it has not yet been configured with Java home.
 JAVA_HOME=/usr/local/jdk17
 if [ ! -d "$JAVA_HOME" ]; then
@@ -158,6 +168,10 @@ jdk_version() {
 # need check and create if the log directory existed before outing message to the log file.
 if [[ ! -d "${LOG_DIR}" ]]; then
     mkdir -p "${LOG_DIR}"
+fi
+
+if [[ ! -d "${PID_DIR}" ]]; then
+    mkdir -p "${PID_DIR}"
 fi
 
 STDOUT_LOGGER="${LOG_DIR}/fe.out"

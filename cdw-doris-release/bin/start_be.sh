@@ -88,6 +88,16 @@ export aws_log_level=3
 export azure_log_level=3
 export AWS_EC2_METADATA_DISABLED=true
 
+if [[ -z ${LOG_DIR} ]]; then
+    echo "LOG_DIR must be defined before starting, please check your conf."
+    exit 1
+fi
+
+if [[ -z ${PID_DIR} ]]; then
+    echo "PID_DIR should be defined before starting, please check your conf, try to infer as LOG_DIR."
+    export PID_DIR="${LOG_DIR}/../pid"
+fi
+
 STDOUT_LOGGER="${LOG_DIR}/be.out"
 log() {
     # same datetime format as in fe.log: 2024-06-03 14:54:41,478
@@ -284,6 +294,10 @@ done
 
 if [[ ! -d "${LOG_DIR}" ]]; then
     mkdir -p "${LOG_DIR}"
+fi
+
+if [[ ! -d "${PID_DIR}" ]]; then
+    mkdir -p "${PID_DIR}"
 fi
 
 pidfile="${PID_DIR}/be.pid"
