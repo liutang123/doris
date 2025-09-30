@@ -69,6 +69,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import lombok.Getter;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -528,14 +529,36 @@ public abstract class FileQueryScanNode extends FileScanNode {
         rangeDesc.setColumnsFromPath(columnsFromPath);
         rangeDesc.setColumnsFromPathKeys(columnsFromPathKeys);
 
-        // TODO(camby): avoid new Path obj in toStorageLocation while no need convert
-        rangeDesc.setPath(fileSplit.getPath().toStorageLocation().toString());
+        if (useGFS()) {
+            rangeDesc.setPath(fileSplit.getPath().getPath().toString());
+        } else {
+            rangeDesc.setPath(fileSplit.getPath().toStorageLocation().toString());
+        }
         if (fileSplit.getLocationType() == TFileType.FILE_HDFS) {
             // TODO llj this logic use StringBuilder, it is not efficient
             rangeDesc.setFsName(fileSplit.getPath().getSchemeStr() + "://" + fileSplit.getPath().getAuthority());
         }
         rangeDesc.setModificationTime(fileSplit.getModificationTime());
         return rangeDesc;
+    }
+
+    private boolean useGFS() {
+        TableIf table = desc.getTable();
+        if (table instanceof ExternalTable) {
+            try {
+                ExternalTable extTable = (ExternalTable) table;
+                String broker = extTable.getCatalog().bindBrokerName();
+                if (StringUtils.isNotEmpty(broker)) {
+                    String cosImpl = extTable.getCatalog().getCatalogProperty().getProperties().get("fs.cosn.impl");
+                    String ofsImpl = extTable.getCatalog().getCatalogProperty().getProperties().get("fs.ofs.impl");
+                    return "com.qcloud.cos.goosefs.hadoop.CosNFileSystem".equals(cosImpl)
+                            || "com.qcloud.cos.goosefs.hadoop.CHDFSHadoopFileSystem".equals(ofsImpl);
+                }
+            } catch (Exception e) {
+                LOG.warn("judge use gfs error.", e);
+            }
+        }
+        return false;
     }
 
     // To Support Hive 1.x orc internal column name like (_col0, _col1, _col2...)
