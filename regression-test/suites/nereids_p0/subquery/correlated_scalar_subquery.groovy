@@ -106,6 +106,14 @@ suite("correlated_scalar_subquery") {
     qt_select_having1 """select c1 from correlated_scalar_t1 where correlated_scalar_t1.c2 > (select correlated_scalar_t2.c1 from correlated_scalar_t2  where correlated_scalar_t2.c2 < 4 having correlated_scalar_t1.c1 = correlated_scalar_t2.c1);"""  
     qt_select_having2 """select c1 from correlated_scalar_t1 where correlated_scalar_t1.c2 > (select any_value(correlated_scalar_t2.c1) from correlated_scalar_t2  where correlated_scalar_t2.c2 < 4 having correlated_scalar_t1.c1 = any_value(correlated_scalar_t2.c1));"""
 
+    qt_multi_agg_func """
+        SELECT  t1.c1, t1.c2, 
+                (SELECT SUM(t2.c2)+SUM(IFNULL(t2.c2,0)) AS sum_value 
+                FROM correlated_scalar_t2 t2 
+                WHERE t2.c1 = t1.c1) as t2_c2_sum 
+        FROM correlated_scalar_t1 t1;
+        """
+
     explain {
         sql("""select c1 from correlated_scalar_t1 where correlated_scalar_t1.c2 > (select c1 from correlated_scalar_t2 where correlated_scalar_t1.c1 = correlated_scalar_t2.c1 limit 1);""")
         notContains("assert_true");
