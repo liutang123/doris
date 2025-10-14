@@ -26,6 +26,7 @@ import org.apache.doris.nereids.trees.plans.logical.LogicalPlan;
 import org.apache.doris.nereids.trees.plans.logical.LogicalProject;
 import org.apache.doris.nereids.trees.plans.logical.LogicalSort;
 import org.apache.doris.nereids.trees.plans.logical.LogicalSubQueryAlias;
+import org.apache.doris.nereids.trees.plans.logical.LogicalUnary;
 import org.apache.doris.nereids.types.DataType;
 
 import com.google.common.base.Preconditions;
@@ -75,16 +76,43 @@ public class ScalarSubquery extends SubqueryExpr implements LeafExpression {
     /**
     * getTopLevelScalarAggFunction
     */
-    public Optional<NamedExpression> getTopLevelScalarAggFunction() {
-        Plan plan = findTopLevelScalarAgg(queryPlan, ImmutableSet.copyOf(correlateSlots));
-        if (plan != null) {
-            LogicalAggregate aggregate = (LogicalAggregate) plan;
-            Preconditions.checkState(aggregate.getAggregateFunctions().size() == 1,
-                    "in scalar subquery, should only return 1 column 1 row, "
-                            + "but we found multiple columns ", aggregate.getOutputExpressions());
-            return Optional.of((NamedExpression) aggregate.getOutputExpressions().get(0));
+    public NamedExpression getTopLevelScalarAggFunction() {
+        NamedExpression expr = getTopLevelScalarAggFunction0(queryPlan, ImmutableSet.copyOf(correlateSlots));
+        if (expr != null) {
+            return expr;
         } else {
-            return Optional.empty();
+            throw new IllegalArgumentException(
+                    "Try to find top level scalar agg function, but found no aggregate function");
+        }
+    }
+
+    private static NamedExpression getTopLevelScalarAggFunction0(Plan plan, ImmutableSet<Slot> slots) {
+        if (plan instanceof LogicalAggregate) {
+            LogicalAggregate<?> aggregate = (LogicalAggregate<?>) plan;
+            if (aggregate.getGroupByExpressions().isEmpty() && aggregate.containsSlots(slots)) {
+                Preconditions.checkState(aggregate.getAggregateFunctions().size() == 1,
+                        "in scalar subquery, should only return 1 column 1 row, "
+                                + "but we found multiple columns ", aggregate.getOutputExpressions());
+                return aggregate.getOutputExpressions().get(0);
+            } else {
+                return null;
+            }
+        } else if (plan instanceof LogicalProject) {
+            LogicalProject<?> project = (LogicalProject<?>) plan;
+            Preconditions.checkState(project.getProjects().size() == 1,
+                    "in scalar subquery, should only return 1 column 1 row, "
+                            + "but we found multiple columns ", project.getProjects());
+            return project.getOutputs().get(0);
+        } else if (plan instanceof LogicalSubQueryAlias || plan instanceof LogicalSort) {
+            for (Plan child : plan.children()) {
+                NamedExpression result = getTopLevelScalarAggFunction0(child, slots);
+                if (result != null) {
+                    return result;
+                }
+            }
+            return null;
+        } else {
+            return null;
         }
     }
 

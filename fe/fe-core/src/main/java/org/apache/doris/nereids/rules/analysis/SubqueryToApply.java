@@ -419,7 +419,7 @@ public class SubqueryToApply implements AnalysisRuleFactory {
                 // so wrap COUNT with Nvl to ensure its result is 0 instead of null to get the correct result
                 if (conjunct.isPresent()) {
                     Map<Expression, Expression> replaceMap = new HashMap<>();
-                    NamedExpression agg = ((ScalarSubquery) subquery).getTopLevelScalarAggFunction().get();
+                    NamedExpression agg = ((ScalarSubquery) subquery).getTopLevelScalarAggFunction();
                     if (agg instanceof Alias) {
                         if (((Alias) agg).child() instanceof NotNullableAggregateFunction) {
                             NotNullableAggregateFunction notNullableAggFunc =
