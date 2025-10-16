@@ -52,7 +52,7 @@ using namespace doris::cloud;
  */
 std::shared_ptr<int> gen_pidfile(const std::string& process_name) {
     std::cerr << "process working directory: " << std::filesystem::current_path() << std::endl;
-    std::string pid_path = "./bin/" + process_name + ".pid";
+    std::string pid_path = std::string(getenv("PID_DIR")) + "/" + process_name + ".pid";
     int fd = ::open(pid_path.c_str(), O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
     // clang-format off
     std::shared_ptr<int> holder(&fd, // Just pretend to need an address of int
@@ -193,6 +193,11 @@ int main(int argc, char** argv) {
 
     auto start = steady_clock::now();
     auto end = start;
+
+    if (getenv("PID_DIR") == nullptr) {
+        std::cerr << "you need set PID_DIR environment variable" << std::endl;
+        return -1;
+    }
 
     auto pid_file_fd_holder = gen_pidfile("doris_cloud");
     if (pid_file_fd_holder == nullptr) {
