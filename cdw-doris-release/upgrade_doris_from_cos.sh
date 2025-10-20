@@ -866,6 +866,25 @@ init() {
 # init
 init $@
 
+check_and_fix_ms_dir() {
+    local DIR="$1"
+    local USER="doris"
+    local GROUP="doris"
+
+    if [ ! -d "$DIR" ]; then
+        return 1
+    fi
+
+    local owner
+    local group
+    owner=$(stat -c %U "$DIR")
+    group=$(stat -c %G "$DIR")
+
+    if [ "$owner" != "$USER" ] || [ "$group" != "$GROUP" ]; then
+        chown -R "$USER:$GROUP" "$DIR" || return 2
+    fi
+}
+
 # rollback or upgarde
 if [ ${execute_mode} == "ROLLBACK" ]; then
   log "[INFO] start to rollback..."
@@ -899,6 +918,9 @@ else # for upgarde
 
   # upgrade 
   upgrade_doris
+
+  # check and fix when ms dir is ownered by root...
+  check_and_fix_ms_dir "/data/cdw/doris/ms"
 
   log "[INFO] upgrade successfully!!"
 fi
