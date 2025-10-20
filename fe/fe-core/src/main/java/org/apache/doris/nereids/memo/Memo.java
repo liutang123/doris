@@ -547,6 +547,9 @@ public class Memo {
             }
         }
         for (GroupExpression srcParent : source.getParentGroupExpressions()) {
+            if (srcParent.getOwnerGroup() == null) {
+                continue;
+            }
             if (srcParent.getOwnerGroup().equals(destination)) {
                 // cycle, we should not merge
                 return;
