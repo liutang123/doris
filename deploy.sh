@@ -30,7 +30,7 @@ fi
 log "[INFO] success to install fe libs."
 
 # install help-resource 
-ret=$(cp -a "${cur_dir}/docs/build/help-resource.zip" "${dest_dir}/lib")
+ret=$(cp -a "${cur_dir}/docs/build/help-resource.zip" "${dest_dir}/lib/fe")
 if [ $? -ne 0 ]; then
   log "[ERROR] failed to install help-resource.zip."
   exit 1
