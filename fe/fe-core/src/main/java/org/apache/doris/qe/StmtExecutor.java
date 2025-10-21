@@ -948,9 +948,8 @@ public class StmtExecutor {
                             }
                         }
                     }
-                } else {
-                    isNeedRetry = e instanceof RpcException;
                 }
+                isNeedRetry |= e instanceof RpcException;
                 if (i != retryTime - 1 && isNeedRetry
                         && context.getConnectType().equals(ConnectType.MYSQL) && !context.getMysqlChannel().isSend()) {
                     LOG.warn("retry {} times. stmt: {}", (i + 1), parsedStmt.getOrigStmt().originStmt);
