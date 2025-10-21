@@ -528,9 +528,8 @@ public abstract class FileQueryScanNode extends FileScanNode {
         rangeDesc.setColumnsFromPath(columnsFromPath);
         rangeDesc.setColumnsFromPathKeys(columnsFromPathKeys);
 
-
-        // rangeDesc.setPath(fileSplit.getPath().toStorageLocation().toString());
-        rangeDesc.setPath(fileSplit.getPath().get());
+        // TODO(camby): avoid new Path obj in toStorageLocation while no need convert
+        rangeDesc.setPath(fileSplit.getPath().toStorageLocation().toString());
         if (fileSplit.getLocationType() == TFileType.FILE_HDFS) {
             // TODO llj this logic use StringBuilder, it is not efficient
             rangeDesc.setFsName(fileSplit.getPath().getSchemeStr() + "://" + fileSplit.getPath().getAuthority());
