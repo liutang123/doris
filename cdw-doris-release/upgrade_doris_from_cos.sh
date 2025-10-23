@@ -1,97 +1,115 @@
 #!/bin/bash
-#set -x
+
+#set -o errexit
+#trap 'exit_on_error "unexpected error has occured"' ERR
 
 ################################################################################################################################
 #
-# define region: you can change here
+# define region: you can change or add new region here
 #
-work_dir_prefix="/data/cdw/upgrade_packages_dir"
-bj_cos_bucket_url="https://cdwch-cos-apps-bj-1305504398.cos.ap-beijing.myqcloud.com"
-gz_cos_bucket_url="https://cdwch-cos-apps-gz-1305504398.cos.ap-guangzhou.myqcloud.com"
-sh_cos_bucket_url="https://cdwch-cos-apps-sh-1305504398.cos.ap-shanghai.myqcloud.com"
-nj_cos_bucket_url="https://cdwch-cos-apps-nj-1305504398.cos.ap-nanjing.myqcloud.com"
-hk_cos_bucket_url="https://cdwch-cos-apps-hk-1305504398.cos.ap-hongkong.myqcloud.com"
-cq_cos_bucket_url="https://cdwch-cos-apps-cq-1305504398.cos.ap-chongqing.myqcloud.com"
-sg_cos_bucket_url="https://cdwch-cos-apps-sg-1305504398.cos.ap-singapore.myqcloud.com"
-cd_cos_bucket_url="https://cdwch-cos-apps-cd-1305504398.cos.ap-chengdu.myqcloud.com"
-shadc_cos_bucket_url="https://cdwch-apps-shadc-1305504398.cos.ap-shanghai-adc.myqcloud.com/"
-shfsi_cos_bucket_url="https://cdwch-cos-apps-shjr-1305504398.cos.ap-shanghai-fsi.myqcloud.com/"
-siliconvalley_cos_bucket_url="https://cdwch-cos-apps-us-1305504398.cos.na-siliconvalley.myqcloud.com/"
-bangkok_cos_bucket_url="https://cdwch-cos-apps-th-1305504398.cos.ap-bangkok.myqcloud.com/"
-ashburn_cos_bucket_url="https://cdwch-cos-apps-use-1305504398.cos.na-ashburn.myqcloud.com/"
-tokyo_cos_bucket_url="https://cdwch-cos-apps-jp-1305504398.cos.ap-tokyo.myqcloud.com/"
-jakarta_cos_bucket_url="https://cdwch-cos-apps-jkt-1305504398.cos.ap-jakarta.myqcloud.com/"
-shenzhenfsi_cos_bucket_url="https://cdwch-cos-apps-szjr-1305504398.cos.ap-shenzhen-fsi.myqcloud.com/"
-seoul_cos_bucket_url="https://cdwch-cos-apps-kr-1305504398.cos.ap-seoul.myqcloud.com/"
+WORK_DIR_PREFIX="/data/cdw/upgrade_packages_dir"
+# List of known bucket ADDRESSES for region validation
+ADDRESSES=(
+  "cdwch-cos-apps-bj-1305504398.cos.ap-beijing.myqcloud.com"
+  "cdwch-cos-apps-gz-1305504398.cos.ap-guangzhou.myqcloud.com"
+  "cdwch-cos-apps-sh-1305504398.cos.ap-shanghai.myqcloud.com"
+  "cdwch-cos-apps-nj-1305504398.cos.ap-nanjing.myqcloud.com"
+  "cdwch-cos-apps-hk-1305504398.cos.ap-hongkong.myqcloud.com"
+  "cdwch-cos-apps-cq-1305504398.cos.ap-chongqing.myqcloud.com"
+  "cdwch-cos-apps-sp-1305504398.cos.ap-singapore.myqcloud.com"
+  "cdwch-cos-apps-cd-1305504398.cos.ap-chengdu.myqcloud.com"
+  "cdwch-apps-shadc-1305504398.cos.ap-shanghai-adc.myqcloud.com"
+  "cdwch-cos-apps-shjr-1305504398.cos.ap-shanghai-fsi.myqcloud.com"
+  "cdwch-cos-apps-us-1305504398.cos.na-siliconvalley.myqcloud.com"
+  "cdwch-cos-apps-th-1305504398.cos.ap-bangkok.myqcloud.com"
+  "cdwch-cos-apps-use-1305504398.cos.na-ashburn.myqcloud.com"
+  "cdwch-cos-apps-jp-1305504398.cos.ap-tokyo.myqcloud.com"
+  "cdwch-cos-apps-jkt-1305504398.cos.ap-jakarta.myqcloud.com"
+  "cdwch-cos-apps-szjr-1305504398.cos.ap-shenzhen-fsi.myqcloud.com"
+  "cdwch-cos-apps-kr-1305504398.cos.ap-seoul.myqcloud.com"
+)
 #
 ################################################################################################################################
 
 # double write log info to file and term
 log() {
-  echo "$@" >> ${logFile}
-  echo "$@"
+  if [[ -n "${LOG_FILE}" ]]; then
+    echo "$(date '+%Y-%m-%d %H:%M:%S') $@" | tee -a "$LOG_FILE"
+  else
+    echo "$(date '+%Y-%m-%d %H:%M:%S') $@"
+  fi
+}
+
+exit_on_error() {
+  log "[ERROR] $@" 
+  exit 1
 }
 
 # rollback new add dirs
-rollback_new_add_dirs() {
-  if [ ! -f ${newAddDirList} ]; then
-    log "[WARN] ${newAddDirList} file is not exist!"
+rollback_new_add_paths() {
+  log "[INFO] start to rollback new add files or dirs..."
+  if [ ! -f ${NEW_ADD_PATHS_LIST} ]; then
+    log "[INFO] ${NEW_ADD_PATHS_LIST} file is not exist!"
     return 0
   fi
 
-  local new_add_dirs=($(cat ${newAddDirList} | sort -u))
-  for new_add_dir in ${new_add_dirs[@]}; do
-    if [ -d ${new_add_dir} ]; then
-      rm -fr ${new_add_dir}
-      log "[INFO] remove dir ${new_add_dir}"
+  local new_add_paths=($(cat "${NEW_ADD_PATHS_LIST}" | sort -u))
+  for new_add_path in "${new_add_paths[@]}"; do
+    if [[ -f "$new_add_path" || -d "$new_add_path" ]]; then
+      rm -fr ${new_add_path} || { log "[ERROR] rm -fr ${new_add_path} failed"; return 1; }
+      log "[INFO] remove dir ${new_add_path}"
     else
-      log "[WARN] ${new_add_dir} is not exist, it maybe run rollback for more times!"
+      log "[WARN] ${new_add_path} is not exist, it maybe run rollback for more times!"
     fi
   done
 
-  log "[INFO] rollback new add dir succuesfullly"
+  log "[INFO] rollback new add files and dirs succuesfullly"
+  return 0
 }
 
 # rollback upgrade dirs
-rollback_upgrade_dirs() {
-  if [ ! -f ${backupUpgradeDirPairList} ]; then
-    log "[WARN] ${backupUpgradeDirPairList} file is not exist!"
+rollback_upgrade_paths() {
+  log "[INFO] start to rollback updated files or dirs..."
+  if [ ! -f ${BACKUP_UPGRADE_PATH_PAIR_LIST} ]; then
+    log "[INFO] ${BACKUP_UPGRADE_PATH_PAIR_LIST} file is not exist!"
     return 0
   fi
 
-  local upgrade_dir_pair_list=($(cat ${backupUpgradeDirPairList}))
-  for path_pair in ${upgrade_dir_pair_list[@]}; do
-    local backup_dir_path=$(echo ${path_pair} | awk -F ',' '{print $1}')
-    local upgrade_dir_path=$(echo ${path_pair} | awk -F ',' '{print $2}')
+  local upgrade_path_pair_list=($(cat "${BACKUP_UPGRADE_PATH_PAIR_LIST}"))
+  for path_pair in "${upgrade_path_pair_list[@]}"; do
+    local backup_path=$(echo ${path_pair} | awk -F ',' '{print $1}')
+    local upgrade_path=$(echo ${path_pair} | awk -F ',' '{print $2}')
 
-    if [ "${backup_dir_path}" == "" -o "${upgrade_dir_path}" == "" ]; then
+    if [ "${backup_path}" == "" -o "${upgrade_path}" == "" ]; then
       log "[WARN] either backup dir and upgrade dir cannot empty"
-      return 0
+      return 1
     fi
-    if [ ! -d ${backup_dir_path} ]; then
-      log "[WARN] ${backup_dir_path} is not exists!"
+
+    if [[ ! -f "$backup_path" && ! -d "$backup_path" ]]; then
+      log "[WARN] ${backup_path} is not exists!"
       continue
     fi
 
-    if [ -d ${upgrade_dir_path} ]; then
-      log "[INFO] ${upgrade_dir_path} is exist, it will be remove!"
-      rm -fr "${upgrade_dir_path}"
+    if [ -d ${upgrade_path} ]; then
+      log "[INFO] ${upgrade_path} is exist, it will be remove!"
+      rm -fr "${upgrade_path}" || { log "[ERROR] rm -fr ${upgrade_path} failed"; return 1; }
     fi
 
-    cp -a "${backup_dir_path}" "${upgrade_dir_path}"
-    log "[INFO] restore dir from ${backup_dir_path} to ${upgrade_dir_path}"
+    cp -a "${backup_path}" "${upgrade_path}" || { log "[ERROR] copy ${backup_path} to ${upgrade_path} failed"; return 1; }
+    log "[INFO] restore dir from ${backup_path} to ${upgrade_path}"
   done
 
-  log "[INFO] rollback update dir succuesfullly"
+  log "[INFO] rollback updated files and dirs succuesfullly"
+  return 0
 }
-
 
 # rollback automatically when the error occurs in upgrading
 error_on_rollback() {
   log "[ERROR] $@" 
-  log "[INFO] rollback..." 
-  rollback_new_add_dirs
-  rollback_upgrade_dirs
+  log "[INFO] Rollback..." 
+  rollback_new_add_paths
+  rollback_upgrade_paths
+  exit 1
 }
 
 # just for those upgarding from 1.1 to 1.2 and need to swith user from root to doris
@@ -104,6 +122,8 @@ monitor_json_be_doris=$(cat <<- 'EOF'
 [{"processName":"doris_be","startCmd":{"cmd":"sh","timeout":3600,"arguments":["/usr/local/service/doris/bin/start_be.sh","--daemon"],"environments":null},"user":"doris","group":"doris","port":""},{"processName":"org.apache.doris.broker.hdfs.BrokerBootstrap","startCmd":{"cmd":"sh","timeout":3600,"arguments":["/usr/local/service/doris/bin/start_broker.sh","--daemon"],"environments":null},"user":"doris","group":"doris","port":""}]
 EOF
 )
+
+# for 1.1 to 1.2, sometimes need to update monitor json
 update_monitor_json() {
   local monitor_json="/usr/local/service/cdwch/monitor.json"
   local monitor_json_bak="${monitor_json}.bak"
@@ -112,8 +132,8 @@ update_monitor_json() {
   local need_to_fix=true
   local node_type=""
   if [ -f ${monitor_json} ]; then
-    local actual_json=`echo $(cat ${monitor_json})`
-    cat ${monitor_json} | grep start_be > /dev/null
+    local actual_json=`echo $(cat "${monitor_json}")`
+    cat "${monitor_json}" | grep start_be > /dev/null
     if [ $? -eq 0 ]; then # for BE
       node_type="BE"
       if [ "${monitor_json_be_doris}" == "${actual_json}" ]; then
@@ -121,7 +141,7 @@ update_monitor_json() {
       fi
     fi
       
-    cat ${monitor_json} | grep PaloFe > /dev/null
+    cat "${monitor_json}" | grep PaloFe > /dev/null
     if [ $? -eq 0 ]; then
       if [ "${node_type}" == "BE" ]; then
         log "[WARN] there are some errors in ${monitor_json}($(cat ${monitor_json}))"
@@ -144,7 +164,7 @@ update_monitor_json() {
       log "[WARN] Update monitor json failed (Both ${monitor_json} and ${monitor_json_bak} are not exist!)"
       return 1
     fi
-    mv ${monitor_json} ${monitor_json_bak}
+    mv "${monitor_json}" "${monitor_json_bak}"
     if [ $? -ne 0 ]; then
       log "[WARN] Update monitor json failed (move ${monitor_json} to ${monitor_json_bak} failed!)"
       return 1
@@ -153,21 +173,13 @@ update_monitor_json() {
   fi
 
   # backup old monitor
-  mv ${monitor_json_bak} ${monitor_json_old}
-  if [ $? -ne 0 ]; then
-    log "[WARN] Update monitor json failed (Move ${monitor_json_bak} to ${monitor_json_old} failed!)"
-    return 1
-  fi
+  mv "${monitor_json_bak}" "${monitor_json_old}" || { log "[ERROR] Move ${monitor_json_bak} to ${monitor_json_old} failed"; return 1; }
   log "[INFO] move ${monitor_json_bak} to ${monitor_json_old}"
 
   # create new monitor files according to old
-  cat ${monitor_json_old} | grep start_be > /dev/null
+  cat "${monitor_json_old}" | grep start_be > /dev/null
   if [ $? -eq 0 ]; then
-    echo ${monitor_json_be_doris} > ${monitor_json_bak}
-    if [ $? -ne 0 ]; then
-      log "[WARN] Create monitor json failed!"
-      return 1
-    fi
+    echo ${monitor_json_be_doris} > ${monitor_json_bak} || { log "[ERROR] Create monitor json failed!"; return 1; }
     if [ "${node_type}" == "FE" ]; then
       log "[WARN] there are some errors in ${monitor_json_old}($(cat ${monitor_json_old}))"
       return 1
@@ -175,7 +187,7 @@ update_monitor_json() {
     node_type="BE"
     log "[INFO] create new ${monitor_json_bak} for ${node_type} node"
   else 
-    cat ${monitor_json_old} | grep PaloFe > /dev/null
+    cat "${monitor_json_old}" | grep PaloFe > /dev/null
     if [ $? -eq 0 ]; then
       echo ${monitor_json_fe_doris} > ${monitor_json_bak}
       if [ "${node_type}" == "BE" ]; then
@@ -192,15 +204,14 @@ update_monitor_json() {
   fi
   
   if [ "$1" == "RESTORE" ]; then
-    cp -f ${monitor_json_bak} ${monitor_json} 
-    if [ $? -ne 0 ]; then
-      log "[WARN] Restore monitor json failed (cp -f ${monitor_json_bak} to ${monitor_json} failed!)"
-      return 1
-    fi
+    cp -f ${monitor_json_bak} ${monitor_json} || { log "[ERROR] cp -f ${monitor_json_bak} to ${monitor_json} failed!"; return 1; }
     log "[INFO] restore ${monitor_json_bak} to ${monitor_json}"
   fi
+
+  return 0
 }
 
+# for 1.1 to 1.2, sometimes need to update agent version
 update_agent() {
   local agent_dir="/usr/local/service/cdwch/cdwch-agent"
   if [ -d ${agent_dir} ]; then
@@ -216,7 +227,7 @@ update_agent() {
         log "[INFO] current ${agent_file} is old(md5sum is ${current_md5}), need to update..."
       fi
     fi
-    rm -fr ${agent_dir}
+    rm -fr ${agent_dir} || { log "[ERROR] rm -fr ${agent_dir} failed"; return 1; }
     log "[INFO] remove dir ${agent_dir}"
   else
     log "[WARN] ${agent_dir} is not exist!"
@@ -225,7 +236,7 @@ update_agent() {
   # remove tar package of old agent
   local agent_tar="/usr/local/service/cdwch/cdwdoris-agent-1.0.0.tar.gz"
   if [ -f ${agent_tar} ]; then
-    rm -f ${agent_tar}
+    rm -f ${agent_tar} || { log "[ERROR] rm -f ${agent_tar} failed"; return 1; }
     log "[INFO] remove file ${agent_tar}"
   else
     log "[WARN] ${agent_tar} is not exist!"
@@ -238,8 +249,11 @@ update_agent() {
   else
     log "[INFO] killed cdwdoris-agent process and it will start automaticlly."
   fi
+
+  return 0
 }
 
+# for 1.1 to 1.2, sometimes need to change working dir owner
 change_working_dir_owner() {
   local need_to_fix=false
   local fe_dir="/data/cdw/doris/fe"
@@ -264,11 +278,7 @@ change_working_dir_owner() {
     if [ $? -ne 0 -o "$result" != "" ]; then
       log "[WARN] ${mydir} is ownered by root, now change to doris"
       need_to_fix=true
-      chown -R doris:doris ${mydir}
-      if [ $? -ne 0 ]; then
-        error_on_rollback "[FATAL] change the owner of ${mydir} to doris:doris failed"
-        exit 1
-      fi
+      chown -R doris:doris ${mydir} || { log "[FATAL] change the owner of ${mydir} to doris:doris failed"; return 1; }
     else
       log "[INFO] check ${mydir} is OK."
     fi
@@ -276,18 +286,29 @@ change_working_dir_owner() {
   if [ "${need_to_fix}" = false ]; then
     log "[INFO] no working dir are belong to root"
   fi
+
+  return 0
 }
 
-upgrade_doris() {
-  if [ ! -d ${sourceDir} ]; then
-    error_on_rollback "${sourceDir} is not exist"
-    exit 1
+# download new package
+download_new_package() {
+  local source_file=${NEW_VERSION_DORIS_TAR_PACKAGE}
+  log "[INFO] start to prepare the doris ${source_file} package."
+
+  # if exists in /data, move to SOURCE_DIR and return 0
+  log "[INFO] try to find the doris ${source_file} package in /data."
+  if [ -f "/data/${source_file}" ]; then
+    log "[INFO] ${source_file} is exists in dir /data, move to ${SOURCE_DIR}/${source_file}..."
+    mv "/data/${source_file}" "${SOURCE_DIR}/${source_file}" 
+    if [ $? -eq 0 ]; then
+      log "[INFO] success to move file ${source_file} from /data to ${SOURCE_DIR}!"
+      return 0
+    fi
   fi
 
-  local new_version=$(echo $doris_tar | grep -E -o "[0-9]\.[0-9]+" | head -1)
-  log "[INFO] start to upgrade doris to ${new_version} ($doris_tar)."
-
-  # decide the dir according to new version
+  # download from cos
+  log "[INFO] try to download ${source_file} from cos since it is not found in /data."
+  local new_version=$NEW_MAJOR_VERSION
   local cos_subdir=""
   case ${new_version} in
     0.15)
@@ -305,574 +326,277 @@ upgrade_doris() {
     2.0)
         cos_subdir="2.0"
         ;;
-    2.1)
-        cos_subdir="2.1"
-        ;;
-    3.0)
-        cos_subdir="3.0"
-        ;;
-    3.1)
-        cos_subdir="3.1"
-        ;;
-    *)
-        log "[WARN] Cannot figure out the cos subdir for unknown ${new_version}, try use ${new_version} as subdir!"
+    *) # from 2.0, cos_subdir is the same as major version
         cos_subdir=${new_version}
         ;;
   esac
   cos_subdir="doris/${cos_subdir}"
-
-  # download source packages
-  local source_file=${doris_tar}
-  if [ -f ${sourceDir}/${source_file} ]; then
-    error_on_rollback "The target file ${source_file} is already exists in ${sourceDir}, upgrade failed!"
-    exit 1
+  log "[INFO] start to wget from cos, and the url is ${COS_ADDR}/${cos_subdir}/${source_file}"
+  wget -q ${COS_ADDR}/${cos_subdir}/${source_file} -P ${SOURCE_DIR}
+  if [ $? -eq 0 ]; then
+    log "[INFO] success to download the doris ${source_file} package from cos and saved to ${SOURCE_DIR}."
+    return 0
   fi
 
-  if [ -f "/data/${source_file}" ]; then
-    log "[INFO] ${source_file} is exists in dir /data, move to ${sourceDir}/${source_file}..."
-    mv "/data/${source_file}" "${sourceDir}/${source_file}"
-    if [ $? -ne 0 ]; then
-      error_on_rollback "move file ${source_file} from /data to ${sourceDir} failed!"
-      exit 1
-    fi
-  else
-    log "[INFO] ${source_file} is not exists in dir /data, it will start to wget from cos..."
-    log "And the url is ${cos_bucket_url}/${cos_subdir}/${source_file}"
-    wget -q ${cos_bucket_url}/${cos_subdir}/${source_file} -P ${sourceDir}
-    if [ $? -ne 0 ]; then
-      error_on_rollback "wget file ${source_file} failed!"
-      exit 1
-    fi
-    log "[INFO] downloaded the doris ${source_file} package."
+  log "[ERROR] download file ${source_file} failed!"
+  return 1
+}
+
+# decompress new package
+decompress_new_package() {
+  local untar_work_dir="${SOURCE_DIR}/"
+  local upgrade_file_path="${untar_work_dir}/${NEW_VERSION_DORIS_TAR_PACKAGE}"
+
+  log "[INFO] start to decompress doris package $upgrade_file_path ..."
+  tar -zxf "${upgrade_file_path}" -C "${untar_work_dir}" || { log "[ERROR] unzip tar package ${upgrade_file_path} failed!"; return 1; }
+  log "[INFO] success to decompress $upgrade_file_path to ${untar_work_dir}."
+  return 0
+}
+
+# backup old doris dir
+backup_old_doris_dir() {
+  local dest_dir="${DEST_DIR}/doris"
+  log "[INFO] start to backup old doris (${dest_dir})..."
+  cp -a "${dest_dir}" "${BACKUP_DIR}" || { log "[ERROR] copy ${dest_dir} to ${BACKUP_DIR} failed." ; return 1; }
+  echo "${BACKUP_DIR}/doris,${dest_dir}" >> ${BACKUP_UPGRADE_PATH_PAIR_LIST}
+  log "[INFO] success to backup old doris ${dest_dir} to ${BACKUP_DIR}."
+  return 0
+}
+
+# upgrade a specified component which specified by param
+upgrade_a_specified_component() {
+  if [[ $# -ne 1 ]]; then
+    log "[ERROR] need to a param to specify the component"
+    return 1
   fi
 
-  # untar
-  log "[INFO] start to untar doris package ..."
-  local untar_work_dir="${sourceDir}/"
-  local upgrade_file_path="${sourceDir}/${source_file}"
-  tar -zxf "${upgrade_file_path}" -C "${untar_work_dir}"
+  local component=$(echo "$1" | tr '[:upper:]' '[:lower:]')
+  if [[ -z "$component" ]]; then
+    log "[ERROR] component param is null"
+    return 1
+  fi
+
+  case "$component" in
+    ms|fe|be|broker) log "[INFO] upgrade $component ...";;
+    *) 
+      log "[ERROR] invalid component $component ..."
+      return 1
+      ;;
+  esac
+
+  log "[INFO] start to upgrade the $component of doris..."
+
+  local dest_dir="${DEST_DIR}/doris"
+  local source_dir="${SOURCE_DIR}/doris"
+  local backup_dir="${BACKUP_DIR}/doris"
+
+  if [ ! -d "${source_dir}" ]; then
+    log "[ERROR] download and decompress new doris first before you do upgrade!"
+    return 1
+  fi
+
+  if [ ! -d "${backup_dir}" ]; then
+    log "[ERROR] backup first before you do upgrade!"
+    return 1
+  fi
+
+  log "[INFO] copy and replace the start script of $component of doris..."
+  cp -f "${source_dir}/bin/start_${component}.sh" "${dest_dir}/bin/start_${component}.sh"
   if [ $? -ne 0 ]; then
-    error_on_rollback "unzip tar package ${upgrade_file_path} failed!"
-    exit 1
+    log "[ERROR] copy ${source_dir}/bin/start_${component}.sh to ${dest_dir}/bin/start_${component}.sh failed"
+    return 1
   fi
-  log "[INFO] untar doris v${new_version} package ok."
+  echo "${backup_dir}/bin/start_${component}.sh,${dest_dir}/bin/start_${component}.sh" >> ${BACKUP_UPGRADE_PATH_PAIR_LIST}
 
-  # get old version
-  local dest_dir="/usr/local/service/doris"
-  local doris_be_bin="${dest_dir}/lib/be/doris_be"
-  if [ ! -f ${doris_be_bin} ]; then
-    log "[INFO] doris_be is not exists, try to find palo_be in ${dest_dir}/lib/be."
-    doris_be_bin="${dest_dir}/lib/be/palo_be"
-    if [ ! -f ${doris_be_bin} ]; then
-      error_on_rollback "Both doris_be and palo_be are not exists."
-      exit -1
-    fi
-  fi
-  local version_file="${dest_dir}/version.txt"
-  local version_str=""
-  if [ -f ${version_file} ]; then
-    read -r dump1 dump2 version_str < $version_file
-    if [ $? -ne 0 ]; then
-      error_on_rollback "read $version_file failed"
-      exit -1
-    fi
-  else
-    version_str=$(${doris_be_bin} --version)
-    if [ $? -ne 0 ]; then
-      error_on_rollback "get version from doris_be failed"
-      exit -1
-    fi
-  fi
-  local old_version=$(echo ${version_str} | grep -E -o "[0-9]\.[0-9]+" | head -1)
-  log "[INFO] Found your old version string of Doris is ${version_str}"
-
-  # backup old doris
-  log "[INFO] start to backup old doris..."
-  cp -a ${dest_dir} ${backupDir}
+  log "[INFO] copy and replace the stop script of $component of doris..."
+  cp -f "${source_dir}/bin/stop_${component}.sh" "${dest_dir}/bin/stop_${component}.sh"
   if [ $? -ne 0 ]; then
-    error_on_rollback "copy ${dest_dir} to ${backupDir} failed."
-    exit 1
+    log "[ERROR] copy ${source_dir}/bin/stop_${component}.sh to ${dest_dir}/bin/stop_${component}.sh failed"
+    return 1
   fi
-  rm -fr ${dest_dir}
+  echo "${backup_dir}/bin/stop_${component}.sh,${dest_dir}/bin/stop_${component}.sh" >> ${BACKUP_UPGRADE_PATH_PAIR_LIST}
+
+  log "[INFO] remove the lib of $component of doris..."
+  rm -fr "${dest_dir}/lib/${component}"
   if [ $? -ne 0 ]; then
-    error_on_rollback "remove ${dest_dir} failed."
-    exit 1
+    log "[ERROR] rm -fr ${dest_dir}/lib/${component} failed"
+    return 1
   fi
-  echo "${backupDir}/doris,${dest_dir}" >> ${backupUpgradeDirPairList}
-  log "[INFO] backup old doris ok."
+  echo "${backup_dir}/lib/${component},${dest_dir}/lib/${component}" >> ${BACKUP_UPGRADE_PATH_PAIR_LIST}
 
-  # upgrade
-  cp -a "${untar_work_dir}/doris" ${dest_dir}
-  echo "${dest_dir}" >> ${newAddDirList}
-  log "[INFO] copy ${untar_work_dir}/doris to ${dest_dir} ok."
+  log "[INFO] copy the new lib of $component of doris..."
+  cp -fr "${source_dir}/lib/${component}" "${dest_dir}/lib/"
+  if [ $? -ne 0 ]; then
+    log "[ERROR] copy ${source_dir}/lib/${component} to ${dest_dir}/lib failed"
+    return 1
+  fi
 
+  log "[INFO] success to upgrade the $component of doris."
+  return 0
+}
+
+# upgrade whole doris
+upgrade_whole_doris() {
+  log "[INFO] start to upgrade whole doris..."
+  local dest_dir="${DEST_DIR}/doris"
+  local source_dir="${SOURCE_DIR}/doris"
+  local backup_dir="${BACKUP_DIR}/doris"
+
+  if [ ! -d "${source_dir}" ]; then
+    log "[ERROR] download and decompress new doris first before you do upgrade!"
+    return 1
+  fi
+
+  if [ ! -d "${backup_dir}" ]; then
+    log "[ERROR] backup first before you do upgrade!"
+    return 1
+  fi
+
+  log "[INFO] remove the whole doris dir ${dest_dir}..."
+  rm -fr "${dest_dir}" || { log "[ERROR] rm -fr ${dest_dir} failed"; return 1; }
+  echo "${backup_dir},${dest_dir}" >> ${BACKUP_UPGRADE_PATH_PAIR_LIST}
+
+  log "[INFO] copy the new whole doris dir (copy ${source_dir} to ${DEST_DIR})"
+  cp -fr "${source_dir}" "${DEST_DIR}" || { log "[ERROR] copy ${source_dir}/lib/${component} to ${dest_dir}/lib failed"; return 1; }
+
+  log "[INFO] success to upgrade the whole doris from $OLD_VERSION to $NEW_VERSION."
+  return 0
+}
+
+# need to keep old configura and libs after replace and upgrade doris whole dir
+keep_old_configure_and_libs() {
   # restore conf files
-  log "[INFO] restore old conf of be, fe."
-  rm -fr ${dest_dir}/conf
-  cp -a ${backupDir}/doris/conf ${dest_dir}
+  local dest_dir="${DEST_DIR}/doris"
+  local backup_dir="${BACKUP_DIR}/doris"
+  log "[INFO] start to restore old conf and libs..."
+
+  rm -fr ${dest_dir}/conf || { log "[ERROR] rm -fr ${dest_dir}/conf failed"; return 1; }
+  cp -a "${backup_dir}/conf" "${dest_dir}" || { log "[ERROR] cp -a ${backup_dir}/conf ${dest_dir} failed"; return 1; }
   if [ -d "${dest_dir}/plugins/AuditLoader" ]; then
     log "[INFO] restore old conf of audit loader plugin."
-    cp -f "${backupDir}/doris/plugins/AuditLoader/plugin.conf" "${dest_dir}/plugins/AuditLoader"
+    cp -f "${backup_dir}/plugins/AuditLoader/plugin.conf" "${dest_dir}/plugins/AuditLoader"
   fi
 
   # restore keytab file if exists
-  if ls ${backupDir}/doris/*.keytab &> /dev/null; then
+  if ls ${backup_dir}/*.keytab &> /dev/null; then
     log "[INFO] restore keytab files to ${dest_dir}."
-    cp -f ${backupDir}/doris/*.keytab ${dest_dir}
+    cp -f ${backup_dir}/*.keytab ${dest_dir} || { log "[ERROR] cp -f ${backup_dir}/*.keytab ${dest_dir} failed"; return 1; }
   fi
 
   # restore old jdbc drivers
-  local old_jdbc_driver_dir="${backupDir}/doris/jdbc_drivers"
+  local old_jdbc_driver_dir="${backup_dir}/jdbc_drivers"
   local new_jdbc_driver_dir="${dest_dir}/jdbc_drivers"
   if [ -d "${old_jdbc_driver_dir}" ]; then
     log "[INFO] restore old jdbc_drivers."
     if [ ! -d "${new_jdbc_driver_dir}" ]; then
-      mkdir -p ${new_jdbc_driver_dir}
+      mkdir -p ${new_jdbc_driver_dir} || { log "[ERROR] mkdir -p ${new_jdbc_driver_dir} failed"; return 1; }
     fi
-    cp -f ${old_jdbc_driver_dir}/*.jar "${new_jdbc_driver_dir}"
+    cp -f ${old_jdbc_driver_dir}/*.jar "${new_jdbc_driver_dir}" || { log "[ERROR] copy jars from ${old_jdbc_driver_dir} to ${new_jdbc_driver_dir} failed"; return 1; }
   fi
 
   # restore scripts for cloud manage controller 
   local new_scirpts_dir="${dest_dir}/bin"
-  local apiserver_operation_sh="${backupDir}/doris/bin/apiserver_operation.sh"
+  local apiserver_operation_sh="${backup_dir}/bin/apiserver_operation.sh"
   if [ -f "${apiserver_operation_sh}" ]; then
     log "[INFO] restore ${apiserver_operation_sh}."
-    cp -f "${apiserver_operation_sh}" "${new_scirpts_dir}"
+    cp -f "${apiserver_operation_sh}" "${new_scirpts_dir}" || { log "[ERROR] cp -f ${apiserver_operation_sh} ${new_scirpts_dir} failed"; return 1; }
   fi
-  local fe_monitor_sh="${backupDir}/doris/bin/fe_monitor.sh"
+  local fe_monitor_sh="${backup_dir}/doris/bin/fe_monitor.sh"
   if [ -f "${fe_monitor_sh}" ]; then
     log "[INFO] restore ${fe_monitor_sh}."
-    cp -f "${fe_monitor_sh}" "${new_scirpts_dir}"
+    cp -f "${fe_monitor_sh}" "${new_scirpts_dir}" || { log "[ERROR] cp -f ${fe_monitor_sh} ${new_scirpts_dir} failed"; return 1; }
   fi
 
-  # need to add doris user group for upgrading from 1.2 and later
-  if [ "${new_version}" == "1.2" ] && [ "${old_version}" == "1.1" ]; then
-
-    log "[INFO] Due to upgrading from ${old_version} to ${new_version}, need to change user from root to doris for starting doris...."
-
-    local group="doris"
-    local user="doris"
-
-    # 1. create group if not exists
-    grep -E "^$group" /etc/group >& /dev/null
-    if [ $? -ne 0 ]; then
-      groupadd $group
-      if [ $? -ne 0 ]; then
-        log "[WARN] add group $group failed"
-      else
-        log "[INFO] Add group $group successfully!"
-      fi
-    fi
-
-    # 2. create user if not exists
-    grep -E "^$user" /etc/passwd >& /dev/null
-    if [ $? -ne 0 ]; then
-      useradd -g $group $user
-      if [ $? -ne 0 ]; then
-        log "[WARN] add user $user to $group failed"
-      else
-        log "[INFO] Add user $user successfully!"
-      fi
-    fi
-
-    # 3. check and fix owners of working dir
-    log "[INFO] check and fix owners of working dir"
-    change_working_dir_owner
-    
-    # 4. check and fix monitor.json
-    log "[INFO] check and fix monitor.json"
-    update_monitor_json
-
-    # 5. check and fix cdwch-agent
-    log "[INFO] check and fix cdwch-agent"
-    update_agent
-
-  # need to check and prepare jdk17 for 3.0
-  elif [ "${new_version}" == "3.0" ] && [ "${old_version}" == "2.1" ]; then
-    local jdk_dest_dir="/usr/local"
-    local jdk_dest_path="${jdk_dest_dir}/jdk17"
-    if [ ! -d "${jdk_dest_path}" ]; then
-      log "[INFO] ${jdk_dest_path} is not exists, it will start to wget from cos..."
-      local jdk17_tar_file="TencentKona-17.0.13.b1-jdk_linux-x86_64.tar.gz"
-      log "And the url is ${cos_bucket_url}/${cos_subdir}/${jdk17_tar_file}"
-      wget -q ${cos_bucket_url}/${cos_subdir}/${jdk17_tar_file} -P ${sourceDir}
-      if [ $? -ne 0 ]; then
-        error_on_rollback "wget file ${jdk17_tar_file} failed!"
-        exit 1
-      fi
-      log "[INFO] downloaded the file ${jdk17_tar_file} package."
-
-      # untar
-      log "[INFO] start to untar jdk17 package ..."
-      tar -zxf "${sourceDir}/${jdk17_tar_file}" -C "${jdk_dest_dir}"
-      if [ $? -ne 0 ]; then
-        error_on_rollback "unzip tar package ${jdk17_tar_file} failed!"
-        exit 1
-      fi
-      local jdk17_untar_file="${jdk_dest_dir}/TencentKona-17.0.13.b1"
-      mv ${jdk17_untar_file} ${jdk_dest_path}
-      if [ $? -ne 0 ]; then
-        error_on_rollback "[WARN] Move ${jdk17_untar_file} to ${jdk_dest_path} failed!"
-        exit 1
-      fi
-      log "[INFO] Moved ${jdk17_untar_file} to ${jdk_dest_path}"
-    fi
-  fi
-
-  log "[INFO] success to upgrade doris from v${old_version} to v${new_version}."
+  log "[INFO] success to restore old conf and libs."
+  return 0
 }
 
-fix_start_scripts() {
-  # download source packages
-  local cos_subdir="doris/1.2.0"
-  local dest_dir="/usr/local/service"
-  local source_file=${doris_tar}
-  if [ -f ${sourceDir}/${source_file} ]; then
-    error_on_rollback "The target file ${source_file} is already exists in ${sourceDir}, check and fix done?"
-    exit 1
-  fi
-
-  if [ -f "/data/${source_file}" ]; then
-    log "[INFO] ${source_file} is exists in dir /data, move to ${sourceDir}/${source_file}..."
-    mv "/data/${source_file}" "${sourceDir}/${source_file}"
-    if [ $? -ne 0 ]; then
-      error_on_rollback "move file ${source_file} from /data to ${sourceDir} failed!"
-      exit 1
-    fi
-  else
-    log "[INFO] ${source_file} is not exists in dir /data, it will start to wget from cos..."
-    log "And the url is ${cos_bucket_url}/${cos_subdir}/${source_file}"
-    wget -q ${cos_bucket_url}/${cos_subdir}/${source_file} -P ${sourceDir}
-    if [ $? -ne 0 ]; then
-      error_on_rollback "wget file ${source_file} failed!"
-      exit 1
-    fi
-    log "[INFO] downloaded the doris ${source_file} package."
-  fi
-
-  # untar
-  log "[INFO] start to untar doris package ..."
-  local untar_work_dir="${sourceDir}/"
-  local upgrade_file_path="${sourceDir}/${source_file}"
-  tar -zxf "${upgrade_file_path}" -C "${untar_work_dir}"
-  if [ $? -ne 0 ]; then
-    error_on_rollback "unzip tar package ${upgrade_file_path} failed!"
-    exit 1
-  fi
-  log "[INFO] untar doris v${new_version} package ok."
-
-  # backup old bin of doris
-  local bin_dir="doris/bin"
-  mkdir -p ${backupDir}/doris && cp -a ${dest_dir}/${bin_dir} ${backupDir}/${bin_dir}
-  if [ $? -ne 0 ]; then
-    error_on_rollback "copy ${dest_dir}/${bin_dir} to ${backupDir}/${bin_dir} failed."
-    exit 1
-  fi
-
-  rm -fr "${dest_dir}/${bin_dir}"
-  if [ $? -ne 0 ]; then
-    error_on_rollback "remove ${dest_dir}/${bin_dir} failed."
-    exit 1
-  fi
-  echo "${backupDir}/${bin_dir},${dest_dir}/${bin_dir}" >> ${backupUpgradeDirPairList}
-  log "[INFO] backup old bin of doris ok."
-
-  # 1. check and fix start scripts (start_be.sh, start_fe.sh and start_broker.sh) 
-  log "[INFO] check and fix start scripts (start_be.sh, start_fe.sh and start_broker.sh)"
-  cp -a "${untar_work_dir}/${bin_dir}" "${dest_dir}/${bin_dir}"
-  if [ $? -ne 0 ]; then
-    error_on_rollback "copy ${untar_work_dir}/${bin_dir} to ${dest_dir}/${bin_dir} failed."
-    exit 1
-  fi
-  chown -R doris:doris "${dest_dir}/${bin_dir}"
-
-  echo "${dest_dir}/${bin_dir}" >> ${newAddDirList}
-  log "[INFO] copy ${untar_work_dir}/${bin_dir} to ${dest_dir}/${bin_dir} ok."
-
-
-  # 2. check and fix log4j.properties
-  local conf_file="doris/conf/log4j.properties"
-  log "[INFO] check and fix ${conf_file}"
-  mkdir -p "${backupDir}/doris/conf"
-  cp -a "${dest_dir}/${conf_file}" "${backupDir}/${conf_file}"
-  echo "${backupDir}/${conf_file},${dest_dir}/${conf_file}" >> ${backupUpgradeDirPairList}
-  rm -f "${dest_dir}/${conf_file}"
-  echo "${dest_dir}/${conf_file}" >> ${newAddDirList}
-  cp -a "${untar_work_dir}/${conf_file}" "${dest_dir}/${conf_file}"
-  if [ $? -ne 0 ]; then
-    error_on_rollback "copy ${untar_work_dir}/${conf_file} to ${dest_dir}/${conf_file} failed."
-  fi
-  chown doris:doris "${dest_dir}/${conf_file}"
-}
-
-check_fix_doris(){
-  if [ ! -d ${sourceDir} ]; then
-    log "[ERROR] ${sourceDir} is not exist"
-    exit 1
-  fi
-
-  local new_version=$(echo $doris_tar | grep -E -o "[0-9]\.[0-9]+" | head -1)
-  if [ "${new_version}" != "1.2" ]; then
-    log "[ERROR] no need to fix, the doris version is not right"
-    exit 0
-  fi
-
-  # get old version
-  local dest_dir="/usr/local/service"
-  local doris_be_bin="${dest_dir}/doris/lib/be/doris_be"
-  if [ ! -f ${doris_be_bin} ]; then
-    log "[ERROR] ${doris_be_bin} not exists."
-    exit -1
-  fi
-  local version_str=$(${doris_be_bin} --version)
-  local old_version=$(echo ${version_str} | grep -E -o "[0-9]\.[0-9]+" | head -1)
-  log "[INFO] Found your old version string of Doris is ${old_version} (${version_str})"
-  if [ "${old_version}" != "1.2" ]; then
-    log "[ERROR] no need to fix, the doris version is not right, it now just fix 1.2"
-    exit 0
-  fi
-
-  # check for if or not fix start scripts
-  local need_to_fix=false
-  local start_be_script="start_be"
-  local start_fe_script="start_fe"
-  local start_broker_script="start_broker"
-  declare -A MD5_MAP
-  MD5_MAP["${start_be_script}"]="fae585a2bef6eeb288c006922ed3735b"
-  MD5_MAP["${start_fe_script}"]="d7455720d9fd4c0f04774bc4443a50f0"
-  MD5_MAP["${start_broker_script}"]="895241467593aca27f021312405ea1ad"
-  for myscript in ${!MD5_MAP[*]}
-  do   
-    local myfile="${dest_dir}/doris/bin/${myscript}.sh"
-    if [ ! -f ${myfile} ]; then
-      log "[ERROR] ${myfile} not exists."
-      exit -1
-    fi
-    local md5sum=$(md5sum ${myfile} | awk '{print $1}')
-    local expected_md5=${MD5_MAP[$myscript]}
-    if [ "${md5sum}" != "${expected_md5}" ]; then
-      log "[INFO] md5 not match, expected $expected_md5, actually $md5sum(${myfile}), need to fix..."
-      need_to_fix=true
-      break
-    fi
-  done
-  if [ "${need_to_fix}" = true ]; then
-    fix_start_scripts
-  else
-    log "[INFO] no need to fix start scripts, they are all the newest!"
-  fi
-
-  # 3. check and fix user and group related issue
-  log "[INFO] check and fix user and group related issue"
+# need to change from root to doris user group for upgrading from 1.2 and later
+change_owner_from_root_to_doris() {
   local group="doris"
+  local user="doris"
+  log "[INFO] change owner from root to doris..."
+
+  # 1. create group if not exists
   grep -E "^$group" /etc/group >& /dev/null
   if [ $? -ne 0 ]; then
     groupadd $group
     if [ $? -ne 0 ]; then
-      log "[WARN] Add group $group failed"
+      log "[WARN] add group $group failed"
     else
       log "[INFO] Add group $group successfully!"
     fi
-  else
-    log "[INFO] no need to add group $group which is already exist!"
   fi
 
-  # create user if not exists
-  local user="doris"
+  # 2. create user if not exists
   grep -E "^$user" /etc/passwd >& /dev/null
   if [ $? -ne 0 ]; then
     useradd -g $group $user
     if [ $? -ne 0 ]; then
-      log "[WARN] Add user $user to $group failed"
+      log "[WARN] add user $user to $group failed"
     else
       log "[INFO] Add user $user successfully!"
     fi
-  else
-    log "[INFO] no need to add user $user which is already exist!"
   fi
 
-  # 4. check and fix owners of working dir
+  # 3. check and fix owners of working dir
   log "[INFO] check and fix owners of working dir"
-  change_working_dir_owner
- 
-  # 5. check and fix monitor.json
+  change_working_dir_owner || { log "[ERROR] check and fix owners of working dir failed"; return 1; }
+  
+  # 4. check and fix monitor.json
   log "[INFO] check and fix monitor.json"
-  update_monitor_json "RESTORE"
+  update_monitor_json || { log "[ERROR] check and fix monitor.json failed"; return 1; }
 
-  # 6. check and fix cdwch-agent
+  # 5. check and fix cdwch-agent
   log "[INFO] check and fix cdwch-agent"
-  update_agent
+  update_agent || { log "[ERROR] check and fix cdwch-agent failed"; return 1; }
 
-  log "[INFO] success to check and fix doris v${old_version} according to v${new_version}."
+  log "[INFO] success to change owner from root to doris..."
+  return 0
 }
 
-usage(){
-  echo "USAGE: $0 region[|-r or --rollback] package_name [-f]"
-  echo "or"
-  echo "$0 -r package_name"
-  echo "or"
-  echo "$0 -fix package_name"
-  echo " e.g.: \"$0 bj tencent-cdw-doris-1.2.2-rc01-2a8a38e.tar.gz\" for upgrade from beijing bucket"
-  echo " e.g.: \"$0 gz tencent-cdw-doris-1.2.2-rc01-2a8a38e.tar.gz\" for upgrade from guangzhou bucket"
-  echo " e.g.: \"$0 sh tencent-cdw-doris-1.2.2-rc01-2a8a38e.tar.gz\" for upgrade from shanghai bucket"
-  echo " e.g.: \"$0 nj tencent-cdw-doris-1.2.2-rc01-2a8a38e.tar.gz\" for upgrade from nanjing bucket"
-  echo " e.g.: \"$0 hk tencent-cdw-doris-1.2.2-rc01-2a8a38e.tar.gz\" for upgrade from hongkong bucket"
-  echo " e.g.: \"$0 cq tencent-cdw-doris-1.2.2-rc01-2a8a38e.tar.gz\" for upgrade from chongqing bucket"
-  echo " e.g.: \"$0 sg tencent-cdw-doris-1.2.2-rc01-2a8a38e.tar.gz\" for upgrade from singapore bucket"
-  echo " e.g.: \"$0 cd tencent-cdw-doris-1.2.2-rc01-2a8a38e.tar.gz\" for upgrade from chengdu bucket"
-  echo " or \"$0 -r tencent-cdw-doris-1.2.2-rc01-2a8a38e.tar.gz\" for rollback to version tencent-cdw-doris-1.2.2-rc01-2a8a38e"
-  echo " e.g.: \"$0 bj tencent-cdw-doris-1.2.2-rc01-2a8a38e.tar.gz -f\" for fix according to the version in beijing bucket"
-}
+# need to check and prepare jdk17 for 3.0
+check_install_jdk17() {
+  local jdk_dest_dir="/usr/local"
+  local jdk_dest_path="${jdk_dest_dir}/jdk17"
+  log "[INFO] check if need to install jdk17..."
 
-create_log_file() {
-  touch ${logFile}
-  if [ $? -ne 0 ]; then
-    echo "[ERROR] create file ${logFile} failed!"
-    exit 1
-  fi
-}
+  if [ ! -d "${jdk_dest_path}" ]; then
+    local jdk17_tar_file="TencentKona-17.0.13.b1-jdk_linux-x86_64.tar.gz"
+    local file_url="${COS_ADDR}/doris/3.0/${jdk17_tar_file}"
+    log "[INFO] ${jdk_dest_path} is not exists, it will start to wget from cos of $file_url"
 
-init() {
+    # download
+    wget -q ${file_url} -P ${SOURCE_DIR} || { log "[ERROR] wget file ${jdk17_tar_file} failed!"; return 1; }
+    log "[INFO] downloaded the file ${jdk17_tar_file} package."
 
-  # two params for upgrade and rollback and three params for checking and fixing
-  if [ $# -ne 2 ] && [ $# -ne 3 ] ; then
-    usage $@
-    exit 1;
-  fi
+    # untar
+    log "[INFO] start to untar jdk17 package ..."
+    tar -zxf "${SOURCE_DIR}/${jdk17_tar_file}" -C "${jdk_dest_dir}" || { log "[ERROR] unzip tar package ${jdk17_tar_file} failed"; return 1; }
 
-  if [ $# -eq 3 ] && [ "$3" != "-f" ] ; then
-    usage $@
-    exit 1;
-  fi
+    # install
+    local jdk17_untar_file="${jdk_dest_dir}/TencentKona-17.0.13.b1"
+    mv "${jdk17_untar_file}" "${jdk_dest_path}" || { log "[ERROR] Move ${jdk17_untar_file} to ${jdk_dest_path} failed"; return 1; }
+    log "[INFO] Moved ${jdk17_untar_file} to ${jdk_dest_path}"
 
-  doris_tar="$2"
-  if [[ "${doris_tar:0:18}" != "tencent-cdw-doris-" ]]; then
-    usage $@
-    exit 1;
-  fi
-
-  if [[ "${doris_tar:0-7:7}" != ".tar.gz" ]]; then
-    doris_tar="${doris_tar}.tar.gz"
-    echo "package_name missed .tar.gz? it has been complemented with .tar.gz as suffix:${doris_tar}"
-  fi
-
-  upgrade_version_string=${doris_tar%\.tar\.gz}
-
-  execute_mode="UPGRADE"
-  if [ "$3" == "-f" ]; then
-    execute_mode="CHECK_FIX"
-  fi
-
-  case $1 in
-    bj|beijing)
-    cos_bucket_url=${bj_cos_bucket_url}
-    ;;
-    gz|guangzhou)
-    cos_bucket_url=${gz_cos_bucket_url}
-    ;;
-    sh|shanghai)
-    cos_bucket_url=${sh_cos_bucket_url}
-    ;;
-    hk|hongkong)
-    cos_bucket_url=${hk_cos_bucket_url}
-    ;;
-    nj|nanjing)
-    cos_bucket_url=${nj_cos_bucket_url}
-    ;;
-    cq|chongqing)
-    cos_bucket_url=${cq_cos_bucket_url}
-    ;;
-    sg|singapore|xinjiapo)
-    cos_bucket_url=${sg_cos_bucket_url}
-    ;;
-    cd|chengdu)
-    cos_bucket_url=${cd_cos_bucket_url}
-    ;;
-    1305504398.cos.ap|shadc|shanghaiadc)
-    cos_bucket_url=${shadc_cos_bucket_url}
-    ;;
-    shjr|shanghai-fsi)
-    cos_bucket_url=${shfsi_cos_bucket_url}
-    ;;
-    us|siliconvalley)
-    cos_bucket_url=${siliconvalley_cos_bucket_url}
-    ;;
-    th|bangkok)
-    cos_bucket_url=${bangkok_cos_bucket_url}
-    ;;
-    use|ashburn)
-    cos_bucket_url=${ashburn_cos_bucket_url}
-    ;;
-    jp|tokyo)
-    cos_bucket_url=${tokyo_cos_bucket_url}
-    ;;
-    jkt|jakarta)
-    cos_bucket_url=${jakarta_cos_bucket_url}
-    ;;
-    szjr|shenzhen-fsi)
-    cos_bucket_url=${shenzhenfsi_cos_bucket_url}
-    ;;
-    kr|seoul)
-    cos_bucket_url=${seoul_cos_bucket_url}
-    ;;
-    -r|rollback)
-    execute_mode="ROLLBACK"
-    ;;
-    *)
-    usage $@
-    exit 1
-    ;;
-  esac
-
-  # create source dir and backup dir
-  sourceDir="${work_dir_prefix}/${upgrade_version_string}/source"
-  backupDir="${work_dir_prefix}/${upgrade_version_string}/backup"
-  logFile="${work_dir_prefix}/${upgrade_version_string}/${execute_mode,,}_doris.log"
-  backupUpgradeDirPairList="${backupDir}/upgrade_dir_pair_list.txt"
-  newAddDirList="${backupDir}/new_add_dir_list.txt"
-
-  # create log file
-  if [ -f ${logFile} ]; then
-    echo "[ERROR] ${logFile} is exist, maybe you do ${execute_mode,,} more times"
-    exit 1
-  fi
-
-  # for rollback, all init things done here
-  if [ ${execute_mode} == "ROLLBACK" ]; then
-    return 0
-  fi
-
-  if [ ! -d ${sourceDir} ]; then
-    mkdir -p ${sourceDir}
+    log "[INFO] success to install jdk17"
   else
-    echo "[ERROR] ${sourceDir} is exist!"
-    exit 1
+    log "[INFO] jdk17 is exist, no need to install."
   fi
-
-  if [ ! -d ${backupDir} ]; then
-    mkdir -p ${backupDir}
-  else
-    echo "[ERROR] ${backupDir} is exist!"
-    exit 1
-  fi
-
-  create_log_file 
+  
+  return 0
 }
 
-#########################
-# do upgrade or rollback
-########################
-
-# init
-init $@
-
+# check and fix the data dir of metaservice which is need to change the owner from root to doris.
 check_and_fix_ms_dir() {
     local DIR="$1"
     local USER="doris"
     local GROUP="doris"
 
+    log "[INFO] check and fix the data dir of metaservice to change the owner from root to doris..."
     if [ ! -d "$DIR" ]; then
-        return 1
+	log "[WARN] $DIR is not a valid path"
+        return 0
     fi
 
     local owner
@@ -881,46 +605,353 @@ check_and_fix_ms_dir() {
     group=$(stat -c %G "$DIR")
 
     if [ "$owner" != "$USER" ] || [ "$group" != "$GROUP" ]; then
-        chown -R "$USER:$GROUP" "$DIR" || return 2
+        chown -R "$USER:$GROUP" "$DIR" || { log "[ERROR] chown failed"; return 1; }
     fi
+
+    log "[INFO] success to change the owner of MS data dir from root to doris"
+    return 0
 }
 
+# Validate region; return the address if found, or empty string otherwise
+match_cos_region_address() {
+  local keyword="$1"
+  if [[ -z "$keyword" ]]; then
+    echo ""
+    return 0
+  fi
+  keyword=$(echo "$keyword" | tr '[:upper:]' '[:lower:]')
+  for addr in "${ADDRESSES[@]}"; do
+    addr_lower=$(echo "$addr" | tr '[:upper:]' '[:lower:]')
+    if [[ "$addr_lower" =~ "apps-${keyword}-" ]]; then
+      echo "$addr"
+      return 0
+    fi
+  done
+  echo ""
+  return 0
+}
+
+# Try to detect and return the current region automatically
+detect_region() {
+  # Example: get region from Tencent CVM metadata
+  local meta_region
+  meta_region=$(curl -s http://metadata.tencentyun.com/latest/meta-data/placement/region 2>/dev/null)
+  if [[ -n "${meta_region}" ]]; then
+    # meta_region may return like "ap-shanghai"
+    for addr in "${ADDRESSES[@]}"; do
+      if [[ "$addr" =~ \.(${meta_region})\.myqcloud\.com$ ]]; then
+        if [[ "$addr" =~ apps-([a-z]+)-[0-9]+\.cos\.${meta_region}\.myqcloud\.com$ ]]; then
+          echo "${BASH_REMATCH[1]}"
+          return 0
+        fi
+      fi
+    done
+  fi
+  echo ""
+  return 0
+}
+
+# Validate version format, allow optional .tar.gz suffix
+match_version() {
+  local ver="$1"
+  [[ "$ver" =~ ^tencent-cdw-doris-[0-9]+\.[0-9]+\.[0-9]+-[a-zA-Z0-9]+(-[a-zA-Z0-9]+){0,2}(\.tar\.gz)?$ ]]
+}
+
+# get old version
+get_old_version() {
+  local dest_dir="/usr/local/service/doris"
+
+  # case 1: by version.txt
+  local version_file="${dest_dir}/version.txt"
+  local version_str=""
+  if [ -f ${version_file} ]; then
+    read -r dump1 dump2 version_str < $version_file
+    if [[ $? -eq 0 && "$version_str" != "" ]]; then
+      echo $version_str
+      return 0
+    fi
+  fi
+
+  # case 2: by doris_be --version
+  local doris_be_bin="${dest_dir}/lib/be/doris_be"
+  if [ ! -f ${doris_be_bin} ]; then
+    #log "[INFO] doris_be is not exists, try to find palo_be in ${dest_dir}/lib/be."
+    doris_be_bin="${dest_dir}/lib/be/palo_be"
+  fi
+  if [ -f ${doris_be_bin} ]; then
+    version_str=$(${doris_be_bin} --version 2>/dev/null)
+    if [[ $? -eq 0 && "$version_str" != "" ]]; then
+      IFS=" (" read -r version _ <<< "$version_str"
+      echo $version
+      return 0
+    fi
+  fi
+
+  # case 3: by start_be.sh --version
+  version_str=$(sh /usr/local/service/doris/bin/start_be.sh --version)
+  if [[ $? -eq 0 && "$version_str" != "" ]]; then
+    IFS=" (" read -r version _ <<< "$version_str"
+    echo $version
+    return 0
+  fi
+
+  # can't decide the version
+  echo ""
+  return 1
+}
+
+usage() {
+  echo "Usage: $0 [region|-r|rollback] <version> [--ms] [--fe] [--be] [--broker]"
+  echo "Parameters can be in any order."
+  echo "Examples:"
+  echo "  $0 sh tencent-cdw-doris-3.0.8-xxxx-1234567 --ms --fe"
+  echo "  $0 tencent-cdw-doris-1.1.5-rc02-ea64eeb --broker --be sh"
+  echo "  $0 -r tencent-cdw-doris-1.2.10-6fe1462-2502272.tar.gz --broker"
+  echo "  $0 rollback tencent-cdw-doris-1.1.5-rc02-ea64eeb.tar.gz --fe"
+  exit 1
+}
+
+#############################################################################################################################
+# Do upgrade or rollback
+#############################################################################################################################
+
+opt_ms=0
+opt_fe=0
+opt_be=0
+opt_broker=0
+opt_all=0
+
+region=""
+version=""
+is_rollback=0
+
+# Loop through arguments and classify them
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --ms)
+      opt_ms=1
+      shift
+      ;;
+    --fe)
+      opt_fe=1
+      shift
+      ;;
+    --be)
+      opt_be=1
+      shift
+      ;;
+    --broker)
+      opt_broker=1
+      shift
+      ;;
+    -r|rollback)
+      is_rollback=1
+      shift
+      ;;
+    -*)
+      # Unknown flag
+      echo "[ERROR] Unknown option $1"
+      usage
+      ;;
+    *)
+      # Non-flag argument, check if it's version or region
+      if [[ -z "$version" ]] && match_version "$1" > /dev/null; then
+        version="$1"
+        shift
+      elif [[ -z "$region" ]] && [[ -n "$(match_cos_region_address "$1")" ]]; then
+        region="$1"
+        shift
+      else
+        # Not recognized, may be input order issue
+        echo "[ERROR] Unknown or invalid parameter: $1"
+        usage
+      fi
+      ;;
+  esac
+done
+
+# Version is mandatory
+if [[ -z "$version" ]]; then
+  echo "[ERROR] Version argument is required!"
+  usage
+fi
+
+# trim the suffix if has
+NEW_VERSION_DORIS_TAR_PACKAGE="${version}"
+if [[ "${version}" != *.tar.gz ]]; then
+  NEW_VERSION_DORIS_TAR_PACKAGE="${version}.tar.gz"
+fi
+upgrade_version_string=${NEW_VERSION_DORIS_TAR_PACKAGE%\.tar\.gz}
+
+# create log file
+date_str=$(date +"%Y%m%d_%H%M%S")
+log_dir="${WORK_DIR_PREFIX}/${upgrade_version_string}"
+if [[ $is_rollback -eq 0 ]]; then  # for upgrading
+  LOG_FILE="${log_dir}/upgrade_${date_str}.log"
+else
+  LOG_FILE="${log_dir}/rollback_${date_str}.log"
+fi
+mkdir -p "$log_dir" || { echo "[ERROR] create log dir $log_dir failed"; exit 1; }
+touch "$LOG_FILE" || { echo "[ERROR] create log file $LOG_FILE failed"; exit 1; }
+
+# For upgrade mode, region is required. Try auto-detect if not specified.
+COS_ADDR=""
+if [[ $is_rollback -eq 0 ]]; then
+  if [[ -z "$region" ]]; then
+    region=$(detect_region)
+    if [[ -z "$region" ]]; then
+      log "[ERROR] Region argument is required in upgrade mode and could not be auto-detected!"
+      usage
+    else
+      log "[INFO] Region auto-detected as: $region"
+    fi
+  fi
+  COS_ADDR=$(match_cos_region_address "$region")
+  if [[ -z "$COS_ADDR" ]]; then
+    log "[ERROR] Invalid region code: $region"
+    usage
+  fi
+fi
+
+# For rollback mode, region is not required, but can be provided
+if [[ $is_rollback -eq 1 && -n "$region" ]]; then
+  COS_ADDR=$(match_cos_region_address "$region")
+  if [[ -z "$COS_ADDR" ]]; then
+    log "[ERROR] Invalid region code: $region"
+    usage
+  fi
+fi
+
+# Print out final selections
+if [[ $is_rollback -eq 1 ]]; then
+  log "[INFO] Mode: Rollback"
+else
+  log "[INFO] Mode: Upgrade"
+  log "[INFO] Region: $region"
+  log "[INFO] COS address: $COS_ADDR"
+fi
+log "[INFO] Version: $version"
+log "[INFO] Options:"
+[[ $opt_ms -eq 1 ]] && log "  --ms"
+[[ $opt_fe -eq 1 ]] && log "  --fe"
+[[ $opt_be -eq 1 ]] && log "  --be"
+[[ $opt_broker -eq 1 ]] && log "  --broker"
+
+# No component options specified, defaulting to --ms --fe --be --broker
+if [[ $opt_ms -eq 0 && $opt_fe -eq 0 && $opt_be -eq 0 && $opt_broker -eq 0 ]]; then
+  opt_all=1
+  log "[INFO] No component options specified, defaulting to --ms --fe --be --broker"
+fi
+
+# create source dir and backup dir
+DEST_DIR="/usr/local/service"
+SOURCE_DIR="${WORK_DIR_PREFIX}/${upgrade_version_string}/source"
+BACKUP_DIR="${WORK_DIR_PREFIX}/${upgrade_version_string}/backup"
+BACKUP_UPGRADE_PATH_PAIR_LIST="${BACKUP_DIR}/upgrade_path_pair_list.txt"
+NEW_ADD_PATHS_LIST="${BACKUP_DIR}/new_add_paths_list.txt"
+
+# figure out the old and new version
+OLD_VERSION=$(get_old_version)
+NEW_VERSION=$upgrade_version_string
+OLD_MAJOR_VERSION=$(echo ${OLD_VERSION} | grep -E -o "[0-9]\.[0-9]+" | head -1)
+NEW_MAJOR_VERSION=$(echo ${NEW_VERSION} | grep -E -o "[0-9]\.[0-9]+" | head -1)
+
+[[ "$OLD_MAJOR_VERSION" =~ ^[0-9]+\.[0-9]+$ ]] || exit_on_error "Unrecognized old version: ${OLD_MAJOR_VERSION}"
+[[ "$NEW_MAJOR_VERSION" =~ ^[0-9]+\.[0-9]+$ ]] || exit_on_error "Unrecognized new version: ${NEW_MAJOR_VERSION}"
+
 # rollback or upgarde
-if [ ${execute_mode} == "ROLLBACK" ]; then
+if [[ $is_rollback -eq 0 ]]; then  # for upgrading
+  log "[INFO] start to upgrade, the version from $OLD_VERSION to $NEW_VERSION..."
+
+  # create dir
+  log "[INFO] create dir ${SOURCE_DIR} and ${BACKUP_DIR}"
+  if [ ! -d ${SOURCE_DIR} ]; then
+    mkdir -p ${SOURCE_DIR} || exit_on_error "create dir ${SOURCE_DIR} failed"
+  fi
+  if [ ! -d ${BACKUP_DIR} ]; then
+    mkdir -p ${BACKUP_DIR} || exit_on_error "create dir ${BACKUP_DIR} failed"
+  fi
+
+  # 1. Prepare the source packege of new doris version if it is not exist.
+  if [ ! -f "${SOURCE_DIR}/${NEW_VERSION_DORIS_TAR_PACKAGE}" ]; then
+    download_new_package || exit_on_error "prepare the source package failed"
+  else
+    log "[INFO] The target file ${NEW_VERSION_DORIS_TAR_PACKAGE} is already exists in ${SOURCE_DIR}!"
+  fi
+
+  # 2. Decompress the source packege of new doris version
+  if [ ! -d "${SOURCE_DIR}/doris" ]; then
+    decompress_new_package || exit_on_error "decompress the source package failed"
+  else
+    log "[INFO] It is been decompress in ${SOURCE_DIR}!"
+  fi
+
+  # 3. backup the old doris dir
+  if [ ! -d "${BACKUP_DIR}/doris" ]; then
+    backup_old_doris_dir || exit_on_error "backup old doris dir failed"
+  else
+    log "[INFO] It is been backup to ${BACKUP_DIR}/doris"
+  fi
+
+  # 4. upgrade doris according to the sepcified param
+  if [[ $opt_all -ne 1 ]]; then
+    if [[ $opt_ms -eq 1 ]]; then
+      upgrade_a_specified_component "ms" || error_on_rollback "upgrade ms failed"
+      # check and fix for ms dir is ownered by root...
+      check_and_fix_ms_dir "/data/cdw/doris/ms" || error_on_rollback "check and fix ms dir failed"
+    fi
+    if [[ $opt_fe -eq 1 ]]; then
+      upgrade_a_specified_component "fe" || error_on_rollback "upgrade fe failed"
+    fi
+    if [[ $opt_be -eq 1 ]]; then
+      upgrade_a_specified_component "be" || error_on_rollback "upgrade be failed"
+    fi
+    if [[ $opt_broker -eq 1 ]]; then
+      upgrade_a_specified_component "broker" || error_on_rollback "upgrade broker failed"
+    fi
+    
+    log "[INFO] Upgrade component successfully!"
+    exit 0
+  fi
+
+  # 5. upgrade the whole doris
+  # Following is upgrade whole doris, that is opt_all must be 1
+  upgrade_whole_doris || error_on_rollback "replace whole doris dir failed"
+
+  # 6. restore and keep old configure and libs
+  keep_old_configure_and_libs || error_on_rollback "restore and keep old configure and libs failed"
+
+  # 7. For the upgarding from 1.1 to 1.2, need to do something...
+  if [ "${NEW_MAJOR_VERSION}" == "1.2" ] && [ "${OLD_MAJOR_VERSION}" == "1.1" ]; then
+    # need to change from root to doris user group for upgrading from 1.2 and later
+    log "[INFO] need to change owner from root to doris due to upgrade from ${OLD_MAJOR_VERSION} to ${NEW_MAJOR_VERSION}"
+    change_owner_from_root_to_doris || error_on_rollback "Change user from root to doris failed"
+  fi
+
+  # 8. need to check and prepare jdk17 for 3.0
+  if [ "${NEW_MAJOR_VERSION}" == "3.0" ] && [ "${OLD_MAJOR_VERSION}" == "2.1" ]; then
+    log "[INFO] need to check and install jdk17 due to upgrade from ${OLD_MAJOR_VERSION} to ${NEW_MAJOR_VERSION}"
+    check_install_jdk17 || error_on_rollback "install jdk17 failed"
+  fi
+
+  # 9. check and fix for ms dir is ownered by root...
+  check_and_fix_ms_dir "/data/cdw/doris/ms" || error_on_rollback "check and fix the owner of ms dir failed"
+  log "[INFO] success to finish the upgrading, the version from $OLD_VERSION to $NEW_VERSION."
+  
+else # for rollback
+
+  LOG_FILE="${WORK_DIR_PREFIX}/${upgrade_version_string}/rollback_${date_str}.log"
   log "[INFO] start to rollback..."
 
-  if [ ! -d ${backupDir} ]; then
-    echo "[ERROR] backup dir(${backupDir}) must be exist, please check the version number ${upgrade_version_string}"
-    exit 1
+  if [ ! -d ${BACKUP_DIR} ]; then
+    exit_on_error "backup dir(${BACKUP_DIR}) must be exist, please check the version number ${upgrade_version_string}"
   fi
-  create_log_file 
 
   # remove new add dirs
-  rollback_new_add_dirs
+  rollback_new_add_paths || exit_on_error "rollback new add dirs failed"
 
   # restore upgrade dirs
-  rollback_upgrade_dirs
+  rollback_upgrade_paths || exit_on_error "rollback upgrade dirs failed"
 
   log "[INFO] rollback successfully!!"
-
-elif [ ${execute_mode} == "CHECK_FIX" ]; then
-
-  log "[INFO] start to check and fix according to specify version..."
-
-  # check and fix 
-  check_fix_doris
-
-  log "[INFO] checking and fixing successfully!!"
-
-else # for upgarde
-
-  log "[INFO] start to upgrade..."
-
-  # upgrade 
-  upgrade_doris
-
-  # check and fix when ms dir is ownered by root...
-  check_and_fix_ms_dir "/data/cdw/doris/ms"
-
-  log "[INFO] upgrade successfully!!"
 fi
