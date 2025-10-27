@@ -1124,10 +1124,14 @@ public class BackupJob extends AbstractJob implements GsonPostProcessable {
 
         finishedTime = System.currentTimeMillis();
         state = BackupJobState.FINISHED;
-
         // log
         env.getEditLog().logBackupJob(this);
         LOG.info("job is finished. {}", this);
+
+        // Clean up local temporary directory (only for remote repositories)
+        if (repoId != Repository.KEEP_ON_LOCAL_REPO_ID) {
+            cleanupLocalJobDir();
+        }
 
         if (repoId == Repository.KEEP_ON_LOCAL_REPO_ID) {
             env.getBackupHandler().addSnapshot(label, this);
@@ -1154,6 +1158,27 @@ public class BackupJob extends AbstractJob implements GsonPostProcessable {
             return false;
         }
         return true;
+    }
+
+    /**
+     * Clean up local job directory.
+     * Recursively delete the entire directory tree, including all subdirectories and files.
+     */
+    private void cleanupLocalJobDir() {
+        if (localJobDirPath != null) {
+            try {
+                File jobDir = new File(localJobDirPath.toString());
+                if (jobDir.exists()) {
+                    Files.walk(localJobDirPath, FileVisitOption.FOLLOW_LINKS)
+                            .sorted(Comparator.reverseOrder())
+                            .map(Path::toFile)
+                            .forEach(File::delete);
+                }
+                localJobDirPath = null;
+            } catch (Exception e) {
+                LOG.warn("failed to clean the backup job dir: " + localJobDirPath.toString());
+            }
+        }
     }
 
     /*
@@ -1196,17 +1221,7 @@ public class BackupJob extends AbstractJob implements GsonPostProcessable {
         }
 
         // clean the backup job dir
-        if (localJobDirPath != null) {
-            try {
-                File jobDir = new File(localJobDirPath.toString());
-                if (jobDir.exists()) {
-                    Files.walk(localJobDirPath, FileVisitOption.FOLLOW_LINKS).sorted(Comparator.reverseOrder())
-                            .map(Path::toFile).forEach(File::delete);
-                }
-            } catch (Exception e) {
-                LOG.warn("failed to clean the backup job dir: " + localJobDirPath.toString());
-            }
-        }
+        cleanupLocalJobDir();
 
         // meta info and job info not need save in log when cancel, we need to clean them here
         backupMeta = null;
