@@ -822,6 +822,9 @@ if [[ $is_rollback -eq 1 && -n "$region" ]]; then
   fi
 fi
 
+# add https prefix
+COS_ADDR="https://$COS_ADDR"
+
 # Print out final selections
 if [[ $is_rollback -eq 1 ]]; then
   log "[INFO] Mode: Rollback"
