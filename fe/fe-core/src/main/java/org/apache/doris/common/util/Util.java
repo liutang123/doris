@@ -588,7 +588,11 @@ public class Util {
 
     @NotNull
     public static TFileCompressType inferFileCompressTypeByPath(String path) {
-        String ext = path.substring(path.lastIndexOf('.')).toLowerCase();
+        int dotIndex = path.lastIndexOf('.');
+        if (dotIndex == -1 || dotIndex == path.length() - 1) {
+            return TFileCompressType.PLAIN;
+        }
+        String ext = path.substring(dotIndex).toLowerCase();
         switch (ext) {
             case ".gz":
                 return TFileCompressType.GZ;
