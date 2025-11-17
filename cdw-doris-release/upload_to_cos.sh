@@ -236,9 +236,13 @@ show_git_log_message() {
 
 create_and_push_new_branch() {
   local current_version=$(git branch --show-current)
-  git tag -a ${doris_version_string} -m "${doris_version_string}"
-  git push tencent_origin ${doris_version_string}
-  git checkout ${current_version}
+  if git tag | grep -q "^${doris_version_string}$"; then
+    echo "Tag '${doris_version_string}' already exists."
+  else
+    git tag -a ${doris_version_string} -m "${doris_version_string}"
+    git push tencent_origin ${doris_version_string}
+    git checkout ${current_version}
+  fi
 }
 
 init $@
