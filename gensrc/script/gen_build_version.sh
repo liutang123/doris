@@ -27,15 +27,10 @@
 
 set -eo pipefail
 
-vendor=doris
-if [[ $1 != "" ]]; then
-    vendor=$1
-fi
-
 build_version_prefix="tencent-cdw-doris"
 build_version_major=3
 build_version_minor=0
-build_version_patch=8
+build_version_patch=9
 build_version_hotfix=0
 build_version_rc_version="rc01"
 
