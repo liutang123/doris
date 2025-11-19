@@ -500,11 +500,15 @@ keep_old_configure_and_libs() {
   if [ -f "${apiserver_operation_sh}" ]; then
     log "[INFO] restore ${apiserver_operation_sh}."
     cp -f "${apiserver_operation_sh}" "${new_scirpts_dir}" || { log "[ERROR] cp -f ${apiserver_operation_sh} ${new_scirpts_dir} failed"; return 1; }
+  else
+    log "[INFO] ${apiserver_operation_sh} is not exist."
   fi
-  local fe_monitor_sh="${backup_dir}/doris/bin/fe_monitor.sh"
+  local fe_monitor_sh="${backup_dir}/bin/fe_monitor.sh"
   if [ -f "${fe_monitor_sh}" ]; then
     log "[INFO] restore ${fe_monitor_sh}."
     cp -f "${fe_monitor_sh}" "${new_scirpts_dir}" || { log "[ERROR] cp -f ${fe_monitor_sh} ${new_scirpts_dir} failed"; return 1; }
+  else
+    log "[INFO] ${fe_monitor_sh} is not exist."
   fi
 
   log "[INFO] success to restore old conf and libs."
