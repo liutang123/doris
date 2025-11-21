@@ -632,7 +632,7 @@ public class BackupJob extends AbstractJob implements GsonPostProcessable {
             }
         }
         // If no valid tables found, cancel the job
-        if (!hasValidTables) {
+        if (!hasValidTables && !isBackupPriv() && !isBackupCatalog() && !isBackupWorkloadGroup()) {
             status = new Status(ErrCode.NOT_FOUND, "no valid tables found for backup");
             return;
         }
