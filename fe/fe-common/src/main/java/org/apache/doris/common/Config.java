@@ -3440,4 +3440,16 @@ public class Config extends ConfigBase {
 
     @ConfField(mutable = true, description = {"是否禁用外部扫描时对路径进行标准化，默认false"})
     public static boolean tc_disable_normalize_hdfs_path_in_external_scan = false;
+
+    @ConfField(mutable = true, description = {"是否隐藏表的 Storage Vaults",
+            "Whether to hide table storage vaults, default is false."})
+    public static boolean hide_table_storage_vaults = true;
+
+    @ConfField(mutable = true, description = {"是否隐藏库的 Storage Vaults",
+            "Whether to hide database storage vaults, default is false."})
+    public static boolean hide_db_storage_vaults = true;
+
+    @ConfField(mutable = true, description = {"是否隐藏 Storage Medium",
+            "Whether to hide storage medium, default is false."})
+    public static boolean hide_storage_medium = true;
 }

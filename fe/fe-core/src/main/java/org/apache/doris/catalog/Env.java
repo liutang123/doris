@@ -3578,7 +3578,7 @@ public class Env {
         }
 
         // storage medium
-        if (olapTable.getStorageMedium() != null) {
+        if (!Config.hide_storage_medium && olapTable.getStorageMedium() != null) {
             sb.append(",\n\"").append(PropertyAnalyzer.PROPERTIES_STORAGE_MEDIUM).append("\" = \"");
             sb.append(olapTable.getStorageMedium().name().toLowerCase());
             sb.append("\"");
@@ -3711,7 +3711,7 @@ public class Env {
         }
 
         // Storage Vault
-        if (!Strings.isNullOrEmpty(olapTable.getStorageVaultId())) {
+        if (!Config.hide_table_storage_vaults && !Strings.isNullOrEmpty(olapTable.getStorageVaultId())) {
             sb.append(",\n\"").append(PropertyAnalyzer
                     .PROPERTIES_STORAGE_VAULT_ID).append("\" = \"");
             sb.append(olapTable.getStorageVaultId()).append("\"");

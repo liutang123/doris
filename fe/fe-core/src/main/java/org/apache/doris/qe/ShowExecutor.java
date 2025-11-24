@@ -196,6 +196,7 @@ import org.apache.doris.common.util.LogKey;
 import org.apache.doris.common.util.NetUtils;
 import org.apache.doris.common.util.OrderByPair;
 import org.apache.doris.common.util.PrintableMap;
+import org.apache.doris.common.util.PropertyAnalyzer;
 import org.apache.doris.common.util.TimeUtils;
 import org.apache.doris.common.util.Util;
 import org.apache.doris.datasource.CatalogIf;
@@ -1165,9 +1166,15 @@ public class ShowExecutor {
             DatabaseIf db = catalog.getDbOrAnalysisException(showStmt.getDb());
             sb.append("CREATE DATABASE `").append(ClusterNamespace.getNameFromFullName(showStmt.getDb())).append("`");
             if (db.getDbProperties().getProperties().size() > 0) {
-                sb.append("\nPROPERTIES (\n");
-                sb.append(new PrintableMap<>(db.getDbProperties().getProperties(), "=", true, true, false));
-                sb.append("\n)");
+                Map<String, String> filteredProperties = new HashMap<>(db.getDbProperties().getProperties());
+                if (Config.hide_db_storage_vaults) {
+                    filteredProperties.remove(PropertyAnalyzer.PROPERTIES_STORAGE_VAULT_NAME);
+                }
+                if (filteredProperties.size() > 0) {
+                    sb.append("\nPROPERTIES (\n");
+                    sb.append(new PrintableMap<>(filteredProperties, "=", true, true, false));
+                    sb.append("\n)");
+                }
             }
         }
 
