@@ -51,7 +51,7 @@ Status DataTypeBitMapSerDe::serialize_one_cell_to_json(const IColumn& column, in
     if (_nesting_level >= 2) {
         bw.write(DataTypeNullableSerDe::NULL_IN_COMPLEX_TYPE.c_str(),
                  strlen(NULL_IN_COMPLEX_TYPE.c_str()));
-    } else {
+    } else if (!_output_null_as_empty_for_csv) {
         bw.write(DataTypeNullableSerDe::NULL_IN_CSV_FOR_ORDINARY_TYPE.c_str(),
                  strlen(NULL_IN_CSV_FOR_ORDINARY_TYPE.c_str()));
     }

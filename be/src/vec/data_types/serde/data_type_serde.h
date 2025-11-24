@@ -236,7 +236,9 @@ public:
     static const std::string NULL_IN_CSV_FOR_ORDINARY_TYPE;
 
 public:
-    DataTypeSerDe(int nesting_level = 1) : _nesting_level(nesting_level) {};
+    DataTypeSerDe(int nesting_level = 1)
+            : _nesting_level(nesting_level),
+              _output_null_as_empty_for_csv(config::output_null_as_empty_for_csv) {}
     virtual ~DataTypeSerDe();
     // Text serializer and deserializer with formatOptions to handle different text format
     virtual Status serialize_one_cell_to_json(const IColumn& column, int row_num,
@@ -366,6 +368,9 @@ protected:
     // The _nesting_level of StructSerde is 1
     // The _nesting_level of StringSerde is 2
     int _nesting_level = 1;
+
+    // Support config output NULL value in csv file format
+    bool _output_null_as_empty_for_csv = false;
 
     static void convert_field_to_rapidjson(const vectorized::Field& field, rapidjson::Value& target,
                                            rapidjson::Document::AllocatorType& allocator);
