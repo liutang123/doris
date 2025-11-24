@@ -18,7 +18,7 @@ ADDRESSES=(
   "cdwch-cos-apps-nj-1305504398.cos.ap-nanjing.myqcloud.com"
   "cdwch-cos-apps-hk-1305504398.cos.ap-hongkong.myqcloud.com"
   "cdwch-cos-apps-cq-1305504398.cos.ap-chongqing.myqcloud.com"
-  "cdwch-cos-apps-sp-1305504398.cos.ap-singapore.myqcloud.com"
+  "cdwch-cos-apps-sg-1305504398.cos.ap-singapore.myqcloud.com"
   "cdwch-cos-apps-cd-1305504398.cos.ap-chengdu.myqcloud.com"
   "cdwch-apps-shadc-1305504398.cos.ap-shanghai-adc.myqcloud.com"
   "cdwch-cos-apps-shjr-1305504398.cos.ap-shanghai-fsi.myqcloud.com"
