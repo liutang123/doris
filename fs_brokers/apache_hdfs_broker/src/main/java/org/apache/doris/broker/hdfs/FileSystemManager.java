@@ -35,6 +35,7 @@ import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
 import org.apache.hadoop.hdfs.HdfsConfiguration;
+import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.log4j.Logger;
@@ -51,6 +52,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileLock;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.PrivilegedAction;
 import java.security.PrivilegedExceptionAction;
 import java.security.SecureRandom;
 import java.util.ArrayList;
@@ -89,6 +91,7 @@ public class FileSystemManager {
 
     private static final String USER_NAME_KEY = "username";
     private static final String PASSWORD_KEY = "password";
+    private static final String HADOOP_USERNAME = "hadoop.username";
     private static final String AUTHENTICATION_SIMPLE = "simple";
     private static final String AUTHENTICATION_KERBEROS = "kerberos";
     private static final String KERBEROS_PRINCIPAL = "kerberos_principal";
@@ -677,8 +680,10 @@ public class FileSystemManager {
         }
 
         FileSystemIdentity fileSystemIdentity = null;
+        String hadoopUser = null;
         if (authentication.equals(AUTHENTICATION_SIMPLE)) {
-            fileSystemIdentity = new FileSystemIdentity(host, "");
+            hadoopUser = properties.getOrDefault(HADOOP_USERNAME, "");
+            fileSystemIdentity = new FileSystemIdentity(host, hadoopUser);
         } else {
             // for kerberos, use host + principal + keytab as filesystemindentity
             String kerberosContent = "";
@@ -718,6 +723,7 @@ public class FileSystemManager {
             if (fileSystem.getDFSFileSystem() == null) {
                 logger.info("create file system for new path " + path);
                 String tmpFilePath = null;
+                UserGroupInformation ugi = null;
                 if (authentication.equals(AUTHENTICATION_KERBEROS)){
                     conf.set(CommonConfigurationKeysPublic.HADOOP_SECURITY_AUTHENTICATION,
                             AUTHENTICATION_KERBEROS);
@@ -757,8 +763,19 @@ public class FileSystemManager {
                                     e.getMessage());
                         }
                     }
+                } else if (!Strings.isNullOrEmpty(hadoopUser)) {
+                    // Use the specified 'hadoop.username' as the login name
+                    ugi = UserGroupInformation.createRemoteUser(hadoopUser);
                 }
-                FileSystem chdfsFileSystem = FileSystem.get(pathUri.getUri(), conf);
+
+                FileSystem chdfsFileSystem = null;
+                if (ugi != null) {
+                    chdfsFileSystem = ugi.doAs((PrivilegedExceptionAction<FileSystem>) () -> {
+                        return FileSystem.get(pathUri.getUri(), conf);
+                    });
+                } else {
+                    chdfsFileSystem = FileSystem.get(pathUri.getUri(), conf);
+                }
                 fileSystem.setFileSystem(chdfsFileSystem);
             }
             return fileSystem;
