@@ -473,7 +473,7 @@ public class CatalogMgr implements Writable, GsonPostProcessable {
             if (catalog.getProperties().size() > 0) {
                 sb.append(" PROPERTIES (\n");
                 PrintableMap<String, String> printableMap = new PrintableMap<>(catalog.getProperties(), "=", true, true,
-                        true, true);
+                        Config.hide_catalog_password, true);
                 printableMap.setAdditionalHiddenKeys(ExternalCatalog.HIDDEN_PROPERTIES);
                 sb.append(printableMap);
                 sb.append("\n);");

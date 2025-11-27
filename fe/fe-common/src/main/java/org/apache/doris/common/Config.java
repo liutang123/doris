@@ -345,6 +345,15 @@ public class Config extends ConfigBase {
                     + "but still wish the non-master FE can offer read service."})
     public static boolean ignore_meta_check = false;
 
+    @ConfField(mutable = true, description = {"是否在 Catalog 备份时隐藏密码信息。"
+            + "如果设置为 true，则在备份 Catalog 元数据时会隐藏敏感信息（如密码）。"
+            + "此配置只影响 Catalog 的备份操作，不影响执行 SHOW CREATE CATALOG 语句的结果。",
+            "Whether to hide password information during Catalog backup. "
+            + "If set to true, sensitive information (such as passwords) will be hidden when backing up Catalog "
+            + "metadata. This configuration only affects Catalog backup operations and does not affect the results of "
+            + "executing SHOW CREATE CATALOG statements."})
+    public static boolean hide_catalog_password = false;
+
     @ConfField(description = {"非 Master FE 与 Master FE 的最大时钟偏差，单位为毫秒。"
             + "这个配置用于在非 Master FE 与 Master FE 之间建立 BDBJE 连接时检查时钟偏差，"
             + "如果时钟偏差超过这个阈值，则 BDBJE 连接会被放弃。",

@@ -1265,23 +1265,27 @@ public class BackupJob extends AbstractJob implements GsonPostProcessable {
 
     // read global info bytes from disk, and return the snapshot
     public synchronized byte[] getGlobalSnapshot() {
-        if (state != BackupJobState.FINISHED || repoId != Repository.KEEP_ON_LOCAL_REPO_ID) {
-            return null;
-        }
-
-        // Avoid loading expired meta.
-        long expiredAt = createTime + timeoutMs;
-        if (System.currentTimeMillis() >= expiredAt) {
-            return null;
-        }
-
         try {
-            File globalInfoFile = new File(localGlobalJobInfoFilePath);
-            return Files.readAllBytes(globalInfoFile.toPath());
-        } catch (IOException e) {
-            LOG.warn("failed to load global info and job info file, job info file {}: ",
-                    localGlobalJobInfoFilePath, e);
-            return null;
+            if (state != BackupJobState.FINISHED || repoId != Repository.KEEP_ON_LOCAL_REPO_ID) {
+                return null;
+            }
+
+            // Avoid loading expired meta.
+            long expiredAt = createTime + timeoutMs;
+            if (System.currentTimeMillis() >= expiredAt) {
+                return null;
+            }
+
+            try {
+                File globalInfoFile = new File(localGlobalJobInfoFilePath);
+                return Files.readAllBytes(globalInfoFile.toPath());
+            } catch (IOException e) {
+                LOG.warn("failed to load global info and job info file, job info file {}: ",
+                        localGlobalJobInfoFilePath, e);
+                return null;
+            }
+        } finally {
+            cleanupLocalJobDir();
         }
     }
 
