@@ -804,10 +804,11 @@ public class FileSystemManager {
         String secretKey = properties.getOrDefault(FS_COS_SECRET_KEY, "");
         String endpoint = properties.getOrDefault(FS_COS_ENDPOINT, "");
         String disableCache = properties.getOrDefault(FS_COS_IMPL_DISABLE_CACHE, "true");
+        String hadoopUser = properties.getOrDefault(HADOOP_USERNAME, "");
         // endpoint is the server host, pathUri.getUri().getHost() is the bucket
         // we should use these two params as the host identity, because FileSystem will cache both.
         String host = COS_SCHEME + "://" + endpoint + "/" + pathUri.getUri().getHost();
-        String cosUgi = accessKey + "," + secretKey;
+        String cosUgi = accessKey + "," + secretKey + "," + hadoopUser;
         FileSystemIdentity fileSystemIdentity = new FileSystemIdentity(host, cosUgi);
         BrokerFileSystem fileSystem = updateCachedFileSystem(fileSystemIdentity, properties);
         fileSystem.getLock().lock();
@@ -821,7 +822,14 @@ public class FileSystemManager {
                 conf.set(FS_COS_ENDPOINT, endpoint);
                 conf.set(FS_COS_IMPL, "org.apache.hadoop.fs.CosFileSystem");
                 conf.set(FS_COS_IMPL_DISABLE_CACHE, disableCache);
-                FileSystem cosFileSystem = FileSystem.get(pathUri.getUri(), conf);
+                FileSystem cosFileSystem = null;
+                if (!Strings.isNullOrEmpty(hadoopUser)) {
+                    // Use the specified 'hadoop.username' as the login name
+                    UserGroupInformation ugi = UserGroupInformation.createRemoteUser(hadoopUser);
+                    cosFileSystem = ugi.doAs((PrivilegedExceptionAction<FileSystem>) () -> FileSystem.get(pathUri.getUri(), conf));
+                } else {
+                    cosFileSystem = FileSystem.get(pathUri.getUri(), conf);
+                }
                 fileSystem.setFileSystem(cosFileSystem);
             }
             return fileSystem;
