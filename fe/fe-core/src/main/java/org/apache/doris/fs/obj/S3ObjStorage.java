@@ -79,12 +79,10 @@ import java.util.stream.Collectors;
 public class S3ObjStorage implements ObjStorage<S3Client> {
     private static final Logger LOG = LogManager.getLogger(S3ObjStorage.class);
     private S3Client client;
-
     protected Map<String, String> properties;
-
     private boolean isUsePathStyle = false;
-
     private boolean forceParsingByStandardUri = false;
+    private boolean checksumValidationEnabled = false;
 
     public S3ObjStorage(Map<String, String> properties) {
         this.properties = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
@@ -121,6 +119,8 @@ public class S3ObjStorage implements ObjStorage<S3Client> {
         String region = this.properties.get(S3Properties.REGION);
 
         this.properties.put(S3Properties.REGION, PropertyConverter.checkRegion(endpoint, region, S3Properties.REGION));
+        checksumValidationEnabled = this.properties.getOrDefault(PropertyConverter.CHECKSUM_VALIDATION_ENABLED, "false")
+                .equalsIgnoreCase("true");
     }
 
     @Override
@@ -134,7 +134,7 @@ public class S3ObjStorage implements ObjStorage<S3Client> {
             client = S3Util.buildS3Client(endpoint, properties.get(S3Properties.REGION), isUsePathStyle,
                     properties.get(S3Properties.ACCESS_KEY), properties.get(S3Properties.SECRET_KEY),
                     properties.get(S3Properties.SESSION_TOKEN), properties.get(S3Properties.ROLE_ARN),
-                    properties.get(S3Properties.EXTERNAL_ID));
+                    properties.get(S3Properties.EXTERNAL_ID), checksumValidationEnabled);
         }
         return client;
     }

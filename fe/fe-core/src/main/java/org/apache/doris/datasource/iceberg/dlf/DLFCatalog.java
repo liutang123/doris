@@ -71,7 +71,7 @@ public class DLFCatalog extends HiveCompatibleCatalog {
             s3Endpoint = "http://" + s3Endpoint;
         }
         URI endpointUri = URI.create(s3Endpoint);
-        FileIO io = new S3FileIO(() -> S3Util.buildS3Client(endpointUri, region, credential, isUsePathStyle));
+        FileIO io = new S3FileIO(() -> S3Util.buildS3Client(endpointUri, region, credential, isUsePathStyle, false));
         io.initialize(properties);
         return io;
     }

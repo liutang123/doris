@@ -74,7 +74,7 @@ public class S3Util {
 
     @Deprecated
     public static S3Client buildS3Client(URI endpoint, String region, CloudCredential credential,
-            boolean isUsePathStyle) {
+            boolean isUsePathStyle, boolean checksumValidationEnabled) {
         EqualJitterBackoffStrategy backoffStrategy = EqualJitterBackoffStrategy
                 .builder()
                 .baseDelay(Duration.ofSeconds(1))
@@ -104,6 +104,7 @@ public class S3Util {
                 .serviceConfiguration(S3Configuration.builder()
                         .chunkedEncodingEnabled(false)
                         .pathStyleAccessEnabled(isUsePathStyle)
+                        .checksumValidationEnabled(checksumValidationEnabled)
                         .build())
                 .build();
     }
@@ -158,7 +159,8 @@ public class S3Util {
     }
 
     public static S3Client buildS3Client(URI endpoint, String region, boolean isUsePathStyle, String accessKey,
-            String secretKey, String sessionToken, String roleArn, String externalId) {
+            String secretKey, String sessionToken, String roleArn, String externalId,
+            boolean checksumValidationEnabled) {
         EqualJitterBackoffStrategy backoffStrategy = EqualJitterBackoffStrategy
                 .builder()
                 .baseDelay(Duration.ofSeconds(1))
@@ -189,6 +191,7 @@ public class S3Util {
                 .serviceConfiguration(S3Configuration.builder()
                         .chunkedEncodingEnabled(false)
                         .pathStyleAccessEnabled(isUsePathStyle)
+                        .checksumValidationEnabled(checksumValidationEnabled)
                         .build())
                 .build();
     }
