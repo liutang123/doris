@@ -428,6 +428,15 @@ public class BackupJob extends AbstractJob implements GsonPostProcessable {
     public synchronized void replayRun() {
         if (state == BackupJobState.SAVE_META) {
             saveMetaInfo(true);
+        } else if (state == BackupJobState.FINISHED) {
+            String createTimeStr = TimeUtils.longToTimeString(createTime,
+                    TimeUtils.getDatetimeFormatWithHyphenWithTimeZone());
+            localJobDirPath = Paths.get(BackupHandler.BACKUP_ROOT_DIR.toString(),
+                                        "repo__" + repoId, label + "__" + createTimeStr).normalize();
+            // Clean up local temporary directory (only for remote repositories)
+            if (repoId != Repository.KEEP_ON_LOCAL_REPO_ID) {
+                cleanupLocalJobDir();
+            }
         }
     }
 
