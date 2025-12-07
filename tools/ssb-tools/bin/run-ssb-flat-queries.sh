@@ -98,11 +98,11 @@ run_sql() {
     mysql -h"${FE_HOST}" -P"${FE_QUERY_PORT}" -u"${USER}" -D"${DB}" -e "$@"
 }
 
-echo '============================================'
-run_sql "show variables;"
-echo '============================================'
-run_sql "show table status;"
-echo '============================================'
+#echo '============================================'
+#run_sql "show variables;"
+#echo '============================================'
+#run_sql "show table status;"
+#echo '============================================'
 
 RESULT_DIR="${CURDIR}/result"
 if [[ -d "${RESULT_DIR}" ]]; then
