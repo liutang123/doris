@@ -3277,6 +3277,11 @@ public class FrontendServiceImpl implements FrontendService.Iface {
         if (request.isForceReplace()) {
             properties.put(RestoreStmt.PROP_FORCE_REPLACE, "true");
         }
+        if (request.isReserveStoragePolicy()) {
+            properties.put(RestoreStmt.PROP_RESERVE_STORAGE_POLICY, "true");
+        } else {
+            properties.put(RestoreStmt.PROP_RESERVE_STORAGE_POLICY, "false");
+        }
 
         AbstractBackupTableRefClause restoreTableRefClause = null;
         if (request.isSetTableRefs()) {

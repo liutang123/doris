@@ -1447,6 +1447,7 @@ struct TRestoreSnapshotRequest {
     15: optional bool atomic_restore
     16: optional bool compressed;
     17: optional bool force_replace
+    18: optional bool reserve_storage_policy
 }
 
 struct TRestoreSnapshotResult {
