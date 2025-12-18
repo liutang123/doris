@@ -53,7 +53,8 @@ public class DorisDataMaskPolicy extends Policy implements DataMaskPolicy {
             .addColumn(new Column("DataMaskType", ScalarType.createVarchar(20)))
             .addColumn(new Column("DataMaskDef", ScalarType.createVarchar(65533)))
             .addColumn(new Column("User", ScalarType.createVarchar(200)))
-            .addColumn(new Column("Role", ScalarType.createVarchar(200))).build();
+            .addColumn(new Column("Role", ScalarType.createVarchar(200)))
+            .addColumn(new Column("Priority", ScalarType.createVarchar(10))).build();
 
     private static final Logger LOG = LogManager.getLogger(DorisDataMaskPolicy.class);
 
@@ -81,8 +82,11 @@ public class DorisDataMaskPolicy extends Policy implements DataMaskPolicy {
     @SerializedName(value = "maskType")
     private DataMaskType maskType;
 
+    @SerializedName(value = "priority")
+    private int priority = 0;
+
     public DorisDataMaskPolicy(long id, String policyName, UserIdentity user, String roleName, String ctlName,
-                               String dbName, String tableName, String colName, String maskType)
+                               String dbName, String tableName, String colName, String maskType, int priority)
             throws AnalysisException {
         super(id, PolicyTypeEnum.DATA_MASK, policyName);
         Objects.requireNonNull(maskType, "require maskType object");
@@ -93,6 +97,7 @@ public class DorisDataMaskPolicy extends Policy implements DataMaskPolicy {
         this.tableName = tableName;
         this.colName = colName;
         this.maskType = find(maskType.toUpperCase(Locale.ROOT));
+        this.priority = priority;
     }
 
     public DorisDataMaskPolicy(UserIdentity user, String roleName) {
@@ -139,7 +144,7 @@ public class DorisDataMaskPolicy extends Policy implements DataMaskPolicy {
     public List<String> getShowInfo() throws AnalysisException {
         return Lists.newArrayList(this.policyName, ctlName, dbName, tableName, colName,
             this.maskType.name(), this.maskType.getTransformer(),
-            this.user == null ? null : this.user.getQualifiedUser(), this.roleName);
+            this.user == null ? null : this.user.getQualifiedUser(), this.roleName, String.valueOf(this.priority));
     }
 
     @Override

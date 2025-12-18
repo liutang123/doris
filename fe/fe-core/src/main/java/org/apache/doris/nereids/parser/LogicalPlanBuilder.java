@@ -1323,18 +1323,20 @@ public class LogicalPlanBuilder extends DorisParserBaseVisitor<Object> {
                 ctx.EXISTS() != null, nameParts, Optional.of(filterType),
                 ctx.user == null ? null : visitUserIdentify(ctx.user),
                 ctx.roleName == null ? null : ctx.roleName.getText(),
-                Optional.of(getExpression(ctx.booleanExpression())), ImmutableMap.of(), null);
+                Optional.of(getExpression(ctx.booleanExpression())), ImmutableMap.of());
     }
 
     @Override
     public Command visitCreateDataMaskPolicy(CreateDataMaskPolicyContext ctx) {
         List<String> nameParts = RelationUtil.getQualifierColumnName(ConnectContext.get(),
                 visitMultipartIdentifier(ctx.column));
+        int priority = 0;
+        if (ctx.level != null) {
+            priority = Integer.parseInt(ctx.level.getText());
+        }
         return new CreatePolicyCommand(PolicyTypeEnum.DATA_MASK, ctx.name.getText(),
-            ctx.EXISTS() != null, nameParts, Optional.empty(),
-            ctx.user == null ? null : visitUserIdentify(ctx.user),
-            ctx.roleName == null ? null : ctx.roleName.getText(),
-            Optional.empty(), ImmutableMap.of(), ctx.dataMaskType.getText());
+            ctx.EXISTS() != null, nameParts, ctx.user == null ? null : visitUserIdentify(ctx.user),
+            ctx.roleName == null ? null : ctx.roleName.getText(), ctx.dataMaskType.getText(), priority);
     }
 
     @Override

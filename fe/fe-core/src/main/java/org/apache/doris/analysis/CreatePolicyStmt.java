@@ -72,6 +72,9 @@ public class CreatePolicyStmt extends DdlStmt implements NotFallbackInParser {
     @Getter
     private String dataMaskType;
 
+    @Getter
+    private int priority;
+
     /**
      * Use for cup.
      **/
@@ -102,7 +105,7 @@ public class CreatePolicyStmt extends DdlStmt implements NotFallbackInParser {
      * Use for cup.
      **/
     public CreatePolicyStmt(PolicyTypeEnum type, boolean ifNotExists, String policyName, ColumnName colName,
-                            UserIdentity user, String roleName, String dataMaskType) {
+                            UserIdentity user, String roleName, String dataMaskType, int priority) {
         this.type = type;
         this.ifNotExists = ifNotExists;
         this.policyName = policyName;
@@ -110,6 +113,7 @@ public class CreatePolicyStmt extends DdlStmt implements NotFallbackInParser {
         this.user = user;
         this.roleName = roleName;
         this.dataMaskType = dataMaskType;
+        this.priority = priority;
     }
 
     @Override

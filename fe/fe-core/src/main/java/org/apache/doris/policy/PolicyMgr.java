@@ -441,15 +441,20 @@ public class PolicyMgr implements Writable {
             Set<String> roles = Env.getCurrentEnv().getAccessManager().getAuth().getRolesByUserWithLdap(user).stream()
                     .map(role -> ClusterNamespace.getNameFromFullName(role.getRoleName())).collect(Collectors.toSet());
 
+            DorisDataMaskPolicy res = null;
+            int priority = Integer.MIN_VALUE;
             for (DorisDataMaskPolicy dataMaskPolicy : dorisDataMaskPolicies) {
                 if ((dataMaskPolicy.getUser() != null && dataMaskPolicy.getUser().getQualifiedUser()
                         .equals(user.getQualifiedUser()))
                          || !StringUtils.isEmpty(dataMaskPolicy.getRoleName())
                         && roles.contains(dataMaskPolicy.getRoleName())) {
-                    return dataMaskPolicy;
+                    if (dataMaskPolicy.getPriority() > priority) {
+                        res = dataMaskPolicy;
+                        priority = dataMaskPolicy.getPriority();
+                    }
                 }
             }
-            return null;
+            return res;
         } finally {
             readUnlock();
         }

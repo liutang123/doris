@@ -2088,14 +2088,14 @@ create_stmt ::=
     :}
     /* data mask policy */
     | KW_CREATE KW_DATA KW_MASK KW_POLICY opt_if_not_exists:ifNotExists ident:policyName KW_ON column_name:col KW_TO user_identity:user
-    KW_USING ident:dataMaskType
+    KW_USING ident:dataMaskType KW_LEVEL INTEGER_LITERAL:priority
     {:
-        RESULT = new CreatePolicyStmt(PolicyTypeEnum.DATA_MASK, ifNotExists, policyName, col, user, null, dataMaskType);
+        RESULT = new CreatePolicyStmt(PolicyTypeEnum.DATA_MASK, ifNotExists, policyName, col, user, null, dataMaskType, priority.intValue());
     :}
     | KW_CREATE KW_DATA KW_MASK KW_POLICY opt_if_not_exists:ifNotExists ident:policyName KW_ON column_name:col KW_TO KW_ROLE ident:role
-    KW_USING ident:dataMaskType
+    KW_USING ident:dataMaskType KW_LEVEL INTEGER_LITERAL:priority
     {:
-        RESULT = new CreatePolicyStmt(PolicyTypeEnum.DATA_MASK, ifNotExists, policyName, col, null, role, dataMaskType);
+        RESULT = new CreatePolicyStmt(PolicyTypeEnum.DATA_MASK, ifNotExists, policyName, col, null, role, dataMaskType, priority.intValue());
     :}
     ;
 

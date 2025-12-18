@@ -180,7 +180,7 @@ supportedCreateStatement
     | CREATE DATA MASK POLICY (IF NOT EXISTS)? name=identifier
         ON column=multipartIdentifier
         TO (user=userIdentify | ROLE roleName=identifier)
-        USING dataMaskType=identifier                                  #createDataMaskPolicy
+        USING dataMaskType=identifier (LEVEL level=INTEGER_VALUE)?     #createDataMaskPolicy
     ;
 
 supportedAlterStatement

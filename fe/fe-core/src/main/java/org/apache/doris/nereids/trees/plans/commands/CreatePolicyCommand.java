@@ -34,6 +34,8 @@ import org.apache.doris.policy.PolicyTypeEnum;
 import org.apache.doris.qe.ConnectContext;
 import org.apache.doris.qe.StmtExecutor;
 
+import com.google.common.collect.ImmutableMap;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -52,14 +54,15 @@ public class CreatePolicyCommand extends Command implements ForwardWithSync {
     private final String roleName;
     private final Optional<Expression> wherePredicate;
     private final Map<String, String> properties;
-    private final String dataMaskType;
+    private String dataMaskType;
+    private int priority;
 
     /**
      * ctor of this command.
      */
     public CreatePolicyCommand(PolicyTypeEnum policyType, String policyName, boolean ifNotExists,
             List<String> nameParts, Optional<FilterType> filterType, UserIdentity user, String roleName,
-            Optional<Expression> wherePredicate, Map<String, String> properties, String dataMaskType) {
+            Optional<Expression> wherePredicate, Map<String, String> properties) {
         super(PlanType.CREATE_POLICY_COMMAND);
         this.policyType = policyType;
         this.policyName = policyName;
@@ -70,7 +73,15 @@ public class CreatePolicyCommand extends Command implements ForwardWithSync {
         this.roleName = roleName;
         this.wherePredicate = wherePredicate;
         this.properties = properties;
+    }
+
+    public CreatePolicyCommand(PolicyTypeEnum policyType, String policyName, boolean ifNotExists,
+                               List<String> nameParts, UserIdentity user, String roleName, String dataMaskType,
+                               int priority) {
+        this(policyType, policyName, ifNotExists, nameParts, Optional.empty(), user, roleName, Optional.empty(),
+                ImmutableMap.of());
         this.dataMaskType = dataMaskType;
+        this.priority = priority;
     }
 
     public Optional<Expression> getWherePredicate() {
@@ -103,7 +114,7 @@ public class CreatePolicyCommand extends Command implements ForwardWithSync {
                         PrivPredicate.GRANT.getPrivs().toString());
             }
             Policy policy = new DorisDataMaskPolicy(Env.getCurrentEnv().getNextId(), policyName, user, roleName,
-                    nameParts.get(0), nameParts.get(1), nameParts.get(2), nameParts.get(3), dataMaskType);
+                    nameParts.get(0), nameParts.get(1), nameParts.get(2), nameParts.get(3), dataMaskType, priority);
             Env.getCurrentEnv().getPolicyMgr().createPolicy(policy, ifNotExists);
             return;
         }
