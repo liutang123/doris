@@ -19,7 +19,9 @@ package org.apache.doris.nereids.trees.plans.commands;
 
 import org.apache.doris.analysis.StmtType;
 import org.apache.doris.analysis.UserIdentity;
+import org.apache.doris.catalog.Column;
 import org.apache.doris.catalog.Env;
+import org.apache.doris.common.DdlException;
 import org.apache.doris.common.ErrorCode;
 import org.apache.doris.common.ErrorReport;
 import org.apache.doris.mysql.privilege.PrivPredicate;
@@ -113,8 +115,34 @@ public class CreatePolicyCommand extends Command implements ForwardWithSync {
                 ErrorReport.reportAnalysisException(ErrorCode.ERR_SPECIFIC_ACCESS_DENIED_ERROR,
                         PrivPredicate.GRANT.getPrivs().toString());
             }
+            String ctl = nameParts.get(0);
+            String db = nameParts.get(1);
+            String tbl = nameParts.get(2);
+            String col = nameParts.get(3);
+            if (ctl == null || db == null || tbl == null || col == null) {
+                throw new org.apache.doris.common.AnalysisException("ctl, db, tbl and col should not be null");
+            }
+            Column column = Env.getCurrentEnv().getCatalogMgr()
+                    .getCatalogOrAnalysisException(ctl)
+                    .getDbOrAnalysisException(db)
+                    .getTableOrAnalysisException(tbl).getColumn(col);
+            if (column == null) {
+                ErrorReport.reportAnalysisException(ErrorCode.ERR_BAD_FIELD_ERROR, col, tbl);
+            }
+            if (roleName != null) {
+                boolean roleExists = Env.getCurrentEnv().getAuth().doesRoleExist(roleName);
+                if (!roleExists) {
+                    throw new DdlException("Role: " + roleName + " does not exist");
+                }
+            }
+            if (user != null) {
+                boolean userExists = Env.getCurrentEnv().getAuth().doesUserExist(user);
+                if (!userExists) {
+                    throw new DdlException("User: " + user + " does not exist");
+                }
+            }
             Policy policy = new DorisDataMaskPolicy(Env.getCurrentEnv().getNextId(), policyName, user, roleName,
-                    nameParts.get(0), nameParts.get(1), nameParts.get(2), nameParts.get(3), dataMaskType, priority);
+                    ctl, db, tbl, col, dataMaskType, priority);
             Env.getCurrentEnv().getPolicyMgr().createPolicy(policy, ifNotExists);
             return;
         }

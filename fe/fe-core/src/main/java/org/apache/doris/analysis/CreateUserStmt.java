@@ -146,7 +146,7 @@ public class CreateUserStmt extends DdlStmt implements NotFallbackInParser {
     public void analyze(Analyzer analyzer) throws UserException {
         super.analyze(analyzer);
 
-        if (ConnectContext.get() != null && !ConnectContext.get().getUserIdentity().isRootUser()
+        if (ConnectContext.get() != null && !ConnectContext.get().getCurrentUserIdentity().isRootUser()
                 && Config.disable_manage_user) {
             throw new AnalysisException("Reject user creation. contact the administrator if you have any questions");
         }

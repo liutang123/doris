@@ -64,9 +64,13 @@ public class Role implements Writable, GsonPostProcessable {
     public static String OPERATOR_ROLE = "operator";
     // admin is like DBA, who has all privileges except for NODE privilege held by operator
     public static String ADMIN_ROLE = "admin";
+    public static String DEFAULT_GLOBAL_ROLE = "default_global";
 
     public static Role OPERATOR;
     public static Role ADMIN;
+    // this is default global role with no privilege
+    // all users have this role when create new user
+    public static Role DEFAULT_GLOBAL;
 
     static {
         try {
@@ -76,6 +80,7 @@ public class Role implements Writable, GsonPostProcessable {
                     TablePattern.ALL, PrivBitSet.of(Privilege.NODE_PRIV, Privilege.ADMIN_PRIV));
             ADMIN = new Role(ADMIN_ROLE,
                     TablePattern.ALL, PrivBitSet.of(Privilege.ADMIN_PRIV));
+            DEFAULT_GLOBAL = new Role(DEFAULT_GLOBAL_ROLE);
         } catch (DdlException e) {
             LOG.warn("Initialize operator and admin role error.", e);
         }

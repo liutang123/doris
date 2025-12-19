@@ -70,6 +70,7 @@ public class RoleManager implements Writable, GsonPostProcessable {
     public RoleManager() {
         roles.put(Role.OPERATOR.getRoleName(), Role.OPERATOR);
         roles.put(Role.ADMIN.getRoleName(), Role.ADMIN);
+        roles.put(Role.DEFAULT_GLOBAL.getRoleName(), Role.DEFAULT_GLOBAL);
     }
 
     public Role getRole(String name) {

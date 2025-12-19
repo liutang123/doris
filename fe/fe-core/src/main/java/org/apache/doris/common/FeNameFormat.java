@@ -147,7 +147,7 @@ public class FeNameFormat {
                     || (!canBeAdmin && role.equalsIgnoreCase(Role.ADMIN_ROLE));
         }
 
-        if (res || role.startsWith(RoleManager.DEFAULT_ROLE_PREFIX)) {
+        if (res || role.startsWith(RoleManager.DEFAULT_ROLE_PREFIX) || role.equals(Role.DEFAULT_GLOBAL_ROLE)) {
             throw new AnalysisException(errMsg + ": " + role);
         }
     }

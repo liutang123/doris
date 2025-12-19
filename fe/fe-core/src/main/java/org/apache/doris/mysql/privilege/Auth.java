@@ -531,6 +531,10 @@ public class Auth implements Writable {
             if (role != null) {
                 userRoleManager.addUserRole(userIdent, roleName);
             }
+            // add default role for cam system user
+            if (Config.enable_cam_system) {
+                userRoleManager.addUserRole(userIdent, Role.DEFAULT_GLOBAL_ROLE);
+            }
             // other user properties
             propertyMgr.addUserResource(userIdent.getQualifiedUser());
 

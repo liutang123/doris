@@ -26,7 +26,7 @@ public class CustomConfHandler {
     public static class RootConfHandler extends ConfigBase.DefaultConfHandler {
         @Override
         public void handle(Field field, String confVal) throws Exception {
-            if (ConnectContext.get() != null && !ConnectContext.get().getUserIdentity().isRootUser()) {
+            if (ConnectContext.get() != null && !ConnectContext.get().getCurrentUserIdentity().isRootUser()) {
                 throw new ConfigException("This Config can be updated only for root");
             }
             super.handle(field, confVal);

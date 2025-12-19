@@ -454,6 +454,9 @@ public class PolicyMgr implements Writable {
                     }
                 }
             }
+            if (res != null && res.getMaskType() == DataMaskType.MASK_NONE) {
+                res = null;
+            }
             return res;
         } finally {
             readUnlock();

@@ -408,7 +408,7 @@ public class UserProperty implements Writable {
                 if (keyArr.length != 1) {
                     throw new DdlException(PROP_CAM_GROUP_LIST + " format error");
                 }
-                if (ConnectContext.get() != null && !ConnectContext.get().getUserIdentity().isRootUser()) {
+                if (ConnectContext.get() != null && !ConnectContext.get().getCurrentUserIdentity().isRootUser()) {
                     throw new DdlException(PROP_CAM_GROUP_LIST + " only root can update");
                 }
                 if (Strings.isNullOrEmpty(value)) {
