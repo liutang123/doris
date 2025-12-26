@@ -375,6 +375,8 @@ public class CloudGlobalTransactionMgr implements GlobalTransactionMgrIface {
             }
             commitTransactionWithoutLock(dbId, tableList, transactionId, tabletCommitInfos, txnCommitAttachment, false,
                     mowTableList, backendToPartitionInfos);
+            // clear signature after commit succeeds
+            clearTxnLastSignature(dbId, transactionId);
         } catch (Exception e) {
             if (!mowTableList.isEmpty()) {
                 LOG.warn("commit txn {} failed, release delete bitmap lock, catch exception {}", transactionId,
@@ -606,6 +608,8 @@ public class CloudGlobalTransactionMgr implements GlobalTransactionMgrIface {
         long callbackId = 0L;
         try {
             txnState = commitTxn(commitTxnRequest, transactionId, is2PC, dbId, tableList);
+            // clear signature after commit succeeds
+            clearTxnLastSignature(dbId, transactionId);
             txnOperated = true;
             if (DebugPointUtil.isEnable("CloudGlobalTransactionMgr.commitTransaction.timeout")) {
                 throw new UserException(InternalErrorCode.DELETE_BITMAP_LOCK_ERR,
@@ -1282,6 +1286,8 @@ public class CloudGlobalTransactionMgr implements GlobalTransactionMgrIface {
             txnState = commitTxn(commitTxnRequest, transactionId, false, db.getId(),
                     subTransactionStates.stream().map(SubTransactionState::getTable)
                         .collect(Collectors.toList()));
+            // clear signature after commit succeeds
+            clearTxnLastSignature(db.getId(), transactionId);
             txnOperated = true;
         } finally {
             if (txnState != null) {
@@ -1430,6 +1436,7 @@ public class CloudGlobalTransactionMgr implements GlobalTransactionMgrIface {
             abortTxnResponse = abortTransactionImpl(dbId, transactionId, reason, null);
         } finally {
             handleAfterAbort(abortTxnResponse, txnCommitAttachment, transactionId);
+            clearTxnLastSignature(dbId, transactionId);
         }
     }
 
