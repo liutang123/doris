@@ -1671,8 +1671,9 @@ public class CloudGlobalTransactionMgr implements GlobalTransactionMgrIface {
 
     public boolean isPreviousNonTimeoutTxnFinished(long endTransactionId, long dbId, List<Long> tableIdList)
             throws AnalysisException {
-        LOG.info("isPreviousNonTimeoutTxnFinished(), endTransactionId:{}, dbId:{}, tableIdList:{}",
-                endTransactionId, dbId, tableIdList);
+        LOG.info("isPreviousNonTimeoutTxnFinished(), endTransactionId:{}, dbId:{}, tableIdList:{}.., size: {}",
+                endTransactionId, dbId, tableIdList.size() <= 10 ? tableIdList : tableIdList.subList(0, 10),
+                tableIdList.size());
 
         if (endTransactionId <= 0) {
             throw new AnalysisException("Invaid endTransactionId:" + endTransactionId);
@@ -1687,7 +1688,7 @@ public class CloudGlobalTransactionMgr implements GlobalTransactionMgrIface {
         final CheckTxnConflictRequest checkTxnConflictRequest = builder.build();
         CheckTxnConflictResponse checkTxnConflictResponse = null;
         try {
-            LOG.info("CheckTxnConflictRequest:{}", checkTxnConflictRequest);
+            LOG.debug("CheckTxnConflictRequest:{}", checkTxnConflictRequest);
             checkTxnConflictResponse = MetaServiceProxy
                     .getInstance().checkTxnConflict(checkTxnConflictRequest);
             LOG.info("CheckTxnConflictResponse: {}", checkTxnConflictResponse);

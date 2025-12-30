@@ -3220,6 +3220,9 @@ public class Config extends ConfigBase {
     @ConfField(mutable = true, masterOnly = true)
     public static boolean enable_cloud_warm_up_for_rebalance = true;
 
+    @ConfField(mutable = true, masterOnly = true)
+    public static long cloud_warm_up_rpc_batch_size = 0;
+
     @ConfField(mutable = true, masterOnly = false)
     public static String security_checker_class_name = "";
 
