@@ -20,6 +20,7 @@
 #include <map>
 #include <ostream>
 
+#include "common/config.h"
 #include "runtime/descriptors.h"
 #include "runtime/types.h"
 #include "util/jni-util.h"
@@ -116,6 +117,10 @@ Status TrinoConnectorJniReader::_set_spi_plugins_dir() {
     // get method: setPluginsDir(String pluginsDir)
     jmethodID set_plugins_dir_method =
             env->GetStaticMethodID(plugin_loader_cls, "setPluginsDir", "(Ljava/lang/String;)V");
+
+    // get method: setPluginsDir(String pluginsDir)
+    jmethodID set_log_dir_method =
+            env->GetStaticMethodID(plugin_loader_cls, "setLogDir", "(Ljava/lang/String;)V");
     RETURN_ERROR_IF_EXC(env);
 
     // call: setPluginsDir(String pluginsDir)
@@ -127,6 +132,16 @@ Status TrinoConnectorJniReader::_set_spi_plugins_dir() {
     RETURN_ERROR_IF_EXC(env);
     env->DeleteLocalRef(trino_connector_plugin_path);
     RETURN_ERROR_IF_EXC(env);
+
+    auto sys_log_dir = config::sys_log_dir;
+    if (!sys_log_dir.empty()) {
+        jstring log_dir = env->NewStringUTF(config::sys_log_dir.c_str());
+        RETURN_ERROR_IF_EXC(env);
+        env->CallStaticVoidMethod(plugin_loader_cls, set_log_dir_method, log_dir);
+        RETURN_ERROR_IF_EXC(env);
+        env->DeleteLocalRef(log_dir);
+        RETURN_ERROR_IF_EXC(env);
+    }
 
     return Status::OK();
 }

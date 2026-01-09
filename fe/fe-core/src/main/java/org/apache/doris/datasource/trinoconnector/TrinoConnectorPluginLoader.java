@@ -21,6 +21,7 @@ import org.apache.doris.common.Config;
 import org.apache.doris.common.EnvUtils;
 import org.apache.doris.trinoconnector.TrinoConnectorPluginManager;
 
+import com.google.common.base.Strings;
 import com.google.common.util.concurrent.MoreExecutors;
 import io.trino.FeaturesConfig;
 import io.trino.metadata.HandleResolver;
@@ -32,6 +33,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.File;
+import java.nio.file.Paths;
 import java.util.logging.FileHandler;
 import java.util.logging.Level;
 import java.util.logging.SimpleFormatter;
@@ -67,8 +69,14 @@ public class TrinoConnectorPluginLoader {
                         "%1$tY-%1$tm-%1$td %1$tH:%1$tM:%1$tS %4$s: %5$s%6$s%n");
                 java.util.logging.Logger logger = java.util.logging.Logger.getLogger("");
                 logger.setUseParentHandlers(false);
-                FileHandler fileHandler = new FileHandler(EnvUtils.getDorisHome() + "/log/trinoconnector%g.log",
-                        500000000, 10, true);
+                // Try FE's log dir first
+                String sysLogDir = Strings.isNullOrEmpty(Config.sys_log_dir) ? System.getenv("LOG_DIR") :
+                        Config.sys_log_dir;
+                if (Strings.isNullOrEmpty(sysLogDir)) {
+                    sysLogDir = EnvUtils.getDorisHome() + "/log";
+                }
+                String logPath = Paths.get(sysLogDir, "trinoconnector%g.log").toString();
+                FileHandler fileHandler = new FileHandler(logPath, 500000000, 10, true);
                 fileHandler.setLevel(Level.INFO);
                 fileHandler.setFormatter(new SimpleFormatter());
                 logger.addHandler(fileHandler);

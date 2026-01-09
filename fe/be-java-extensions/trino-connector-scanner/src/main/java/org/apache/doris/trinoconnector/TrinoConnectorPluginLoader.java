@@ -30,6 +30,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.File;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.FileHandler;
@@ -41,6 +42,7 @@ public class TrinoConnectorPluginLoader {
     private static final Logger LOG = LogManager.getLogger(TrinoConnectorPluginLoader.class);
 
     private static String pluginsDir = EnvUtils.getDorisHome() + "/connectors";
+    private static String logDir = EnvUtils.getDorisHome() + "/log";
 
     // Suppress default constructor for noninstantiability
     private TrinoConnectorPluginLoader() {
@@ -69,8 +71,8 @@ public class TrinoConnectorPluginLoader {
                 Arrays.stream(logger.getHandlers())
                         .filter(handler -> handler instanceof ConsoleHandler)
                         .forEach(handler -> handler.setLevel(Level.OFF));
-                FileHandler fileHandler = new FileHandler(EnvUtils.getDorisHome() + "/log/trinoconnector%g.log",
-                        500000000, 10, true);
+                String logPath = Paths.get(logDir, "trinoconnector%g.log").toString();
+                FileHandler fileHandler = new FileHandler(logPath, 500000000, 10, true);
                 fileHandler.setLevel(Level.INFO);
                 fileHandler.setFormatter(new SimpleFormatter());
                 logger.addHandler(fileHandler);
@@ -96,6 +98,10 @@ public class TrinoConnectorPluginLoader {
     // called by c++
     public static void setPluginsDir(String pluginsDir) {
         TrinoConnectorPluginLoader.pluginsDir = pluginsDir;
+    }
+
+    public static void setLogDir(String logDir) {
+        TrinoConnectorPluginLoader.logDir = logDir;
     }
 
     public static TrinoConnectorPluginManager getTrinoConnectorPluginManager() {
