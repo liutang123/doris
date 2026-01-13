@@ -5,11 +5,14 @@
 
 ################################################################################################################################
 #
-# define region: you can change or add new region here
+# Author: derenli
+# Version: v3.1
+# Last updated date: 2026-01-16
 #
 WORK_DIR_PREFIX="/data/cdw/upgrade_packages_dir"
 # List of known bucket ADDRESSES for region validation
 ADDRESSES=(
+   # define region: you can change or add new region here
   "cdwch-cos-apps-bj-1305504398.cos.ap-beijing.myqcloud.com"
   "cdwch-cos-apps-gz-1305504398.cos.ap-guangzhou.myqcloud.com"
   "cdwch-cos-apps-sh-1305504398.cos.ap-shanghai.myqcloud.com"
@@ -431,6 +434,22 @@ upgrade_a_specified_component() {
     return 1
   fi
 
+  common_components=("version.txt" "webroot" "www" "zoneinfo")
+  if [ "$component" == "fe" ]; then
+    common_components+=("jdbc_drivers" "spark-dpp" "mysql_ssl_default_certificate")
+  elif [ "$component" == "be" ]; then
+    common_components+=("jdbc_drivers" "udf" "dict")
+  fi
+
+  log "[INFO] copy the common components: ${common_components[*]} ..."
+
+  for item in "${common_components[@]}"; do
+    cp -fr "${source_dir}/${item}" "${dest_dir}/"
+    if [ $? -ne 0 ]; then
+      log "[WARN] copy ${source_dir}/${item} to ${dest_dir} failed"
+    fi
+  done
+
   log "[INFO] success to upgrade the $component of doris."
   return 0
 }
@@ -732,6 +751,9 @@ is_rollback=0
 # Loop through arguments and classify them
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --help|-h)
+      usage
+      ;;
     --ms)
       opt_ms=1
       shift
@@ -904,26 +926,25 @@ if [[ $is_rollback -eq 0 ]]; then  # for upgrading
   if [[ $opt_all -ne 1 ]]; then
     if [[ $opt_ms -eq 1 ]]; then
       upgrade_a_specified_component "ms" || error_on_rollback "upgrade ms failed"
-      # check and fix for ms dir is ownered by root...
-      check_and_fix_ms_dir "/data/cdw/doris/ms" || error_on_rollback "check and fix ms dir failed"
+      log "[INFO] Upgrade ms component successfully!"
     fi
     if [[ $opt_fe -eq 1 ]]; then
       upgrade_a_specified_component "fe" || error_on_rollback "upgrade fe failed"
+      log "[INFO] Upgrade fe component successfully!"
     fi
     if [[ $opt_be -eq 1 ]]; then
       upgrade_a_specified_component "be" || error_on_rollback "upgrade be failed"
+      log "[INFO] Upgrade be component successfully!"
     fi
     if [[ $opt_broker -eq 1 ]]; then
       upgrade_a_specified_component "broker" || error_on_rollback "upgrade broker failed"
+      log "[INFO] Upgrade broker component successfully!"
     fi
     
-    log "[INFO] Upgrade component successfully!"
-    exit 0
+  else # Following is upgrade whole doris, that is opt_all must be 1
+    # 5. upgrade the whole doris
+    upgrade_whole_doris || error_on_rollback "replace whole doris dir failed"
   fi
-
-  # 5. upgrade the whole doris
-  # Following is upgrade whole doris, that is opt_all must be 1
-  upgrade_whole_doris || error_on_rollback "replace whole doris dir failed"
 
   # 6. restore and keep old configure and libs
   keep_old_configure_and_libs || error_on_rollback "restore and keep old configure and libs failed"
@@ -942,9 +963,13 @@ if [[ $is_rollback -eq 0 ]]; then  # for upgrading
   fi
 
   # 9. check and fix for ms dir is ownered by root...
-  check_and_fix_ms_dir "/data/cdw/doris/ms" || error_on_rollback "check and fix the owner of ms dir failed"
+  if [[ $opt_all -eq 1 || $opt_ms -eq 1 ]]; then
+    check_and_fix_ms_dir "/data/cdw/doris/ms" || error_on_rollback "check and fix the owner of ms dir failed"
+    log "[INFO] Check and fix the owner of ms dir successfully!"
+  fi
+ 
   log "[INFO] success to finish the upgrading, the version from $OLD_VERSION to $NEW_VERSION."
-  
+ 
 else # for rollback
 
   LOG_FILE="${WORK_DIR_PREFIX}/${upgrade_version_string}/rollback_${date_str}.log"
