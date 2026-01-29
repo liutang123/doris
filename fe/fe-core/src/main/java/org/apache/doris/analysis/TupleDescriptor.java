@@ -35,6 +35,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -45,6 +46,7 @@ public class TupleDescriptor {
     private final TupleId id;
     private final String debugName; // debug only
     private final ArrayList<SlotDescriptor> slots;
+    private final HashMap<Integer, SlotDescriptor> idToSlotDesc;
 
     // underlying table, if there is one
     private TableIf table;
@@ -75,6 +77,7 @@ public class TupleDescriptor {
     public TupleDescriptor(TupleId id) {
         this.id = id;
         this.slots = new ArrayList<SlotDescriptor>();
+        this.idToSlotDesc = new HashMap<>();
         this.debugName = "";
         this.cardinality = -1;
     }
@@ -82,6 +85,7 @@ public class TupleDescriptor {
     public TupleDescriptor(TupleId id, String debugName) {
         this.id = id;
         this.slots = new ArrayList<SlotDescriptor>();
+        this.idToSlotDesc = new HashMap<>();
         this.debugName = debugName;
         this.cardinality = -1;
     }
@@ -89,6 +93,7 @@ public class TupleDescriptor {
     public void addSlot(SlotDescriptor desc) {
         desc.setSlotOffset(slots.size());
         slots.add(desc);
+        idToSlotDesc.putIfAbsent(desc.getId().asInt(), desc);
     }
 
     public TupleId getId() {
@@ -118,12 +123,7 @@ public class TupleDescriptor {
      * @return this slot's desc
      */
     public SlotDescriptor getSlot(int slotId) {
-        for (SlotDescriptor slotDesc : slots) {
-            if (slotDesc.getId().asInt() == slotId) {
-                return slotDesc;
-            }
-        }
-        return null;
+        return idToSlotDesc.get(slotId);
     }
 
     public long getCardinality() {

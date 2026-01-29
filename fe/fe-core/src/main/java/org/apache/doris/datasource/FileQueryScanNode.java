@@ -76,6 +76,7 @@ import org.apache.logging.log4j.Logger;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -245,14 +246,22 @@ public abstract class FileQueryScanNode extends FileScanNode {
             params.setColumnIdxs(columnIdxs);
             return;
         }
+
+        // Pre-index columns into a Map for O(1) lookup
+        List<Column> columns = tbl.getBaseSchema();
+        Map<String, Integer> columnNameMap = new HashMap<>(columns.size());
+        for (int i = 0; i < columns.size(); i++) {
+            columnNameMap.putIfAbsent(columns.get(i).getName(), i);
+        }
+
         for (TFileScanSlotInfo slot : params.getRequiredSlots()) {
             if (!slot.isIsFileSlot()) {
                 continue;
             }
             SlotDescriptor slotDesc = desc.getSlot(slot.getSlotId());
             String colName = slotDesc.getColumn().getName();
-            int idx = tbl.getBaseColumnIdxByName(colName);
-            if (idx == -1) {
+            Integer idx = columnNameMap.get(colName);
+            if (idx == null) {
                 throw new UserException("Column " + colName + " not found in table " + tbl.getName());
             }
             columnIdxs.add(idx);
