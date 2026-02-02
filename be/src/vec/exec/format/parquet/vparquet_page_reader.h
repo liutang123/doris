@@ -79,6 +79,7 @@ public:
     }
 
     virtual Status skip_page();
+    virtual Status skip_page_by_header();
 
     virtual Status get_page_data(Slice& slice);
 

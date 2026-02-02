@@ -233,16 +233,25 @@ Status ColumnChunkReader::_decode_dict_page() {
     // Prepare dictionary data
     int32_t uncompressed_size = header->uncompressed_page_size;
     std::unique_ptr<uint8_t[]> dict_data(new uint8_t[uncompressed_size]);
-    if (_block_compress_codec != nullptr) {
-        Slice compressed_data;
-        RETURN_IF_ERROR(_page_reader->get_page_data(compressed_data));
-        Slice dict_slice(dict_data.get(), uncompressed_size);
-        RETURN_IF_ERROR(_block_compress_codec->decompress(compressed_data, &dict_slice));
+    auto dict_num = header->dictionary_page_header.num_values;
+    if (dict_num != 0) {
+        if (_block_compress_codec != nullptr) {
+            Slice compressed_data;
+            RETURN_IF_ERROR(_page_reader->get_page_data(compressed_data));
+            Slice dict_slice(dict_data.get(), uncompressed_size);
+            RETURN_IF_ERROR(_block_compress_codec->decompress(compressed_data, &dict_slice));
+        } else {
+            Slice dict_slice;
+            RETURN_IF_ERROR(_page_reader->get_page_data(dict_slice));
+            // The data is stored by BufferedStreamReader, we should copy it out
+            memcpy(dict_data.get(), dict_slice.data, dict_slice.size);
+        }
     } else {
-        Slice dict_slice;
-        RETURN_IF_ERROR(_page_reader->get_page_data(dict_slice));
-        // The data is stored by BufferedStreamReader, we should copy it out
-        memcpy(dict_data.get(), dict_slice.data, dict_slice.size);
+        if (uncompressed_size != 0) {
+            return Status::IOError("Dictionary page's num_values is {} but uncompressed_size is {}",
+                                   dict_num, uncompressed_size);
+        }
+        RETURN_IF_ERROR(_page_reader->skip_page_by_header());
     }
 
     // Cache page decoder

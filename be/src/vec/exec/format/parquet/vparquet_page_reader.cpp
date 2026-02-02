@@ -101,13 +101,17 @@ Status PageReader::_parse_page_header() {
     return Status::OK();
 }
 
-Status PageReader::skip_page() {
+Status PageReader::skip_page_by_header() {
     if (UNLIKELY(_state != HEADER_PARSED)) {
         return Status::IOError("Should generate page header first to skip current page");
     }
     _offset = _next_header_offset;
     _state = INITIALIZED;
     return Status::OK();
+}
+
+Status PageReader::skip_page() {
+    return skip_page_by_header();
 }
 
 Status PageReader::get_page_data(Slice& slice) {
