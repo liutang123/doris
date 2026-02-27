@@ -2067,11 +2067,20 @@ public class SchemaChangeHandler extends AlterHandler {
                         lightSchemaChange = false;
                     }
                 } else if (alterClause instanceof ModifyColumnClause) {
-                    // modify column
-                    boolean clauseCanLightSchemaChange = processModifyColumn((ModifyColumnClause) alterClause,
-                            olapTable, indexSchemaMap);
-                    if (!clauseCanLightSchemaChange) {
-                        lightSchemaChange = false;
+                    try {
+                        // modify column
+                        boolean clauseCanLightSchemaChange = processModifyColumn((ModifyColumnClause) alterClause,
+                                olapTable, indexSchemaMap);
+                        if (!clauseCanLightSchemaChange) {
+                            lightSchemaChange = false;
+                        }
+                    } catch (DdlException e) {
+                        if (e.getMessage().contains("Shorten type length is prohibited")) {
+                            if (Config.tc_ignore_modify_column_varchar_length_error) {
+                                continue;
+                            }
+                        }
+                        throw e;
                     }
                 } else if (alterClause instanceof ReorderColumnsClause) {
                     // reorder column

@@ -3464,4 +3464,8 @@ public class Config extends ConfigBase {
     @ConfField(mutable = true, description = {"是否隐藏 Storage Medium",
             "Whether to hide storage medium, default is false."})
     public static boolean hide_storage_medium = true;
+
+    @ConfField(mutable = true, description = {"是否忽略modify column 时缩短varchar长度的错误",
+            "Whether to ignore the error when shortening varchar length during modify column, default is false."})
+    public static boolean tc_ignore_modify_column_varchar_length_error = false;
 }
