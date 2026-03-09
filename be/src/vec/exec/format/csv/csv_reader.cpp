@@ -411,9 +411,10 @@ Status CsvReader::init_reader(bool is_load) {
                     _trim_tailing_spaces, false, _value_separator, _value_separator_length, -1);
         }
     } else {
+        size_t col_sep_num = _file_slot_descs.size() > 1 ? _file_slot_descs.size() - 1 : 0;
         text_line_reader_ctx = std::make_shared<EncloseCsvLineReaderContext>(
                 _line_delimiter, _line_delimiter_length, _value_separator, _value_separator_length,
-                _file_slot_descs.size() - 1, _enclose, _escape, _keep_cr);
+                col_sep_num, _enclose, _escape, _keep_cr);
 
         _fields_splitter = std::make_unique<EncloseCsvTextFieldSplitter>(
                 _trim_tailing_spaces, !_not_trim_enclose,
