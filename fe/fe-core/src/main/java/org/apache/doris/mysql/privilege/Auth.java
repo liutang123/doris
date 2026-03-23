@@ -68,6 +68,7 @@ import org.apache.doris.mysql.authenticate.ldap.LdapUserInfo;
 import org.apache.doris.persist.AlterUserOperationLog;
 import org.apache.doris.persist.LdapInfo;
 import org.apache.doris.persist.PrivInfo;
+import org.apache.doris.policy.PolicyTypeEnum;
 import org.apache.doris.qe.ConnectContext;
 import org.apache.doris.resource.Tag;
 import org.apache.doris.resource.workloadgroup.WorkloadGroupMgr;
@@ -619,6 +620,7 @@ public class Auth implements Writable {
             }
 
             if (!isReplay) {
+                Env.getCurrentEnv().getPolicyMgr().dropPolicy(userIdent, PolicyTypeEnum.ROW);
                 Env.getCurrentEnv().getEditLog().logNewDropUser(userIdent);
             }
             LOG.info("finished to drop user: {}, is replay: {}", userIdent.getQualifiedUser(), isReplay);

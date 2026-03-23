@@ -248,4 +248,19 @@ public class RowPolicy extends Policy implements RowFilterPolicy {
         return getPolicyName();
     }
 
+    @Override
+    public String toString() {
+        return "RowPolicy{"
+                + "user=" + user
+                + ", roleName='" + roleName + '\''
+                + ", ctlName='" + ctlName + '\''
+                + ", dbName='" + dbName + '\''
+                + ", tableName='" + tableName + '\''
+                + ", filterType=" + filterType
+                + ", originStmt='" + originStmt + '\''
+                + ", stmtIdx=" + stmtIdx
+                + ", wherePredicate=" + wherePredicate
+                + '}';
+    }
+
 }

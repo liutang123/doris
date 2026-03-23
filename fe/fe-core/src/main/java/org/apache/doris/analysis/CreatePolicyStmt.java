@@ -185,7 +185,7 @@ public class CreatePolicyStmt extends DdlStmt implements NotFallbackInParser {
                 } else {
                     sb.append(user.getQualifiedUser());
                 }
-                sb.append(" USING ").append(wherePredicate.toSql());
+                sb.append(" USING (").append(wherePredicate.toSql()).append(")");
                 break;
             case DATA_MASK:
                 sb.append(" ON ").append(colName.toSql()).append(" TO ");

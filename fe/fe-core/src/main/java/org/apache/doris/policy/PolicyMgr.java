@@ -37,6 +37,8 @@ import org.apache.doris.common.io.Text;
 import org.apache.doris.common.io.Writable;
 import org.apache.doris.common.util.TimeUtils;
 import org.apache.doris.datasource.InternalCatalog;
+import org.apache.doris.mysql.privilege.PrivPredicate;
+import org.apache.doris.mysql.privilege.Role;
 import org.apache.doris.persist.gson.GsonUtils;
 import org.apache.doris.qe.ShowResultSet;
 import org.apache.doris.qe.ShowResultSetMetaData;
@@ -63,6 +65,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -200,6 +203,25 @@ public class PolicyMgr implements Writable {
             Env.getCurrentEnv().getEditLog().logCreatePolicy(policy);
         } finally {
             writeUnlock();
+        }
+    }
+
+    public void dropPolicy(UserIdentity user, PolicyTypeEnum typeEnum) throws DdlException {
+        if (typeEnum == PolicyTypeEnum.ROW) {
+            writeLock();
+            try {
+                List<Policy> policies = Lists.newArrayList(getPoliciesByType(typeEnum));
+                for (Policy policy : policies) {
+                    RowPolicy rowPolicy = (RowPolicy) policy;
+                    if (Objects.equals(user, rowPolicy.getUser())) {
+                        dropPolicy(new DropPolicyLog(rowPolicy.getCtlName(), rowPolicy.getDbName(),
+                                rowPolicy.getTableName(), typeEnum, rowPolicy.getPolicyName(), user,
+                                rowPolicy.getRoleName()), true);
+                    }
+                }
+            } finally {
+                writeUnlock();
+            }
         }
     }
 
@@ -482,22 +504,37 @@ public class PolicyMgr implements Writable {
         try {
             // double check in lock,avoid NPE
             if (!tablePolicies.containsKey(ctlName) || !tablePolicies.get(ctlName).containsKey(dbName)
-                    || !tablePolicies.get(ctlName).get(dbName).containsKey(tableName)) {
+                    || !tablePolicies.get(ctlName).get(dbName).containsKey(tableName)
+                    || hasGlobalPrivilege(user, roles)) {
                 return res;
             }
-            List<RowPolicy> policys = tablePolicies.get(ctlName).get(dbName).get(tableName);
-            for (RowPolicy rowPolicy : policys) {
-                // on rowPolicy to user
-                if ((rowPolicy.getUser() != null && rowPolicy.getUser().getQualifiedUser()
-                        .equals(user.getQualifiedUser()))
-                        || !StringUtils.isEmpty(rowPolicy.getRoleName()) && roles.contains(rowPolicy.getRoleName())) {
-                    res.add(rowPolicy);
-                }
-            }
+            List<RowPolicy> policies = tablePolicies.get(ctlName).get(dbName).get(tableName);
+            res = buildUserPolicies(user, policies, roles);
             return res;
         } finally {
             readUnlock();
         }
+    }
+
+    private boolean hasGlobalPrivilege(UserIdentity user, Set<String> roles) {
+        return Env.getCurrentEnv().getAccessManager().checkGlobalPriv(user,
+            PrivPredicate.ADMIN_OR_NODE) || roles.contains(Role.ADMIN_ROLE);
+    }
+
+    private List<RowPolicy> buildUserPolicies(UserIdentity user, List<RowPolicy> rowPolicies, Set<String> roles) {
+        List<RowPolicy> result = new ArrayList<>();
+        for (RowPolicy rowPolicy : rowPolicies) {
+            if (!StringUtils.isEmpty(rowPolicy.getRoleName()) && roles.contains(rowPolicy.getRoleName())) {
+                result.add(rowPolicy);
+                continue;
+            }
+            if (rowPolicy.getUser() != null) {
+                if (user.equals(rowPolicy.getUser())) {
+                    result.add(rowPolicy);
+                }
+            }
+        }
+        return result;
     }
 
     private RowPolicy mergeRowPolicies(List<RowPolicy> policys) {
