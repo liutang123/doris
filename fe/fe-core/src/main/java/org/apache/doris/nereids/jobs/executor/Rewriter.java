@@ -76,6 +76,7 @@ import org.apache.doris.nereids.rules.rewrite.EliminateFilter;
 import org.apache.doris.nereids.rules.rewrite.EliminateGroupBy;
 import org.apache.doris.nereids.rules.rewrite.EliminateGroupByKey;
 import org.apache.doris.nereids.rules.rewrite.EliminateGroupByKeyByUniform;
+import org.apache.doris.nereids.rules.rewrite.EliminateGroupingSets;
 import org.apache.doris.nereids.rules.rewrite.EliminateJoinByFK;
 import org.apache.doris.nereids.rules.rewrite.EliminateJoinByUnique;
 import org.apache.doris.nereids.rules.rewrite.EliminateJoinCondition;
@@ -515,7 +516,8 @@ public class Rewriter extends AbstractBatchJobExecutor {
                                 new EliminateJoinCondition(),
                                 new EliminateAssertNumRows(),
                                 new EliminateSemiJoin(),
-                                new SimplifyEncodeDecode()
+                                new SimplifyEncodeDecode(),
+                                new EliminateGroupingSets()
                         )
                 ),
                 // The rule modification needs to be done after the subquery is unnested,

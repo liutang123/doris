@@ -83,6 +83,22 @@ public interface Repeat<CHILD_PLAN extends Plan> extends Aggregate<CHILD_PLAN> {
     /**
      * get common grouping set expressions.
      * e.g. grouping sets((a, b, c), (b, c), (c))
+     * the common expressions is [a, b, c]
+     */
+    default Set<Expression> getGroupingSetExpressions() {
+        List<List<Expression>> groupingSets = getGroupingSets();
+        Iterator<List<Expression>> iterator = groupingSets.iterator();
+        Set<Expression> commonGroupingExpressions = Sets.newLinkedHashSet(iterator.next());
+        while (iterator.hasNext()) {
+            commonGroupingExpressions = Sets.union(commonGroupingExpressions,
+                    Sets.newLinkedHashSet(iterator.next())).immutableCopy();
+        }
+        return commonGroupingExpressions;
+    }
+
+    /**
+     * get common grouping set expressions.
+     * e.g. grouping sets((a, b, c), (b, c), (c))
      * the common expressions is [c]
      */
     default Set<Expression> getCommonGroupingSetExpressions() {
