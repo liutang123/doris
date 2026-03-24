@@ -26,6 +26,7 @@ import org.apache.doris.nereids.trees.expressions.StatementScopeIdGenerator;
 import org.apache.doris.nereids.trees.expressions.functions.scalar.Concat;
 import org.apache.doris.nereids.trees.expressions.literal.Literal;
 import org.apache.doris.nereids.trees.expressions.literal.StringLiteral;
+import org.apache.doris.nereids.trees.plans.algebra.Repeat.RepeatType;
 import org.apache.doris.nereids.trees.plans.logical.LogicalOlapScan;
 import org.apache.doris.nereids.trees.plans.logical.LogicalPlan;
 import org.apache.doris.nereids.trees.plans.logical.LogicalRepeat;
@@ -52,9 +53,8 @@ public class EliminateGroupingSetsTest implements MemoPatternMatchSupported {
         Slot name = scan.getOutput().get(2);
 
         LogicalRepeat<?> repeat = new LogicalRepeat<>(
-                ImmutableList.of(ImmutableList.of(id, gender), ImmutableList.of()),
-                ImmutableList.of(id, gender, name),
-                scan);
+                ImmutableList.of(ImmutableList.of(id, gender), ImmutableList.of()), ImmutableList.of(id, gender, name),
+                RepeatType.GROUPING_SETS, scan);
 
         LogicalPlan plan = new LogicalPlanBuilder(repeat)
                 .projectAll()
@@ -79,13 +79,9 @@ public class EliminateGroupingSetsTest implements MemoPatternMatchSupported {
         Alias concatNameX = new Alias(new Concat(name, new StringLiteral("x")), "namex");
 
         LogicalRepeat<?> repeat = new LogicalRepeat<>(
-                ImmutableList.of(
-                        ImmutableList.of(concatNameX.toSlot(), name),
-                        ImmutableList.of(concatNameX.toSlot()),
-                        ImmutableList.of(name),
-                        ImmutableList.of()),
-                ImmutableList.of(concatNameX, name),
-                scan);
+                ImmutableList.of(ImmutableList.of(concatNameX.toSlot(), name), ImmutableList.of(concatNameX.toSlot()),
+                        ImmutableList.of(name), ImmutableList.of()), ImmutableList.of(concatNameX, name),
+                RepeatType.CUBE, scan);
 
         LogicalPlan plan = new LogicalPlanBuilder(repeat)
                 .projectAll()
@@ -111,11 +107,8 @@ public class EliminateGroupingSetsTest implements MemoPatternMatchSupported {
         Alias concatNameX = new Alias(new Concat(name, new StringLiteral("x")), "namex");
 
         LogicalRepeat<?> repeat = new LogicalRepeat<>(
-                ImmutableList.of(
-                        ImmutableList.of(concatNameX.toSlot()),
-                        ImmutableList.of(name)),
-                ImmutableList.of(concatNameX, name),
-                scan);
+                ImmutableList.of(ImmutableList.of(concatNameX.toSlot()), ImmutableList.of(name)),
+                ImmutableList.of(concatNameX, name), RepeatType.GROUPING_SETS, scan);
 
         Expression filterPredicate = ExpressionUtils.and(
                 new EqualTo(concatNameX.toSlot(), new StringLiteral("abcx")),
