@@ -69,29 +69,59 @@ public class EliminateGroupingSets implements RewriteRuleFactory {
         return ImmutableList.of(
                 logicalFilter(logicalAggregate(logicalProject(logicalRepeat(any())))).when(
                                 filter -> filter.child().getSourceRepeat().isPresent())
-                        .thenApply(ctx -> pruneSourceRepeatGroupingSetsByFilter(ctx.root, ctx.cascadesContext))
-                        .toRule(RuleType.ELIMINATE_GROUPING_SETS)
+                        .thenApply(ctx -> pruneSourceRepeatGroupingSetsByFilterNormal(ctx.root, ctx.cascadesContext))
+                        .toRule(RuleType.ELIMINATE_GROUPING_SETS),
+                logicalFilter(logicalProject(logicalAggregate(logicalProject(logicalRepeat(any()))))).when(
+                                filter -> filter.child().child().getSourceRepeat().isPresent())
+                        .thenApply(
+                                ctx -> pruneSourceRepeatGroupingSetsByFilterWithProject(ctx.root, ctx.cascadesContext))
+                        .toRule(RuleType.ELIMINATE_GROUPING_SETS_WITH_PROJECT)
         );
+    }
+
+    private Plan pruneSourceRepeatGroupingSetsByFilterNormal(
+            LogicalFilter<LogicalAggregate<LogicalProject<LogicalRepeat<Plan>>>> filter,
+            CascadesContext cascadesContext) {
+        LogicalAggregate<LogicalProject<LogicalRepeat<Plan>>> aggregate = filter.child();
+        Plan newAgg = pruneSourceRepeatGroupingSetsByFilter0(filter, aggregate, cascadesContext);
+        if (aggregate != newAgg) {
+            return filter.withChildren(newAgg);
+        } else {
+            return filter;
+        }
+    }
+
+    private Plan pruneSourceRepeatGroupingSetsByFilterWithProject(
+            LogicalFilter<LogicalProject<LogicalAggregate<LogicalProject<LogicalRepeat<Plan>>>>> filter,
+            CascadesContext cascadesContext) {
+        LogicalProject<LogicalAggregate<LogicalProject<LogicalRepeat<Plan>>>> project = filter.child();
+        LogicalAggregate<LogicalProject<LogicalRepeat<Plan>>> aggregate = project.child();
+        Plan newAgg = pruneSourceRepeatGroupingSetsByFilter0(filter, aggregate, cascadesContext);
+        if (aggregate != newAgg) {
+            return filter.withChildren(project.withChildren(newAgg));
+        } else {
+            return filter;
+        }
     }
 
     /**
      * Prune grouping sets in aggregate.sourceRepeat according to filter conjuncts.
      * Keep sourceRepeat and project child repeat consistent after pruning.
      */
-    private Plan pruneSourceRepeatGroupingSetsByFilter(
-            LogicalFilter<LogicalAggregate<LogicalProject<LogicalRepeat<Plan>>>> filter,
+    private Plan pruneSourceRepeatGroupingSetsByFilter0(
+            LogicalFilter<? extends Plan> filter,
+            LogicalAggregate<LogicalProject<LogicalRepeat<Plan>>> aggregate,
             CascadesContext cascadesContext) {
-        LogicalAggregate<LogicalProject<LogicalRepeat<Plan>>> aggregate = filter.child();
         LogicalProject<LogicalRepeat<Plan>> project = aggregate.child();
         LogicalRepeat<? extends Plan> sourceRepeat = aggregate.getSourceRepeat().get();
         LogicalRepeat<? extends Plan> childRepeat = project.child();
         if (!sourceRepeat.equals(childRepeat)) {
-            return filter;
+            return aggregate;
         }
         List<List<Expression>> groupingSets = childRepeat.getGroupingSets();
 
         if (groupingSets == null) {
-            return filter;
+            return aggregate;
         }
 
         Set<Expression> groupingSetExpressions = childRepeat.getGroupingSetExpressions();
@@ -109,15 +139,14 @@ public class EliminateGroupingSets implements RewriteRuleFactory {
 
         if (pruned.isEmpty()) {
             return new LogicalEmptyRelation(ConnectContext.get().getStatementContext().getNextRelationId(),
-                    filter.getOutput());
+                    aggregate.getOutput());
         }
         if (pruned.size() == groupingSets.size()) {
-            return filter;
+            return aggregate;
         }
 
         LogicalRepeat<? extends Plan> newChildRepeat = childRepeat.withGroupSets(pruned);
-        return filter.withChildren(
-                aggregate.withSourceRepeat(newChildRepeat).withChildren(project.withChildren(newChildRepeat)));
+        return aggregate.withSourceRepeat(newChildRepeat).withChildren(project.withChildren(newChildRepeat));
     }
 
     /**
