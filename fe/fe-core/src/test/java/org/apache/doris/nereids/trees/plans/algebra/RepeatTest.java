@@ -195,7 +195,7 @@ public class RepeatTest {
         List<Slot> outputSlots = ImmutableList.of(id, name);
         List<Integer> slotIdList = ImmutableList.of(3, 4);
 
-        List<Set<Integer>> result = repeat.computeRepeatSlotIdList(slotIdList, outputSlots);
+        List<Set<Integer>> result = repeat.computeRepeatSlotIdList(slotIdList, outputSlots, false);
 
         Assertions.assertEquals(2, result.size());
         // (name, id) -> indexes {1,0} -> slot ids {4, 3}

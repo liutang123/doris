@@ -66,17 +66,15 @@ import java.util.Set;
 public class EliminateGroupingSets implements RewriteRuleFactory {
     @Override
     public List<Rule> buildRules() {
-        return ImmutableList.of(
-                logicalFilter(logicalAggregate(logicalProject(logicalRepeat(any())))).when(
-                                filter -> filter.child().getSourceRepeat().isPresent())
-                        .thenApply(ctx -> pruneSourceRepeatGroupingSetsByFilterNormal(ctx.root, ctx.cascadesContext))
-                        .toRule(RuleType.ELIMINATE_GROUPING_SETS),
-                logicalFilter(logicalProject(logicalAggregate(logicalProject(logicalRepeat(any()))))).when(
-                                filter -> filter.child().child().getSourceRepeat().isPresent())
-                        .thenApply(
+        return ImmutableList.of(logicalFilter(logicalAggregate(
+                logicalProject(logicalRepeat().when(repeat -> repeat.getOriginalGroupingSets().isEmpty()))).when(
+                        agg -> agg.getSourceRepeat().isPresent())).thenApply(
+                                ctx -> pruneSourceRepeatGroupingSetsByFilterNormal(ctx.root, ctx.cascadesContext))
+                .toRule(RuleType.ELIMINATE_GROUPING_SETS), logicalFilter(logicalProject(logicalAggregate(
+                logicalProject(logicalRepeat().when(repeat -> repeat.getOriginalGroupingSets().isEmpty()))).when(
+                        agg -> agg.getSourceRepeat().isPresent()))).thenApply(
                                 ctx -> pruneSourceRepeatGroupingSetsByFilterWithProject(ctx.root, ctx.cascadesContext))
-                        .toRule(RuleType.ELIMINATE_GROUPING_SETS_WITH_PROJECT)
-        );
+                .toRule(RuleType.ELIMINATE_GROUPING_SETS_WITH_PROJECT));
     }
 
     private Plan pruneSourceRepeatGroupingSetsByFilterNormal(
@@ -145,7 +143,8 @@ public class EliminateGroupingSets implements RewriteRuleFactory {
             return aggregate;
         }
 
-        LogicalRepeat<? extends Plan> newChildRepeat = childRepeat.withGroupSets(pruned);
+        LogicalRepeat<? extends Plan> newChildRepeat = childRepeat.withOriginalGroupingSets(groupingSets)
+                .withGroupSets(pruned);
         return aggregate.withSourceRepeat(newChildRepeat).withChildren(project.withChildren(newChildRepeat));
     }
 

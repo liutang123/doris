@@ -30,11 +30,13 @@ public class LogicalRepeatToPhysicalRepeat extends OneImplementationRuleFactory 
         return logicalRepeat().then(repeat ->
             new PhysicalRepeat<>(
                 repeat.getGroupingSets(),
+                repeat.getOriginalGroupingSets(),
                 repeat.getOutputExpressions(),
                 repeat.getGroupingId().get(),
                 repeat.getLogicalProperties(),
                 repeat.child()
             )
         ).toRule(RuleType.LOGICAL_REPEAT_TO_PHYSICAL_REPEAT_RULE);
+
     }
 }

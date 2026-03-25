@@ -31,6 +31,7 @@ import org.apache.doris.nereids.trees.expressions.Alias;
 import org.apache.doris.nereids.trees.expressions.AssertNumRowsElement;
 import org.apache.doris.nereids.trees.expressions.EqualTo;
 import org.apache.doris.nereids.trees.expressions.ExprId;
+import org.apache.doris.nereids.trees.expressions.Expression;
 import org.apache.doris.nereids.trees.expressions.NamedExpression;
 import org.apache.doris.nereids.trees.expressions.Slot;
 import org.apache.doris.nereids.trees.expressions.SlotReference;
@@ -890,6 +891,7 @@ class ChildOutputPropertyDeriverTest {
                 new ExprId(4), "c4", TinyIntType.INSTANCE, true, ImmutableList.of());
         PhysicalRepeat<GroupPlan> repeat = new PhysicalRepeat<>(
                 ImmutableList.of(ImmutableList.of(c1, c2), ImmutableList.of(c1), ImmutableList.of(c1, c3)),
+                new ArrayList<>(),
                 ImmutableList.of(c1, c2, c3),
                 c4,
                 logicalProperties,
@@ -916,6 +918,7 @@ class ChildOutputPropertyDeriverTest {
                 new ExprId(4), "c4", TinyIntType.INSTANCE, true, ImmutableList.of());
         PhysicalRepeat<GroupPlan> repeat = new PhysicalRepeat<>(
                 ImmutableList.of(ImmutableList.of(c1, c2), ImmutableList.of(c1), ImmutableList.of(c1, c3)),
+                new ArrayList<>(),
                 ImmutableList.of(c1, c2, c3),
                 c4,
                 logicalProperties,
@@ -942,6 +945,7 @@ class ChildOutputPropertyDeriverTest {
                 new ExprId(4), "c4", TinyIntType.INSTANCE, true, ImmutableList.of());
         PhysicalRepeat<GroupPlan> repeat = new PhysicalRepeat<>(
                 ImmutableList.of(ImmutableList.of(c1, c2, c3), ImmutableList.of(c1, c2), ImmutableList.of(c1, c2)),
+                new ArrayList<>(),
                 ImmutableList.of(c1, c2, c3),
                 c4,
                 logicalProperties,

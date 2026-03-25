@@ -32,6 +32,7 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import org.apache.commons.lang3.StringUtils;
 
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -47,11 +48,24 @@ public interface Repeat<CHILD_PLAN extends Plan> extends Aggregate<CHILD_PLAN> {
 
     List<List<Expression>> getGroupingSets();
 
+    /**
+     * Get original grouping sets before rewrite rules (e.g. EliminateGroupingSets) pruning.
+     *
+     * Logical/physical repeat implementations can override this method to preserve stable
+     * grouping metadata across rewrites.
+     */
+    default List<List<Expression>> getOriginalGroupingSets() {
+        return new ArrayList<>();
+    }
+
     List<NamedExpression> getOutputExpressions();
 
     @Override
     default List<Expression> getGroupByExpressions() {
-        return ExpressionUtils.flatExpressions(getGroupingSets());
+        // Use original grouping sets to keep grouping()/grouping_id() argument index stable
+        // even if rewrite rules (e.g. EliminateGroupingSets) prune current grouping sets.
+        return ExpressionUtils.flatExpressions(
+                getOriginalGroupingSets().isEmpty() ? getGroupingSets() : getOriginalGroupingSets());
     }
 
     @Override
@@ -176,8 +190,9 @@ public interface Repeat<CHILD_PLAN extends Plan> extends Aggregate<CHILD_PLAN> {
      *
      * return: [(4, 3), (3)]
      */
-    default List<Set<Integer>> computeRepeatSlotIdList(List<Integer> slotIdList, List<Slot> outputSlots) {
-        List<Set<Integer>> groupingSetsIndexesInOutput = getGroupingSetsIndexesInOutput(outputSlots);
+    default List<Set<Integer>> computeRepeatSlotIdList(List<Integer> slotIdList, List<Slot> outputSlots,
+            boolean useOrigin) {
+        List<Set<Integer>> groupingSetsIndexesInOutput = getGroupingSetsIndexesInOutput(outputSlots, useOrigin);
         List<Set<Integer>> repeatSlotIdList = Lists.newArrayList();
         for (Set<Integer> groupingSetIndex : groupingSetsIndexesInOutput) {
             // keep order
@@ -196,11 +211,13 @@ public interface Repeat<CHILD_PLAN extends Plan> extends Aggregate<CHILD_PLAN> {
      * e.g. groupingSets=((b, a), (a)), output=[a, b]
      * return ((1, 0), (1))
      */
-    default List<Set<Integer>> getGroupingSetsIndexesInOutput(List<Slot> outputSlots) {
+    default List<Set<Integer>> getGroupingSetsIndexesInOutput(List<Slot> outputSlots, boolean useOrigin) {
         Map<Expression, Integer> indexMap = indexesOfOutput(outputSlots);
 
         List<Set<Integer>> groupingSetsIndex = Lists.newArrayList();
-        List<List<Expression>> groupingSets = getGroupingSets();
+
+        List<List<Expression>> groupingSets = (useOrigin && !getOriginalGroupingSets().isEmpty())
+                ? getOriginalGroupingSets() : getGroupingSets();
         for (List<Expression> groupingSet : groupingSets) {
             // keep the index order
             Set<Integer> groupingSetIndex = Sets.newLinkedHashSet();
