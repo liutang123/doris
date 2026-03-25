@@ -88,7 +88,7 @@ public class LogicalRepeat<CHILD_TYPE extends Plan> extends LogicalUnary<CHILD_T
     /**
      * Desc: Constructor for LogicalRepeat.
      */
-    private LogicalRepeat(
+    public LogicalRepeat(
             List<List<Expression>> groupingSets,
             List<List<Expression>> originalGroupingSets,
             List<NamedExpression> outputExpressions,

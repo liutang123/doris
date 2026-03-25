@@ -225,7 +225,7 @@ public class LogicalPlanDeepCopier extends DefaultPlanRewriter<DeepCopierContext
                 .collect(ImmutableList.toImmutableList());
         SlotReference groupingId = (SlotReference) ExpressionDeepCopier.INSTANCE
                 .deepCopy(repeat.getGroupingId().get(), context);
-        return new LogicalRepeat<>(groupingSets, originalGroupingSets, outputExpressions, groupingId,
+        return new LogicalRepeat<>(groupingSets, originalGroupingSets, outputExpressions, Optional.of(groupingId),
                 repeat.getRepeatType(), child);
     }
 
