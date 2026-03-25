@@ -95,7 +95,8 @@ public class LogicalRepeat<CHILD_TYPE extends Plan> extends LogicalUnary<CHILD_T
             Optional<SlotReference> groupingId,
             RepeatType type,
             CHILD_TYPE child) {
-        this(groupingSets, originalGroupingSets, outputExpressions, Optional.empty(), Optional.empty(), groupingId, true,
+        this(groupingSets, originalGroupingSets, outputExpressions, Optional.empty(), Optional.empty(), groupingId,
+                true,
                 type, child);
     }
 
