@@ -168,7 +168,7 @@ public class RepeatTest {
         );
         List<Slot> outputSlots = ImmutableList.of(id, name, gender, groupingId.toSlot());
 
-        List<Set<Integer>> result = repeat.getGroupingSetsIndexesInOutput(outputSlots);
+        List<Set<Integer>> result = repeat.getGroupingSetsIndexesInOutput(outputSlots, false);
 
         Assertions.assertEquals(3, result.size());
         // (name, id) -> indexes {1, 0}
