@@ -82,4 +82,13 @@ public class FileSystemIdentity {
         }
         return true;
     }
+
+    @Override
+    public String toString() {
+        return "FileSystemIdentity{" +
+                "hostName='" + hostName + '\'' +
+                ", ugiInfo='" + ugiInfo + '\'' +
+                ", extraInfo='" + extraInfo + '\'' +
+                '}';
+    }
 }

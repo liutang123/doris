@@ -710,14 +710,13 @@ public class FileSystemManager {
         BrokerFileSystem fileSystem = updateCachedFileSystem(fileSystemIdentity, properties);
         fileSystem.getLock().lock();
         try {
-            // create a new filesystem
-            Configuration conf = new Configuration();
-            for (Map.Entry<String, String> propElement : properties.entrySet()) {
-                conf.set(propElement.getKey(), propElement.getValue());
-            }
-
             if (fileSystem.getDFSFileSystem() == null) {
-                logger.info("create file system for new path " + path);
+                Configuration conf = new Configuration();
+                for (Map.Entry<String, String> propElement : properties.entrySet()) {
+                    conf.set(propElement.getKey(), propElement.getValue());
+                }
+                // create a new filesystem
+                logger.info("create file system [" + fileSystem + "] for new path " + path);
                 String tmpFilePath = null;
                 UserGroupInformation ugi = null;
                 if (authentication.equals(AUTHENTICATION_KERBEROS)){
@@ -1241,6 +1240,10 @@ public class FileSystemManager {
             TBrokerFD fd = parseUUIDToFD(uuid);
             clientContextManager.putNewInputStream(clientId, fd, fsDataInputStream, fileSystem);
             return fd;
+        } catch (FileNotFoundException e) {
+            logger.error("file not found while open path", e);
+            throw new BrokerException(TBrokerOperationStatusCode.FILE_NOT_FOUND,
+                    e, "file not found {}", path);
         } catch (IOException e) {
             logger.error("errors while open path", e);
             fileSystem.closeFileSystem();

@@ -181,8 +181,10 @@ public class HDFSBrokerServiceImpl implements TPaloBrokerService.Iface {
     @Override
     public TBrokerOpenReaderResponse openReader(TBrokerOpenReaderRequest request)
             throws TException {
-        logger.info("receive a open reader request, request client id: "
-                            + request.clientId + ", path: " + request.path + ", startOffset: " +request.startOffset);
+        if (logger.isDebugEnabled()) {
+            logger.debug("receive a open reader request, request client id: "
+                                + request.clientId + ", path: " + request.path + ", startOffset: " +request.startOffset);
+        }
         TBrokerOpenReaderResponse response = new TBrokerOpenReaderResponse();
         try {
             TBrokerFD fd = fileSystemManager.openReader(request.clientId, request.path,
@@ -200,7 +202,9 @@ public class HDFSBrokerServiceImpl implements TPaloBrokerService.Iface {
     @Override
     public TBrokerReadResponse pread(TBrokerPReadRequest request)
             throws TException {
-        logger.info("receive a read request, request detail: " + request);
+        if (logger.isDebugEnabled()) {
+            logger.debug("receive a read request, request detail: " + request);
+        }
         Stopwatch stopwatch = BrokerPerfMonitor.startWatch();
         TBrokerReadResponse response = new TBrokerReadResponse();
         try {
@@ -238,7 +242,9 @@ public class HDFSBrokerServiceImpl implements TPaloBrokerService.Iface {
     @Override
     public TBrokerOperationStatus closeReader(TBrokerCloseReaderRequest request)
             throws TException {
-        logger.info("receive a close reader request, request detail: " + request);
+        if (logger.isDebugEnabled()) {
+            logger.debug("receive a close reader request, request detail: " + request);
+        }
         try {
             fileSystemManager.closeReader(request.fd);
         } catch (BrokerException e) {
